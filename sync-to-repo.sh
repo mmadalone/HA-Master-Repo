@@ -8,3 +8,6 @@ rsync -av "/Users/madalone/Library/Containers/nz.co.pixeleyes.AutoMounter/Data/M
 rsync -av "/Users/madalone/Library/Containers/nz.co.pixeleyes.AutoMounter/Data/Mounts/Home Assistant/SMB/config/blueprints/script/madalone/" "$REPO/script/"
 
 echo "Sync complete. Time is money — go commit!"
+
+cd "$REPO" && git add -A && git commit -m "sync $(date +%Y-%m-%d)" && git push
+echo "Sync underway! Profit!"
