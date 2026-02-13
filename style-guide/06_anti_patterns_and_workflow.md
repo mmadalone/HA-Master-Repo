@@ -67,10 +67,11 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-37 | ⚠️ | Single-pass generation over ~150 lines OR >3 complex template blocks | §11.5 |
 | AP-38 | ⚠️ | First output block is YAML/code with no preceding reasoning | §1.10 |
 | AP-39 | ⚠️ | Review/audit of 3+ files, OR single-file fix pass with 5+ violations/changes, OR resumed/retried crashed session — with no build/audit log created in `_build_logs/` | §11.8, §11.8.1 |
+| AP-40 | ⚠️ | Full-file `read_file` on a 1000+ line file when the task only requires editing a specific section | §11.13 |
 
 **Severity key:** ❌ ERROR = must fix before presenting · ⚠️ WARNING = fix unless user explicitly accepts · ℹ️ INFO = flag to user, fix if trivial
 
-**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-39 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
+**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-40 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
 
 *Rules #14 (verify integration docs) and #28-29 (ESPHome debug sensors, config archiving) require architectural judgment and cannot be mechanically scanned. Everything else is in the tables above.*
 
@@ -171,12 +172,13 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 34. **Never place conditions before the input_boolean auto-reset in voice command → MA bridges.** If a condition aborts the run, the boolean stays ON and the next voice command can't re-trigger it (see §7.7).
 35. **Never use `media_player.media_stop` when you might want to resume.** Stop destroys the queue. Use `media_player.media_pause` for anything that could be temporary (see §7.3).
 
-### Development Environment (36–39)
+### Development Environment (36–40)
 
 36. **Never use container/sandbox tools (`bash_tool`, `view`, `create_file`) for HA config or project file operations.** All filesystem access goes through Desktop Commander or Filesystem MCP tools targeting the user's actual filesystem. The container environment is for Claude's internal scratch work only — the user's files don't live there. Using the wrong toolset creates delays, generates errors, and wastes everyone's time.
 37. **Never generate a file over ~150 lines in a single uninterrupted pass.** Context compression during long outputs causes dropped sections, forgotten decisions, and inconsistent logic. Use the chunked generation workflow (§11.5) instead.
 38. **Never jump straight to YAML/code without explaining your approach first.** The reasoning-first directive (§1.10) is MANDATORY — state your understanding, explain chosen patterns, flag ambiguities, THEN generate. If your first output block is a code fence, you skipped the step.
 39. **Never run a substantial review without creating a build/audit log.** This applies to: (a) multi-file reviews or audits (3+ files), (b) single-file fix passes with 5+ violations or changes, and (c) any task that is a retry or resumption of a previously crashed session. Create the log per §11.8 / §11.8.1 before starting work, update it after each milestone, and log every finding in `[ISSUE]` format with AP-ID and line number. Without the log, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it's just one file" rationalization is exactly how substantial rewrites lose their audit trail.
+40. **Never load an entire large file (1000+ lines) into context just to edit a specific section.** Use `read_file` with line range parameters to read only the relevant section. Use `edit_block` for surgical edits — replace only what changed. Verify with a targeted `read_file` of the edited section, not the whole file. If you need to understand the file's structure first, read the first ~50 lines or use `search_files` / `grep` to locate the target section. Full file reads are only justified when the task genuinely requires understanding the entire file (e.g., full audits, refactors, or new builds). See §11.13.
 
 ---
 
@@ -592,3 +594,23 @@ After the anti-pattern scan (§10) and security checklist (§10.5) pass, run ext
 4. **Template dry-run.** If the generated code contains Jinja2 templates, test non-trivial ones with `ha_eval_template()` before presenting.
 
 **When to skip:** Trivial edits (alias rename, comment update) don't need full validation. Use judgment — but if the edit touches logic, triggers, or service calls, validate.
+
+### 11.13 Large file editing (1000+ lines)
+
+Loading an entire large file into context just to change a few lines is wasteful, slow, and risks context compression artifacts in the rest of the conversation. Treat large files the way a surgeon treats a patient — open only what you need, fix it, close it, verify.
+
+**The rule (AP-40):** Never `read_file` an entire 1000+ line file when the task only requires editing a specific section.
+
+**Procedure:**
+1. **Locate the target.** If you don't already know the line numbers, use `search_files` / `grep` or read just the first ~50 lines to understand the file's structure and find the section you need.
+2. **Read surgically.** Use `read_file` with `offset` / `length` (or equivalent line range parameters) to load only the relevant section — typically the target lines plus 5–10 lines of surrounding context for orientation.
+3. **Edit surgically.** Use `edit_block` (or equivalent find-and-replace tool) to replace only the changed text. Do not rewrite surrounding content that hasn't changed.
+4. **Verify surgically.** After the edit, re-read the edited section (same targeted range) to confirm the change landed correctly. Do not re-read the whole file.
+
+**When full-file reads ARE justified:**
+- Full audits or compliance sweeps where every line must be scanned (§11.2, §11.8.1).
+- Major refactors that restructure the file's organization.
+- New file creation (obviously — you're writing the whole thing).
+- Files under ~200 lines where the overhead of locating a section exceeds just reading it all.
+
+**Why this matters:** A 1500-line blueprint dumped into context consumes tokens that could be spent on reasoning, compresses earlier conversation history, and creates a temptation to "while I'm here" rewrite sections that don't need touching. Surgical edits are faster, safer, and leave a cleaner diff in git.

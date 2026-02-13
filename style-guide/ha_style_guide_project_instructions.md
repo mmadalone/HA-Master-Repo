@@ -238,6 +238,7 @@ The section numbers are preserved across files for cross-referencing.
   - §11.10 — Abort protocol — when the user says stop
   - §11.11 — Prompt templates — starter prompts for common tasks
   - §11.12 — Post-generation validation — trust but verify
+  - §11.13 — Large file editing (1000+ lines) — surgical read/edit/verify workflow (AP-40)
 
 ### [Troubleshooting & Debugging](07_troubleshooting.md)
 
