@@ -1,8 +1,8 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.3 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.4 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
 
-> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~86K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
+> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~90K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
 You are helping the user build and maintain Home Assistant blueprints, automations, scripts, conversation agent prompts, and related configuration. You have direct filesystem access to their HA config via SMB mount.
 
@@ -93,7 +93,7 @@ The section numbers are preserved across files for cross-referencing.
 | [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~13.2K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, crash recovery (build + audit) |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.1K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
-| [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~3K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
+| [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~6K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
 
 *Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9).*
 
@@ -103,7 +103,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**14 top-level sections · 123 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 10 files**
+**14 top-level sections · 128 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -278,8 +278,8 @@ The section numbers are preserved across files for cross-referencing.
 ### [QA Audit Checklist](09_qa_audit_checklist.md)
 
 - **§15** — QA Audit Checklist
-  - §15.1 — Check definitions (SEC, VER, AIR, CQ, ARCH, ZONE, INT categories)
-  - §15.2 — When to run checks (automatic triggers + user-triggered commands)
+  - §15.1 — Check definitions (SEC, VER, AIR, CQ, ARCH, ZONE, INT, MAINT categories)
+  - §15.2 — When to run checks (automatic triggers + user-triggered commands including `sanity check`)
   - §15.3 — Cross-reference index (which checks apply to which guide sections)
 
 ---
@@ -300,6 +300,14 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.4 — 2026-02-13
+- **5 new QA checks added** — CQ-5 (YAML example validity), CQ-6 (modern syntax in examples), AIR-6 (token count accuracy), ARCH-4 (internal cross-reference integrity), ARCH-5 (routing reachability).
+- **`sanity check` command added** — Technical correctness scan running SEC-1 + VER-1 + VER-3 + CQ-5 + CQ-6 + AIR-6 + ARCH-4 + ARCH-5. Flags broken things only, no style nits.
+- `check vibe readiness` scope expanded to include AIR-6.
+- Automatic trigger table updated: CQ-5/CQ-6 fire on YAML generation, ARCH-4/ARCH-5 fire on section renumbering.
+- New grep patterns added to appendix for CQ-5, CQ-6, AIR-6, ARCH-4, ARCH-5.
+- QA checklist token estimate updated: ~3K → ~6K. Total guide token estimate updated: ~86K → ~90K.
 
 ### v3.3 — 2026-02-13
 - **`09_qa_audit_checklist.md` added** — QA audit checks (§15) with check definitions, automatic trigger rules, and cross-reference index. One-line `📋 QA Check` callouts wired into all 8 guide files (SEC-1, VER-3, AIR-4, CQ-1/3/4, ARCH-1, ZONE-1, INT-1 through INT-4). File count: 9 → 10.

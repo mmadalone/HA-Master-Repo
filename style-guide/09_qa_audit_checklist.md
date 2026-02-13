@@ -181,6 +181,27 @@ You can use either `conversation.process` or `assist_satellite.start_conversatio
 | "Avoid too many triggers" | "More than 8 triggers in one automation suggests it should be split by domain" |
 | "Use reasonable delays" | "TTS duck/restore: 300ms fade, 500ms restore delay (adjust ±200ms per speaker)" |
 
+### AIR-6: Token Count Accuracy [WARNING]
+
+**Check:** Every token estimate in the master index and file headers must be verifiable. Use `1 token ≈ 4 characters` as the baseline conversion.
+
+**Threshold:** Flag when a claim drifts by more than **15%** from the measured value.
+
+**What to verify:**
+- Per-file token estimates in the master index routing table
+- The total token count claim (e.g., "~86K tokens total")
+- Any per-section token budget claims (e.g., "§1 alone: ~5.7K")
+
+**Measurement method:**
+```bash
+# Approximate tokens for a file (chars / 4)
+wc -c <filename> | awk '{printf "%.1fK tokens\n", $1/4/1000}'
+```
+
+**Why:** Stale token estimates cause the AI to either overload context (loads too many files) or underload it (skips a file thinking it won't fit). Both degrade output quality.
+
+📋 QA Check: Re-measure after any structural change to a style guide file.
+
 ---
 
 ## 4 — Code Quality & Patterns
@@ -239,6 +260,34 @@ Known return value documentation required:
 | `conversation.process` | Yes | `response.speech.plain.speech` |
 | `assist_satellite.start_conversation` | No | N/A — does not return response text |
 
+### CQ-5: YAML Example Validity [ERROR]
+
+**Check:** Every fenced YAML block (```` ```yaml ````) in the style guide must:
+1. Parse without syntax errors (valid YAML structure)
+2. Use real HA action/service domain names (not invented ones)
+3. Use real entity domain prefixes (e.g., `light.`, `climate.`, not `thing.`)
+
+**Known valid action domains:** `homeassistant`, `light`, `switch`, `climate`, `media_player`, `music_assistant`, `cover`, `fan`, `scene`, `script`, `automation`, `input_boolean`, `input_number`, `input_select`, `input_text`, `input_datetime`, `input_button`, `timer`, `counter`, `number`, `select`, `button`, `notify`, `tts`, `conversation`, `assist_satellite`, `rest_command`, `shell_command`, `logbook`, `persistent_notification`. This is not exhaustive — verify against HA docs if unsure.
+
+**Exceptions:** Blocks explicitly marked as pseudocode, illustrative fragments, or `# (not real YAML)` are exempt.
+
+📋 QA Check: Run on every YAML example added or modified in the guide.
+
+### CQ-6: Modern Syntax in Examples [WARNING]
+
+**Check:** All YAML examples must use HA 2024.10+ syntax. Flag these violations:
+
+| Legacy (pre-2024.10) | Modern (2024.10+) | Ties to |
+|---|---|---|
+| `service:` | `action:` | AP-08 |
+| `service_data:` | `data:` (under `action:`) | AP-08 |
+| `automation:` (singular top-level) | `automations:` (plural) | §3.8 |
+| `script:` (singular top-level) | `scripts:` (plural) | §3.8 |
+
+**Exceptions:** Blocks that explicitly demonstrate the migration (showing old → new) or that document legacy behavior are exempt if clearly labeled.
+
+📋 QA Check: Run on every YAML example added or modified in the guide.
+
 ---
 
 ## 5 — Architecture & Structure
@@ -273,6 +322,46 @@ Persona-based avoids agent explosion. Each persona is a reusable router.
 - Exact paths (not "in the ESPHome config directory")
 - A directory tree view for complex structures
 - Which files are optional vs. required
+
+### ARCH-4: Internal Cross-Reference Integrity [ERROR]
+
+**Check:** Every internal reference must resolve:
+
+1. **Section references** (`§X.X`) — must match an actual heading in the target file. Verify the number AND the heading text.
+2. **File references** (e.g., `06_anti_patterns_and_workflow.md`) — the file must exist in `PROJECT_DIR`.
+3. **AP-code references** (e.g., `AP-15`, `AP-39`) — must exist in the §10 scan tables.
+4. **Check-ID references** (e.g., `SEC-1`, `CQ-3`) — must exist in this QA checklist.
+
+**How to scan:**
+```bash
+# Find all §X.X references
+grep -oE '§[0-9]+\.[0-9]+(\.[0-9]+)?' *.md | sort -u
+
+# Find all file references
+grep -oE '[0-9]{2}_[a-z_]+\.md' *.md | sort -u
+
+# Find all AP-code references
+grep -oE 'AP-[0-9]+' *.md | sort -u
+```
+
+Then verify each one resolves to an actual target. Dangling references are ERROR severity — they send the AI on a wild goose chase through files that don't exist.
+
+📋 QA Check: Run after any section renumbering, file rename, or AP-code addition/removal.
+
+### ARCH-5: Routing Reachability [WARNING]
+
+**Check:** Every section in every style guide file must be reachable from at least one entry in the master index routing tables (operational mode tables, task-specific routing, or quick reference).
+
+**How to verify:**
+1. Collect all section numbers from all files: `grep -oE '^#{1,3} [0-9]+\.' *.md`
+2. Collect all section numbers referenced in the master index routing tables
+3. Flag any section that appears in (1) but not in (2)
+
+**Orphan sections** — sections with no routing path — will never be loaded by the AI unless it happens to read the entire file. This defeats the token budget system (§1.9).
+
+**Fix:** Either add the orphan section to a routing table entry, or move its content into a section that IS routed.
+
+📋 QA Check: Run after adding new sections or modifying routing tables.
 
 ---
 
@@ -372,12 +461,13 @@ Verify all external links in the guide still resolve. Replace broken links with 
 
 | Trigger | Checks to suggest |
 |---------|-------------------|
-| Generating or reviewing any YAML output | SEC-1, CQ-1, CQ-2, CQ-3, CQ-4, VER-2 |
-| Editing a style guide `.md` file | AIR-1, AIR-2, AIR-3, AIR-4 for that file, plus its INT-x checklist if it has one |
+| Generating or reviewing any YAML output | SEC-1, CQ-1, CQ-2, CQ-3, CQ-4, CQ-5, CQ-6, VER-2 |
+| Editing a style guide `.md` file | AIR-1, AIR-2, AIR-3, AIR-4, AIR-6 for that file, plus its INT-x checklist if it has one |
 | User mentions upgrading HA, ESPHome, or MA | MAINT-1 (version sweep), MAINT-2 (deprecation sweep), MAINT-3 (new feature coverage) |
 | Adding or changing a version claim in the guide | VER-1 for that claim — verify before committing |
-| Adding a new pattern or architecture section | AIR-2 (needs skeleton), ARCH-1 (needs boundary rules), ARCH-2 (needs rationale) |
+| Adding a new pattern or architecture section | AIR-2 (needs skeleton), ARCH-1 (needs boundary rules), ARCH-2 (needs rationale), ARCH-5 (must be routable) |
 | User shares a changelog, release notes URL, or mentions a new release | MAINT-1, MAINT-2, MAINT-3 against that release |
+| Renaming, renumbering, or moving sections between files | ARCH-4 (cross-ref integrity), ARCH-5 (routing reachability) |
 | First conversation in a new session involving the style guide | Mention that `run audit` is available if it's been a while |
 
 **For YAML generation checks:** run silently, fix violations before presenting output. Don't ask — just fix.
@@ -394,9 +484,10 @@ The user can say any of these at any time:
 | `run audit on <filename>` | Full checklist scoped to one file. |
 | `check secrets` | SEC-1 scan across all files — grep for inline keys/tokens. |
 | `check versions` | VER-1 sweep — verify all version claims against current release notes via web search. |
-| `check vibe readiness` | AIR-1 through AIR-5 — find vague guidance, missing skeletons, unclear decision logic. |
+| `check vibe readiness` | AIR-1 through AIR-6 — find vague guidance, missing skeletons, unclear decision logic, stale token counts. |
 | `run maintenance` | MAINT-1 through MAINT-4 — version sweep, deprecation sweep, new features, link rot. |
 | `check <CHECK-ID>` | Run a single specific check (e.g., `check CQ-3`). |
+| `sanity check` | Technical correctness scan: SEC-1 + VER-1 + VER-3 + CQ-5 + CQ-6 + AIR-6 + ARCH-4 + ARCH-5. Only flags broken things — no style nits. |
 
 ### Progress tracking
 
@@ -437,4 +528,22 @@ grep -rn 'action:' *.md | grep -v 'alias:'
 
 # ARCH-1: Find layers without boundaries
 grep -rn 'Layer [0-9]' *.md | grep -v 'MUST NOT'
+
+# CQ-5: Find YAML blocks to validate
+grep -n '```yaml' *.md
+
+# CQ-6: Find legacy syntax in examples (should be action:, not service:)
+# Run inside YAML fenced blocks only — manual review needed
+grep -n 'service:' *.md | grep -v '#\|service_data\|service call\|service name'
+
+# AIR-6: Measure actual token counts per file
+for f in 0*.md; do printf "%-40s %sK tokens\n" "$f" "$(wc -c < "$f" | awk '{printf "%.1f", $1/4/1000}')"; done
+
+# ARCH-4: Find all internal cross-references to verify
+grep -oE '§[0-9]+\.[0-9]+(\.[0-9]+)?' *.md | sort | uniq -c | sort -rn
+grep -oE '[0-9]{2}_[a-z_]+\.md' *.md | sort -u
+grep -oE 'AP-[0-9]+' *.md | sort -u
+
+# ARCH-5: Find all section headings (candidates for routing check)
+grep -n '^#{1,3} [0-9]' *.md
 ```
