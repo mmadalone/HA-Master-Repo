@@ -489,6 +489,8 @@ The user can say any of these at any time:
 | `check <CHECK-ID>` | Run a single specific check (e.g., `check CQ-3`). |
 | `sanity check` | Technical correctness scan: SEC-1 + VER-1 + VER-3 + CQ-5 + CQ-6 + AIR-6 + ARCH-4 + ARCH-5. Only flags broken things — no style nits. |
 
+> **Execution standard (applies to ALL commands above):** Every check runs to its full procedure as defined in §15.1. Spot-checking, eyeballing, sampling, or "structural scans" do not satisfy a check. If a procedure says "verify all 9 claims," verify all 9. If it says "parse every YAML block," parse every YAML block. If it says "compute the set difference," compute it — don't declare PASS on vibes. A check is either fully executed or reported as `[SKIP]` with a reason.
+
 ### Progress tracking
 
 When fixing findings from any audit run, maintain a progress log:
