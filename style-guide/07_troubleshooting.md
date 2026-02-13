@@ -324,6 +324,48 @@ Never load entire log files into context — `home-assistant.log` can be tens of
 
 Common HA log path: `home-assistant.log` in the HA config directory.
 
+> **For long-running automations** (bedtime routines, multi-stage sequences, etc.), don't try to catch everything in one read — see §13.6.2 for the round-based live troubleshooting protocol.
+
+#### 13.6.2 Live troubleshooting protocol — long-running automations (MANDATORY)
+
+Automations that take minutes to complete — bedtime routines, multi-stage sequences, follow-me orchestrations, media handoff chains — require a different debugging rhythm. The AI cannot watch logs in real time, cannot poll, and cannot detect when an automation finishes. Attempting to do so produces stale reads, incomplete data, and wasted turns.
+
+**Work in rounds, not in a single pass.**
+
+**Round structure:**
+
+1. **Establish a baseline before triggering.** Grep the log for the automation's entity ID or alias name. Note the last timestamp associated with it. This is your "before" marker — everything after it belongs to the current run.
+
+   ```bash
+   grep -n "bedtime_routine" home-assistant.log | tail -5
+   ```
+
+2. **User triggers the automation.** The AI does not read the log during this step. Hands off the wheel.
+
+3. **Wait for user confirmation.** The user says "it's done," "it failed at step X," or "I got an error on screen." Do not assume completion based on elapsed time — some automations have variable-length waits, user interactions, or LLM round-trips that make duration unpredictable.
+
+4. **Read from the baseline timestamp forward.** Use grep or line ranges scoped to the automation's entity ID or alias. Pull only new entries related to the run.
+
+   ```bash
+   # From the baseline line number forward, filtered to the automation
+   grep "bedtime_routine" home-assistant.log | awk 'NR > <baseline_line>'
+   ```
+
+5. **Repeat for distinct phases.** If the automation has clearly separated stages (e.g., "music selection → playback → TTS goodnight → lights off"), run a round per phase when granular diagnosis is needed. Ask the user to signal phase transitions if possible.
+
+**Hard rules:**
+
+- **Never poll the log in a loop.** Claude cannot watch in real time. Repeated reads on a timer waste tool calls and produce duplicate or incomplete data.
+- **Never assume the automation is finished.** Always wait for the user to confirm. A 30-second automation might take 3 minutes if an LLM call is slow or a device is unresponsive.
+- **Ask the user for on-screen errors first.** HA notification banners, persistent notifications, and toast messages are often faster and more specific than anything in the log. If the user says "I got a red banner that said X," that's your diagnosis — don't go log diving for what they already told you.
+- **Check traces before logs.** Per §13.1, the automation trace shows step-by-step execution with resolved values. For most failures, the trace tells you *what* broke. The log tells you *why* the underlying integration or device failed. Trace first, log second.
+
+**Anti-pattern this prevents:**
+
+Without this protocol, the AI tends to read the log immediately after triggering, gets a partial picture (the automation is still running), draws wrong conclusions, and then reads again after the user reports a problem — now confused by entries from two different reads mixed together. The round-based approach keeps each read clean, scoped, and tied to a known automation state.
+
+**Cross-references:** §13.6.1 (log access mechanics — tail, grep, surgical reads), §13.1 (traces as first stop), §5.1 (timeouts — long-running automations must always have them).
+
 ### 13.7 Debugging Music Assistant issues
 
 **"Music doesn't play after `music_assistant.play_media`"**
