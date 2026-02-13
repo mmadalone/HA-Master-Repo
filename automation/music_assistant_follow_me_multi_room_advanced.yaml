@@ -2,7 +2,7 @@ blueprint:
   name: Music Assistant – Follow me (multi-room advanced)
   author: madalone
   description: >
-    ![Image](/local/blueprint-images/music_assistant_follow_me_multi_room_advanced-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/music_assistant_follow_me_multi_room_advanced-header.jpeg)
 
     # Music Assistant – Follow me (multi-room advanced)
 

@@ -2,7 +2,7 @@ blueprint:
   name: "UPS – Notify on power events (NUT status sensor)"
   author: madalone
   description: >
-    ![Image](/local/blueprint-images/ups_notify-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/ups_notify-header.jpeg)
 
     # UPS – Notify on power events
 

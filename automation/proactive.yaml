@@ -2,7 +2,7 @@ blueprint:
   name: "Proactive – Presence-based suggestions (v4)"
   author: madalone
   description: >
-    ![Image](/local/blueprint-images/proactive-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive-header.jpeg)
 
     # Proactive – Presence-based suggestions
 

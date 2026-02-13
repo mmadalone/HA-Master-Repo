@@ -1018,3 +1018,5 @@ variables:
 ```
 
 This allows the same speaker to appear in multiple zones without list-ordering headaches. The kitchen sensor can map to the workshop speaker, and the workshop sensor can also map to the workshop speaker — both appear in the merged list, and the first presence match wins.
+
+> 📋 **QA Check INT-3:** Music Assistant pattern completeness — verify media_type verification, enqueue modes, TTS duck/restore race condition, Alexa↔MA volume sync, search→select→play, MA+TTS coexistence, and extra zone mappings are all documented. See `09_qa_audit_checklist.md`.

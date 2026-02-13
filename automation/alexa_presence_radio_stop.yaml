@@ -3,7 +3,7 @@ blueprint:
   name: "Alexa Presence-Aware Radio Stop – Music Assistant"
   author: madalone
   description: |
-    ![Image](/local/blueprint-images/alexa_presence_radio_stop-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/alexa_presence_radio_stop-header.jpeg)
 
     # Stop radio playback from any Alexa — one command
 

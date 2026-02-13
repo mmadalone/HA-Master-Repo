@@ -112,6 +112,8 @@ Each layer has a single responsibility. Crossing these boundaries creates mainte
 - Adding `choose` branching in a tool script instead of the centralized automation → duplicates logic across multiple scripts, breaks "single source of truth."
 - Configuring device targeting in the ESPHome config instead of the blueprint → requires reflashing hardware to change which lights respond to voice commands.
 
+> 📋 **QA Check ARCH-1:** Layer boundary enforcement — the 6-layer voice pattern needs explicit MUST NOT rules per layer. See `09_qa_audit_checklist.md`.
+
 ---
 
 ### 14.2 Layer 1 — ESPHome Voice PE satellites
@@ -196,6 +198,8 @@ micro_wake_word:
 ### Current Config Issues to Note
 
 Both satellite configs have **inline API encryption keys** instead of `!secret` references. Per §6.4 and AP-25, these should be migrated to `/config/esphome/secrets.yaml` as `!secret api_key_workshop` and `!secret api_key_living_room`.
+
+> 📋 **QA Check SEC-1:** No inline secrets — API keys, tokens, and passwords must use `!secret` references. See `09_qa_audit_checklist.md`.
 
 ---
 
@@ -884,3 +888,5 @@ These are the ones that'll bite you in the ass if you're not careful:
 | Voice command bridges | §7.7 |
 | Unified media control | §7.8 |
 | All anti-patterns | §10 |
+
+> 📋 **QA Check INT-4:** Voice assistant pattern completeness — verify 6-layer MUST NOT boundaries, TTS streaming config, ElevenLabs fallback, one-agent-per-persona clarification, data flow diagrams, directory tree, and `!secret` for API keys are all documented. See `09_qa_audit_checklist.md`.

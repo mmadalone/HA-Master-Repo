@@ -79,6 +79,8 @@ extra_system_prompt: >-
 | Automation-only flow, no voice satellite involved | `conversation.process` | No satellite to target |
 | Voice flow where you need fallback logic on the response | `conversation.process` + manual TTS | Fire-and-forget won't let you inspect the reply |
 
+> 📋 **QA Check CQ-4:** Return values must be documented — what the action returns, access path, and whether it returns at all. See `09_qa_audit_checklist.md`.
+
 The `extra_system_prompt` should be **short** — just the facts that change per invocation. Never repeat personality, rules, or device lists that belong in the agent's own prompt.
 
 **`conversation_id` for multi-turn context:**
@@ -502,3 +504,5 @@ Conversation agents don't exist in a vacuum — when used with voice assistants,
 - ESPHome satellite configuration: §6 (ESPHome Patterns)
 - Wake word and STT configuration: §6.5
 - TTS duck/restore for music coexistence: §7.4, §7.9 (Music Assistant Patterns)
+
+> 📋 **QA Check INT-1:** Conversation agent completeness — verify dispatcher pattern, MCP servers, confirm-then-execute, naming rationale, token budget, and multi-agent coordination are all documented. See `09_qa_audit_checklist.md`.

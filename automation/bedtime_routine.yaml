@@ -1,7 +1,7 @@
 blueprint:
   name: "Bedtime routine – LLM-driven goodnight (Audiobook)"
   author: madalone
-  description: '![Image](/local/blueprint-images/bedtime_routine-header.jpeg)
+  description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/bedtime_routine-header.jpeg)
 
     # Bedtime routine – LLM-driven goodnight (Audiobook)
 

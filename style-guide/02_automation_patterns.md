@@ -119,6 +119,8 @@ These two are NOT interchangeable. The difference matters when refactoring:
 - `wait_for_trigger`: When you specifically need to wait for a *change* (motion sensor going ON, person arriving).
 - `wait_template`: When you need to wait for a *condition to become true* and it might already be true (temperature above threshold, device available).
 
+> 📋 **QA Check AIR-1:** Replace vague guidance ("use good judgment") with concrete thresholds and ranges. See `09_qa_audit_checklist.md`.
+
 ### 5.2 Error handling — non-critical action failures
 For actions that might fail but shouldn't kill the entire automation (notifications to flaky services, TTS to a speaker that might be offline, API calls to external services), use `continue_on_error: true`:
 
@@ -143,6 +145,8 @@ For actions that might fail but shouldn't kill the entire automation (notificati
 If the automation turns on temporary switches, sets helpers, or creates any transient state:
 - Every failure path (timeout, error, unexpected condition) MUST clean up that state before stopping.
 - Consider a separate failsafe automation that cleans up after a maximum duration, as a safety net for crashes.
+
+> 📋 **QA Check CQ-3:** Stateful operations need cleanup on all failure paths — restore mechanisms are mandatory. See `09_qa_audit_checklist.md`.
 
 ### 5.4 Mode selection (deep dive)
 
@@ -201,6 +205,8 @@ Expose the cooldown duration as a blueprint input with a sensible default (e.g.,
 **Why a template here (per §1.4):** There is no native condition for "time since last triggered." The `this.attributes.last_triggered` context variable and the elapsed-time math have no built-in equivalent. This is a legitimate template use case — document it if someone flags it as inconsistent with the native-first rule.
 
 **Scope warning:** The `this` variable is only available inside automation triggers and conditions. It is NOT available in scripts called by automations. If you extract this cooldown pattern into a standalone script, `this` will be undefined and the template will silently evaluate incorrectly. Keep cooldown logic in the automation itself.
+
+> 📋 **QA Check ZONE-1:** GPS bounce protection requires zone radius guidance and manual protection patterns. See `09_qa_audit_checklist.md`.
 
 ### 5.6 Trigger IDs + Choose pattern
 When an automation has multiple triggers that should lead to different actions, assign `id:` to each trigger and use `choose` with `trigger.id` conditions:

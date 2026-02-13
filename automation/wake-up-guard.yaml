@@ -2,7 +2,7 @@ blueprint:
   name: "Wake-up guard – Snooze/Stop with TTS & mobile"
   author: madalone
   description: >
-    ![Wake-up guard header](/local/blueprint-images/wake-up-guard-header.jpg)
+    ![Wake-up guard header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/wake-up-guard-header.jpg)
 
     # Wake-up guard
 

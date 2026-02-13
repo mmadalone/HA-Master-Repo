@@ -1,7 +1,7 @@
 blueprint:
   name: "Proactive – Presence-based suggestions"
   author: madalone
-  description: '![Proactive LLM Sensors](/local/blueprint-images/proactive_llm_sensors-header.jpeg)
+  description: '![Proactive LLM Sensors](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive_llm_sensors-header.jpeg)
 
     # Proactive – Presence-based suggestions
 

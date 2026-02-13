@@ -2,7 +2,7 @@ blueprint:
   name: "Proactive – Presence-based suggestions (v5 – direct LLM)"
   author: madalone
   description: >
-    ![Image](/local/blueprint-images/proactive_llm-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive_llm-header.jpeg)
 
     # Proactive – Presence-based suggestions
 

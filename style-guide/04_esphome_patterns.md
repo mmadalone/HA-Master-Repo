@@ -478,3 +478,5 @@ esphome:
 - If all components belong to the same area — just use the top-level `area` field.
 
 Entities are assigned to sub-devices via the `device` property on individual components. See the [ESPHome sub-devices documentation](https://esphome.io/components/esphome.html#sub-devices) for full syntax.
+
+> 📋 **QA Check INT-2:** ESPHome pattern completeness — verify web_server→OTA dependency, packages merge modes, config archiving, debug sensor toggle, and sub-devices version are all documented. See `09_qa_audit_checklist.md`.

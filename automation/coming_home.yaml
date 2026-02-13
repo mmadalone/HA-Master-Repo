@@ -2,7 +2,7 @@ blueprint:
   name: "Coming home – AI welcome"
   author: madalone
   description: >
-    ![Image](/local/blueprint-images/coming_home-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/coming_home-header.jpeg)
 
     # Coming home – AI welcome
 

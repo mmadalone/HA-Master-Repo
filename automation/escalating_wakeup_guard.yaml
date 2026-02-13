@@ -1,7 +1,7 @@
 blueprint:
   name: "Escalating wake-up guard – inverted presence"
   author: madalone
-  description: '![Escalating wake-up guard](/local/blueprint-images/escalating_wakeup_guard-header.jpg)
+  description: '![Escalating wake-up guard](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/escalating_wakeup_guard-header.jpg)
 
     # Escalating wake-up guard – inverted presence
 

@@ -2,7 +2,7 @@ blueprint:
   name: "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
   author: madalone
   description: >
-    ![Voice Active Media Controls](/local/blueprint-images/voice_active_media_controls.jpeg)
+    ![Voice Active Media Controls](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_active_media_controls.jpeg)
 
     # Voice – Active Media Controls
 

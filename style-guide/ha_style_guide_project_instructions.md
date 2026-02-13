@@ -1,8 +1,8 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.2 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.3 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
 
-> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 9 files (~83K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
+> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~86K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
 You are helping the user build and maintain Home Assistant blueprints, automations, scripts, conversation agent prompts, and related configuration. You have direct filesystem access to their HA config via SMB mount.
 
@@ -93,6 +93,7 @@ The section numbers are preserved across files for cross-referencing.
 | [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~13.2K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, crash recovery (build + audit) |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.1K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
+| [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~3K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
 
 *Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9).*
 
@@ -102,7 +103,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**14 top-level sections · 123 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 9 files**
+**14 top-level sections · 123 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -274,6 +275,13 @@ The section numbers are preserved across files for cross-referencing.
   - §14.11 — File locations reference
   - §14.12 — Style guide cross-references
 
+### [QA Audit Checklist](09_qa_audit_checklist.md)
+
+- **§15** — QA Audit Checklist
+  - §15.1 — Check definitions (SEC, VER, AIR, CQ, ARCH, ZONE, INT categories)
+  - §15.2 — When to run checks (automatic triggers + user-triggered commands)
+  - §15.3 — Cross-reference index (which checks apply to which guide sections)
+
 ---
 
 ## Quick Reference — When to Read What
@@ -287,10 +295,14 @@ The section numbers are preserved across files for cross-referencing.
 - **Something isn't working?** → 🔧 TROUBLESHOOT: Troubleshooting & Debugging (start at §13.4 flowchart)
 - **Understanding the voice stack?** → 🔨 BUILD or 🔧 TROUBLESHOOT: Voice Assistant Pattern (end-to-end architecture reference)
 - **Reading logs or traces?** → 🔧 TROUBLESHOOT: Troubleshooting §13.1 (traces) and §13.6 (logs)
+- **Running a QA audit?** → 🔍 AUDIT: QA Audit Checklist (check definitions + trigger rules)
 
 ---
 
 ## Changelog
+
+### v3.3 — 2026-02-13
+- **`09_qa_audit_checklist.md` added** — QA audit checks (§15) with check definitions, automatic trigger rules, and cross-reference index. One-line `📋 QA Check` callouts wired into all 8 guide files (SEC-1, VER-3, AIR-4, CQ-1/3/4, ARCH-1, ZONE-1, INT-1 through INT-4). File count: 9 → 10.
 
 ### v3.2 — 2026-02-13
 - **§1.13 added** — Available tools and when to use them (MANDATORY). Canonical routing table: Desktop Commander for all file I/O, HA MCP for service calls and automation CRUD, ha-ssh for container shell access and logs, Gemini for blueprint images only. Explicitly deprecates Filesystem MCP and documents that automation traces require the HA UI.

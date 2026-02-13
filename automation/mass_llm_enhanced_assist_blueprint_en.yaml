@@ -4,7 +4,7 @@ blueprint:
   author: Music Assistant Project (style-guide fixes by madalone)
   # source_url removed — no public fork yet. Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
-  description: '![Image](/local/blueprint-images/mass_llm_enhanced_assist-header.jpeg)
+  description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/mass_llm_enhanced_assist-header.jpeg)
 
     # Play media using voice commands with LLM assistance
 

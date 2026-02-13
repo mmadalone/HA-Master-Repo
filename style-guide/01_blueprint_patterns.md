@@ -38,6 +38,8 @@ blueprint:
 - `min_version:` — **Required** when using features from a specific HA version. Always verify which version introduced the features you use.
 - `icon:` — **NOT valid** in the `blueprint:` schema block. HA will reject it with `extra keys not allowed @ data['blueprint']['icon']`. Icons are only available on **instances** created from blueprints, not the blueprint definition itself. See also §4.1.
 
+> 📋 **QA Check VER-2:** Blueprint examples must include `min_version` when using modern syntax. See `09_qa_audit_checklist.md`.
+
 **Key `min_version` thresholds:**
 
 | Version | Feature introduced |
@@ -276,6 +278,8 @@ actions:
 Every distinct step or phase in the action sequence SHOULD have an `alias:` field. Aliases are not required by HA for functionality — blueprints and automations work fine without them — but they are **strongly recommended** because they dramatically improve debugging. The `alias:` value is what shows up in HA's trace UI, making it the primary documentation for each step when something goes wrong.
 
 **Why this matters so much:** Without aliases, traces show generic step types (`service`, `wait_for_trigger`, `choose`) with no context. Debugging a 15-step automation without aliases means clicking into every damn step to figure out what it does. With aliases, the trace reads like a story. This is especially critical for vibe-coded automations where the AI generated the logic — aliases are the breadcrumb trail.
+
+> 📋 **QA Check CQ-1:** Every action step should have an `alias:` field for trace readability. See `09_qa_audit_checklist.md`.
 
 **Aliases must describe both the *what* and the *why*.** A good alias makes YAML comments redundant — it's readable in the raw file AND in traces.
 

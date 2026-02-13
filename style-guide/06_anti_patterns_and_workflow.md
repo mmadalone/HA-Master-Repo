@@ -75,6 +75,8 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 
 *Rules #14 (verify integration docs) and #28-29 (ESPHome debug sensors, config archiving) require architectural judgment and cannot be mechanically scanned. Everything else is in the tables above.*
 
+> 📋 **QA Check AIR-4:** Every anti-pattern ❌ example must show the fix alongside the bad example. See `09_qa_audit_checklist.md`.
+
 ### 10.5 Security review checklist (AI self-check before presenting code)
 
 This extends the scan tables above. Before presenting generated code to the user, verify each item. This is not optional — AI doesn't naturally think about security, and HA configs run on the user's home network controlling physical devices.
@@ -220,9 +222,9 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
    - **Aspect ratio:** 16:9
    - **Style:** Rick & Morty (Adult Swim cartoon)
    - **Filename:** `<blueprint_name>-header.<ext>` — allowed extensions: `.jpeg`, `.jpg`, `.png`, `.webp` (pick whichever the generation tool outputs — do not convert between formats just to match a convention)
-   - **Save location:** `/config/www/blueprint-images/`
-   - **Blueprint URL:** `/local/blueprint-images/<blueprint_name>-header.<ext>`
-   - After generating, rename the output file from its auto-generated name to the proper `<blueprint_name>-header.<ext>` convention. Ensure the extension in the YAML `![Image](...)` URL matches the actual file on disk exactly.
+   - **Save location:** `HEADER_IMG` (defined in Project Instructions — resolves to `GIT_REPO/images/header/`)
+   - **Blueprint URL:** `https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/<blueprint_name>-header.<ext>`
+   - After generating, rename the output file from its auto-generated name to the proper `<blueprint_name>-header.<ext>` convention. Save it to `GIT_REPO/images/header/`. Ensure the extension in the YAML `![Image](...)` URL matches the actual filename in the repo exactly. **Use `raw.githubusercontent.com`** — never `github.com/blob/...` (blob URLs render HTML, not the image binary).
 5. **Edit directly** — write to the SMB mount. Don't ask "should I write this?" — just do it.
    - **Checkpoint:** If the build requires ≥3 chunks (§11.5), create a build log (§11.8) after completing the outline (step 3) and update it after each chunk is confirmed.
 6. **Verify output (MANDATORY)** — after writing the file:
@@ -235,7 +237,7 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 ### 11.2 When the user asks to review/improve something
 0. **(Mandatory for 3+ files OR single-file reviews with 5+ violations/changes)** Create an audit/build log per §11.8.1 before scanning the first file. Update it after each file completes. Single-file reviews with fewer than 5 findings don't require a log file but MUST report findings in-chat using the structured `[ISSUE]` format: `[ISSUE] filename | AP-ID | severity | line | description | fix`. Skipping this when the threshold is met is a violation of AP-39.
 1. Read the file from the SMB mount.
-1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist on disk. For images: verify the file at `/config/www/blueprint-images/<name>`. Flag missing assets as AP-15 violations.
+1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist. For images: verify the file exists at `GIT_REPO/images/header/<name>` and that the GitHub raw URL in the description resolves correctly (`https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/<name>`). Flag missing assets as AP-15 violations.
 2. Identify issues against this style guide.
 3. Present findings as a prioritized list.
 4. **Ask before making changes** — especially removals or architectural changes.
@@ -263,6 +265,8 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 When **editing existing files** that use old syntax: migrate to new syntax in the sections you touch. Don't rewrite untouched sections just for syntax — but anything you add or modify uses the new forms.
 
 **UI auto-migration note:** Automations managed through HA's automation editor will automatically migrate to the new plural syntax when re-saved via the UI. YAML-only automations are never auto-migrated. A mix of old and new syntax on the same instance is normal and expected — but all new code we produce uses new syntax exclusively.
+
+> 📋 **QA Check VER-3:** Deprecation entries must track version introduced, removal target, and migration path. See `09_qa_audit_checklist.md`.
 
 ### 11.4 When producing conversation agent prompts
 1. Check which integration the user is using and consult its official docs.

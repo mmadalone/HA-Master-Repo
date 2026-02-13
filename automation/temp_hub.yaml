@@ -2,7 +2,7 @@ blueprint:
   name: "Temperature hub – cooling fan per device"
   author: madalone
   description: >
-    ![Image](/local/blueprint-images/temp_hub-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/temp_hub-header.jpeg)
 
     # Temperature hub – cooling fan per device
 

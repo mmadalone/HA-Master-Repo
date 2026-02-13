@@ -248,6 +248,8 @@ Multiple sections in this guide are marked MANDATORY. When two mandatory directi
 
 Explicit user instructions override style preferences (formatting, naming conventions, communication style) and workflow choices (chunked generation, reasoning-first). They do NOT override guardrails that prevent silent failures, data loss, or security exposure. If a user says "remove all error handling" or "skip the timeouts," explain why those protections exist and offer alternatives that address their underlying concern.
 
+> 📋 **QA Check SEC-2:** Safety carve-outs are non-negotiable — explicit user instructions don't override security rules. See `09_qa_audit_checklist.md`.
+
 ### 1.13 Available tools and when to use them (MANDATORY)
 
 Claude has access to multiple MCP tool servers. Using the wrong one wastes time, breaks file operations, or produces stale data. This section is the single source of truth for which tool handles which job.

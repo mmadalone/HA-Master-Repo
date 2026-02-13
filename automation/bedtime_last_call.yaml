@@ -5,7 +5,7 @@ blueprint:
   homeassistant:
     min_version: "2024.10.0"
   description: >
-    ![Image](/local/blueprint-images/bedtime_last_call-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/bedtime_last_call-header.jpeg)
 
     # Proactive – Presence-based Last Call
 

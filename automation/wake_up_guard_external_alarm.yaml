@@ -3,7 +3,7 @@ blueprint:
   author: madalone
   min_version: "2024.10.0"
   description: >-
-    ![Wake-Up Guard header](https://homeassistant.local:8123/local/blueprint-images/wake_up_guard_external_alarm-header.jpeg)
+    ![Wake-Up Guard header](https://homeassistant.local:8123https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/wake_up_guard_external_alarm-header.jpeg)
 
 
     Triggers your wake-up script based on an external alarm-time sensor,

@@ -1,7 +1,7 @@
 blueprint:
   name: "🚽💡 Smart Bathroom Occupancy Light Control (Door + Shower Zone Optional)"
   author: Murat Çeşmecioğlu (modified by Madalone & Miquel)
-  description: '![Image](/local/blueprint-images/smart-bathroom-header.jpeg)
+  description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/smart-bathroom-header.jpeg)
 
     # Smart Bathroom Occupancy Light Control
 

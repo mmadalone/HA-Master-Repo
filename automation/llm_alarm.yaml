@@ -1,7 +1,7 @@
 blueprint:
   name: "Wake-up alarm – LLM context"
   author: madalone
-  description: '![Wake-up alarm header](/local/blueprint-images/llm_alarm-header.jpeg)
+  description: '![Wake-up alarm header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/llm_alarm-header.jpeg)
 
     # Wake-up alarm – LLM context
 

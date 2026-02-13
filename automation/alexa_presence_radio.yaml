@@ -3,7 +3,7 @@ blueprint:
   name: "Alexa Presence-Aware Radio – Music Assistant"
   author: madalone
   description: |
-    ![Image](/local/blueprint-images/alexa_presence_radio-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/alexa_presence_radio-header.jpeg)
 
     # Play radio where you are — one voice command, any Echo
 

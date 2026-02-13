@@ -3,7 +3,7 @@ blueprint:
   name: "Alexa ↔ Music Assistant Volume Sync"
   author: madalone
   description: |
-    ![Image](/local/blueprint-images/alexa_ma_volume_sync_blueprint-header.jpeg)
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/alexa_ma_volume_sync_blueprint-header.jpeg)
 
     # Sync volume between Alexa devices and Music Assistant speakers
 
