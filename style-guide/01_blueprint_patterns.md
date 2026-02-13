@@ -253,7 +253,7 @@ variables:
   target_person: !input person_entity
   person_name: "{{ state_attr(target_person, 'friendly_name') | default('someone') }}"
 
-action:
+actions:
   # The wait_for_trigger can reference variables defined above
   - alias: "Wait for person to leave the zone"
     wait_for_trigger:
@@ -280,7 +280,7 @@ Every distinct step or phase in the action sequence SHOULD have an `alias:` fiel
 **Aliases must describe both the *what* and the *why*.** A good alias makes YAML comments redundant — it's readable in the raw file AND in traces.
 
 ```yaml
-action:
+actions:
   - alias: "Wait for entrance sensor — GPS alone isn't enough, need physical presence"
     wait_for_trigger:
       - trigger: state

@@ -1,3 +1,5 @@
 # Sanity Check Issues Log
 # Started: 2026-02-13 (fresh run)
 [ISSUE] 01_blueprint_patterns.md | ⚠️ WARNING | §3.4 | Code example uses singular `action:` top-level key instead of `actions:` (plural), violating the guide's own §3.8 MANDATORY syntax rules | Change `action:` to `actions:` in the §3.4 variable scope example
+[FIXED] 01_blueprint_patterns.md | §3.4 | `action:` → `actions:` (line ~256)
+[FOUND+FIXED] 01_blueprint_patterns.md | §3.5 | Same issue in alias example — `action:` → `actions:` (line ~283)

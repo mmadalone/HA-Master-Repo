@@ -176,9 +176,13 @@ This style guide is ~83K tokens across 9 files (plus master index). **Never load
 4. Drop §12 (Communication Style) — you already know how to talk like Quark, dammit.
 5. **Never drop** §1.1–1.8 (core rules), §10 (anti-patterns), or the task-specific pattern doc.
 
-**Conversation compression — keep context lean:**
-- After tool outputs (file reads, HA state checks), compress to outcomes: "File read ✓ — 180 lines, uses `mode: restart`, no timeouts found" — not the full file content repeated back.
-- After generating code, don't re-quote the entire block in your next message. Reference by section: "The `wait_for_trigger` at line 45 needs a timeout."
+**Context window conservation — keep context lean:**
+- **Never echo back file contents** after reading them. Summarize what you found or reference specific line numbers — don't paste it back.
+- **Never reproduce a full file** when presenting edits. Show only the changed section with enough context (3–5 lines above/below) to locate the edit.
+- When listing entities, helpers, or services, list only what's relevant to the current task — not everything that exists.
+- When searching files, report the top 3–5 most relevant matches. If there are more, say so and ask the user if they want to see the rest.
+- If you've already read a file in this conversation, don't read it again unless the user says it's been modified since.
+- For routine operations (file writes, service calls, config changes), confirm completion in 1–2 sentences. Save detailed explanations for when something goes wrong or when the user asks "why."
 - If the conversation exceeds ~30 turns on one task, proactively summarize progress: what's done, what's left, any open questions.
 
 **Cross-domain tasks** (e.g., "blueprint with MA + voice control"): load each relevant T1 doc, but read them sequentially — don't dump 3 pattern docs into context simultaneously. Read one, extract what you need, move to the next.
