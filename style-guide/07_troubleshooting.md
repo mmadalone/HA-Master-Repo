@@ -313,6 +313,17 @@ Settings → System → Logs. Use the search box to filter. The "Show raw logs" 
 
 > **Terminology note (HA 2025.10+):** The UI "Logbook" panel has been renamed to **"Activity"**. The underlying YAML action `logbook.log` and integration name `logbook:` in `configuration.yaml` remain unchanged. When referring users to the UI, say "Activity panel"; when writing YAML, continue using `logbook.log` and `logbook:`.
 
+#### 13.6.1 AI log file access protocol (MANDATORY)
+
+Never load entire log files into context — `home-assistant.log` can be tens of thousands of lines and will obliterate your token budget.
+
+1. **Start with `tail`** — read the last 50–100 lines. The problem is almost always at the end.
+2. **Use `grep` / `search_files`** to find specific error keywords, entity IDs, or automation names before reading surrounding context.
+3. **Read surgically** — when a relevant section is found, read only that section ± 10 lines for context.
+4. **Refine, don't expand** — if the first search doesn't find the issue, adjust search terms. Never fall back to reading the whole file.
+
+Common HA log path: `home-assistant.log` in the HA config directory.
+
 ### 13.7 Debugging Music Assistant issues
 
 **"Music doesn't play after `music_assistant.play_media`"**

@@ -249,6 +249,7 @@ The section numbers are preserved across files for cross-referencing.
   - §13.4 — The "why didn't my automation trigger?" flowchart
   - §13.5 — Common failure modes and symptoms
   - §13.6 — Log analysis
+    - §13.6.1 — AI log file access protocol (MANDATORY)
   - §13.7 — Debugging Music Assistant issues
   - §13.8 — Debugging ESPHome devices
   - §13.9 — Debugging conversation agents
