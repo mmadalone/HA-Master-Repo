@@ -380,6 +380,8 @@ File is partially written through the trigger block. Next: actions part 1.
 No blockers. All decisions are final unless user revisits presence detection approach.
 ```
 
+**Build logs are metadata, not staging areas. Proposals don't get repeated.** The correct sequence is: (1) propose changes in conversation, including the actual text to be added or changed, (2) user approves, (3) create build log if threshold is met — the log records *decisions and plan metadata*, not the content itself, (4) write directly to the target file, (5) update build log with completion status. There is no step where the AI re-presents the approved content or asks for a second confirmation. Approval means "do it now." A build log entry for a 40-line addition to §13.6.2 reads *"Add §13.6.2 live troubleshooting protocol — round-based workflow covering baseline, trigger, wait, targeted read, phase repeat"* — one line of decision metadata, not the full text. A build log that contains the actual deliverable content is a draft file wearing a build log's name, and it inserts an unnecessary gate between approval and execution.
+
 **Why every field matters:**
 - **Status** — so the new session knows whether to resume or start fresh.
 - **Last updated chunk** — so the new session knows exactly where to pick up.

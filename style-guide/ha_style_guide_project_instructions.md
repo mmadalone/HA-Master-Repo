@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.5 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.6 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~90K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -301,6 +301,9 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.6 — 2026-02-13
+- **§11.8 updated** — Added build log boundary rule: build logs track decision metadata, not deliverable content. Codifies the correct approval-to-execution sequence: propose in conversation → user approves → create build log (metadata only) → write to target file. No re-presenting approved content, no intermediate draft files.
 
 ### v3.5 — 2026-02-13
 - **§1.14 added** — Session discipline and context hygiene. Six rules: write-to-disk-immediately, post-task state checkpoints, reference-don't-repeat, artifact-first workflow, toolkit trimming per task type, and one-major-deliverable-per-session scoping. Introduces ~15-turn scope check threshold complementing §1.9's existing ~30-turn summary threshold.
