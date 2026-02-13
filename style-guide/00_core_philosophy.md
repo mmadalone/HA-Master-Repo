@@ -258,6 +258,8 @@ This project uses Git for version control via the HA MCP git tools (`ha_create_c
 
 **Every project file.** This includes blueprints, scripts, YAML configs, ESPHome configs, conversation agent prompts, markdown documentation, and any other file managed under this project. If it lives under the HA config directory and you're about to change it, git tracks it. No exceptions.
 
+> **Two git mechanisms, two scopes** — the HA MCP git tools only track `HA_CONFIG`. Style guide files in `PROJECT_DIR` follow a separate sync-and-commit workflow. See §2.6 for the boundary rules.
+
 Build logs in `_build_logs/` are also committed to git — they're part of the project history, not throwaway scratch.
 
 > **Legacy note — `_versioning/` directory:** Prior to v3.0 (Feb 2026), this project used manual filesystem versioning with a `_versioning/` directory tree containing timestamped file copies and markdown changelogs. That system has been replaced by Git. The `_versioning/` directory is retained as a **read-only historical archive** — do not create new files in it, do not reference it in new workflows, and do not delete it. If you need history from before the Git migration, look there.
@@ -323,6 +325,22 @@ When a conversation dies mid-build, git preserves everything:
 4. **Use `ha_git_history`** to see recent commits and find the right recovery point.
 
 This replaces the old filesystem-based recovery (scanning `_versioning/` directories, comparing backups). Git's diff and rollback are more reliable than manual file archaeology.
+
+### 2.6 Git scope boundaries — don't overthink it
+
+The HA MCP git tools (`ha_create_checkpoint`, `ha_git_commit`, `ha_git_rollback`) only track `HA_CONFIG`. They know nothing about `PROJECT_DIR` or `GIT_REPO`.
+
+Style guide edits in `PROJECT_DIR` are synced and committed by the user via `sync-to-repo.sh`. That's not the AI's problem — don't try to manage it.
+
+**Decision rule — two paths, zero deliberation:**
+
+| You edited files in… | Do this |
+|---|---|
+| `HA_CONFIG` | Use HA MCP git tools (checkpoint → edit → commit). Standard §2.2 workflow. |
+| `PROJECT_DIR` | Provide a concise commit message summarizing what changed. Tell the user to sync when they're ready. Done. |
+| Both in one task | Do both — HA MCP commit for the config changes, commit message + sync reminder for the style guide changes. Two separate actions, no need to unify them. |
+
+**Do not deliberate about which git workflow applies.** The path you edited determines the answer. If you catch yourself writing a paragraph about "which versioning mechanism covers this file," you've already violated this rule — pick the path, apply the matching action, move on.
 
 ---
 

@@ -102,7 +102,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**14 top-level sections · 120 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 9 files**
+**14 top-level sections · 121 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 9 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -127,6 +127,7 @@ The section numbers are preserved across files for cross-referencing.
   - §2.3 — Pre-flight checklist (MANDATORY)
   - §2.4 — Atomic multi-file edits
   - §2.5 — Crash recovery via git
+  - §2.6 — Git scope boundaries — don't overthink it
 - **§9** — Naming Conventions & Organization
   - §9.1 — Blueprints
   - §9.2 — Scripts
