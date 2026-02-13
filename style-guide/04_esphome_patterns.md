@@ -391,7 +391,11 @@ sensor:
 
 **Rules:**
 - Always use `${friendly_name}` prefix in sensor names so they're identifiable in HA.
-- Set reasonable `update_interval` values — don't poll every second unless actively debugging.
+- Set concrete `update_interval` values by sensor type — don't poll every second unless actively debugging:
+  - **WiFi/BLE sensors (signal strength, connected clients):** 30–60s
+  - **Environmental (temperature, humidity, pressure):** 60–300s
+  - **Power/energy (voltage, current, wattage):** 10–30s
+  - **Debug/diagnostic (heap size, uptime, loop time):** 10–15s in debug builds, disabled or 300s+ in production
 - `debug` component with `update_interval: 5s` is aggressive — fine for troubleshooting, wasteful for everyday use.
 
 ### 6.8 ESPHome device naming conventions

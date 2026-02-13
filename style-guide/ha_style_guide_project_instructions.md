@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.4 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.5 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~90K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -123,6 +123,7 @@ The section numbers are preserved across files for cross-referencing.
   - §1.11 — Violation report severity taxonomy (ERROR / WARNING / INFO)
   - §1.12 — Directive precedence — when MANDATORYs conflict
   - §1.13 — Available tools and when to use them (MANDATORY)
+  - §1.14 — Session discipline and context hygiene
 - **§2** — Git Versioning (Mandatory)
   - §2.1 — Scope — what gets versioned
   - §2.2 — Git workflow (checkpoint → edit → commit)
@@ -300,6 +301,11 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.5 — 2026-02-13
+- **§1.14 added** — Session discipline and context hygiene. Six rules: write-to-disk-immediately, post-task state checkpoints, reference-don't-repeat, artifact-first workflow, toolkit trimming per task type, and one-major-deliverable-per-session scoping. Introduces ~15-turn scope check threshold complementing §1.9's existing ~30-turn summary threshold.
+- §1.9 updated with cross-reference to §1.14.6 dual-threshold system.
+- Master index TOC updated.
 
 ### v3.4 — 2026-02-13
 - **5 new QA checks added** — CQ-5 (YAML example validity), CQ-6 (modern syntax in examples), AIR-6 (token count accuracy), ARCH-4 (internal cross-reference integrity), ARCH-5 (routing reachability).
