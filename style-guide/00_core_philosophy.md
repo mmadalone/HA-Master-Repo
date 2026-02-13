@@ -248,6 +248,31 @@ Multiple sections in this guide are marked MANDATORY. When two mandatory directi
 
 Explicit user instructions override style preferences (formatting, naming conventions, communication style) and workflow choices (chunked generation, reasoning-first). They do NOT override guardrails that prevent silent failures, data loss, or security exposure. If a user says "remove all error handling" or "skip the timeouts," explain why those protections exist and offer alternatives that address their underlying concern.
 
+### 1.13 Available tools and when to use them (MANDATORY)
+
+Claude has access to multiple MCP tool servers. Using the wrong one wastes time, breaks file operations, or produces stale data. This section is the single source of truth for which tool handles which job.
+
+| Tool | Use for | Do NOT use for |
+|------|---------|----------------|
+| **Desktop Commander** | **PRIMARY tool for ALL file reads/writes on the user's Mac.** HA config via SMB mount, style guide docs in `PROJECT_DIR`, build logs, violation reports — everything that touches disk. | — |
+| **Filesystem MCP** | **Do NOT use.** Desktop Commander handles all file operations. The Filesystem MCP tools (`Filesystem:read_file`, `Filesystem:write_file`, etc.) are redundant and should be considered disabled. Using them alongside Desktop Commander creates confusion over which tool wrote what. | Everything. Prefer Desktop Commander for all file operations. |
+| **home-assistant-cool-vibes (HA MCP)** | HA service calls (`ha_call_service`), entity state queries (`ha_get_entity_state`, `ha_list_entities`), automation/script CRUD (`ha_create_automation`, `ha_update_automation`, etc.), git operations (`ha_create_checkpoint`, `ha_git_commit`, `ha_git_rollback`), helper management, area/device registry, dashboard operations, add-on management. | File editing — use Desktop Commander via SMB for writing YAML files directly. The HA MCP write tools (`ha_write_file`) bypass the SMB mount path and don't follow the file transfer rules. |
+| **ha-ssh** | Shell-level access to the HA container — reading logs (`ha core logs`, `grep` on `home-assistant.log`), checking container state, running HA CLI commands, verifying integration status. Follows §13.6.1 (surgical reads, never dump full logs). | File editing or creation. SSH file writes bypass the SMB mount, risk encoding issues, and violate the file transfer rules. Always use Desktop Commander via SMB for file operations. |
+| **gemini** | Generating blueprint header images per AP-15 (header image gate). Use `gemini-generate-image` with the defaults from §11.1 step 4 (1K resolution, 16:9 aspect, style as appropriate). | General-purpose queries, code generation, or anything outside image generation. |
+| **Automation traces** | **Use the HA UI — not tools.** Claude cannot reliably retrieve trace data via API or SSH. Traces are rendered in the HA frontend (Settings → Automations → click automation → Traces). When troubleshooting, rely on logs via ha-ssh (see §13.6) and ask the user to check traces in the HA UI per §13.1. | Do not attempt to fetch trace JSON via API calls or SSH commands — the data format is unstable and the results are unreliable. |
+
+**Decision rules:**
+
+1. **Reading or writing a file?** → Desktop Commander. Always. No exceptions.
+2. **Querying HA state, calling a service, or managing automations/scripts programmatically?** → HA MCP.
+3. **Need shell access to the HA container (logs, CLI, diagnostics)?** → ha-ssh.
+4. **Need a blueprint header image?** → Gemini.
+5. **Need to see an automation trace?** → Ask the user to check the HA UI.
+
+**Why this matters:** Tool confusion is the #1 source of wasted turns in multi-tool sessions. The AI reaches for `Filesystem:read_file` when it should use `Desktop Commander:read_file`, or tries to SSH a file write when the SMB mount is right there. This section eliminates the guesswork — one tool per job, no overlap, no ambiguity.
+
+**Cross-references:** §2.6 (git scope boundaries — which git tool for which path), §13.6.1 (AI log file access protocol — how to use ha-ssh for log reads), §13.1 (automation traces — HA UI first).
+
 ---
 
 ## 2. GIT VERSIONING (MANDATORY)

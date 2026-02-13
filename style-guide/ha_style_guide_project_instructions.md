@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.1 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.2 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 9 files (~83K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -102,7 +102,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**14 top-level sections · 122 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 9 files**
+**14 top-level sections · 123 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 9 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -121,6 +121,7 @@ The section numbers are preserved across files for cross-referencing.
   - §1.10 — Reasoning-first directive — explain before you code (MANDATORY)
   - §1.11 — Violation report severity taxonomy (ERROR / WARNING / INFO)
   - §1.12 — Directive precedence — when MANDATORYs conflict
+  - §1.13 — Available tools and when to use them (MANDATORY)
 - **§2** — Git Versioning (Mandatory)
   - §2.1 — Scope — what gets versioned
   - §2.2 — Git workflow (checkpoint → edit → commit)
@@ -290,6 +291,10 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.2 — 2026-02-13
+- **§1.13 added** — Available tools and when to use them (MANDATORY). Canonical routing table: Desktop Commander for all file I/O, HA MCP for service calls and automation CRUD, ha-ssh for container shell access and logs, Gemini for blueprint images only. Explicitly deprecates Filesystem MCP and documents that automation traces require the HA UI.
+- Cross-references added to §2.6, §13.6.1, and §13.1.
 
 ### v3.1 — 2026-02-13
 - **§13.6.2 added** — Live troubleshooting protocol for long-running automations (MANDATORY). Round-based workflow: baseline → trigger → wait for user → read. Prevents AI log polling and stale reads during multi-minute automation runs.
