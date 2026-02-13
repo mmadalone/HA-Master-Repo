@@ -339,7 +339,7 @@ Since HA 2025.2, **Model Context Protocol (MCP)** servers provide a second, inte
 | Tool source | Best for | Limitations |
 |---|---|---|
 | Exposed scripts (§8.3.2) | Device control, HA service calls, anything needing HA entity targeting | Requires creating scripts in HA; tool descriptions live in YAML |
-| MCP servers | Information retrieval, external APIs, multi-step reasoning, to-do lists, calendar queries | Requires running a separate MCP server process; HA 2025.9+ improved native support |
+| MCP servers | Information retrieval, external APIs, multi-step reasoning, to-do lists, calendar queries | Requires running a separate MCP server process; available since HA 2025.2 |
 
 These are **complementary, not competing** tool sources. A single conversation agent can use both exposed scripts AND MCP-provided tools simultaneously. The one-agent-per-persona rule (§8.4) limits the number of *agents*, not the number of tool sources per agent. A single `Rick - Extended` agent can have 5 exposed scripts AND 3 MCP servers feeding it tools.
 
@@ -348,7 +348,7 @@ These are **complementary, not competing** tool sources. A single conversation a
 **When to use MCP over scripts:**
 - The capability doesn't map to an HA service call (e.g., "search the web", "check my calendar", "query a database").
 - The tool needs complex input/output schemas that are awkward to express as script fields.
-- You're using the native OpenAI Conversation integration (HA 2025.9+), which has first-class MCP support.
+- You're using the native OpenAI Conversation integration, which supports MCP tools (HA 2025.2+).
 
 **When to stick with scripts:**
 - Device control (lights, media, climate) — scripts give you validation, logging, and a single source of truth in HA.

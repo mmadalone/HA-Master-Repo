@@ -16,7 +16,9 @@
 
 ---
 
-## 1 — Security & Secrets Management
+## 15.1 — Check Definitions
+
+### 1 — Security & Secrets Management
 
 ### SEC-1: No Inline Secrets [ERROR]
 
@@ -51,7 +53,7 @@ api_key: !secret openai_api_key
 
 ---
 
-## 2 — Version Accuracy
+### 2 — Version Accuracy
 
 ### VER-1: All Version Claims Must Be Verified [ERROR]
 
@@ -109,7 +111,7 @@ homeassistant:
 
 ---
 
-## 3 — AI-Readability & Vibe Coding Readiness
+### 3 — AI-Readability & Vibe Coding Readiness
 
 ### AIR-1: No "Use Good Judgment" Without Concrete Thresholds [WARNING]
 
@@ -204,7 +206,7 @@ wc -c <filename> | awk '{printf "%.1fK tokens\n", $1/4/1000}'
 
 ---
 
-## 4 — Code Quality & Patterns
+### 4 — Code Quality & Patterns
 
 ### CQ-1: Action Aliases Are Strongly Recommended [WARNING]
 
@@ -281,8 +283,11 @@ Known return value documentation required:
 |---|---|---|
 | `service:` | `action:` | AP-08 |
 | `service_data:` | `data:` (under `action:`) | AP-08 |
-| `automation:` (singular top-level) | `automations:` (plural) | §3.8 |
-| `script:` (singular top-level) | `scripts:` (plural) | §3.8 |
+| `trigger:` (singular, inside automation) | `triggers:` (plural) | §3.8 |
+| `condition:` (singular, inside automation) | `conditions:` (plural) | §3.8 |
+| `action:` (singular, inside automation) | `actions:` (plural) | §3.8 |
+
+**Note:** Top-level `automation:` and `script:` keys in `configuration.yaml`, packages, and `scripts.yaml` are correctly singular — do NOT flag these.
 
 **Exceptions:** Blocks that explicitly demonstrate the migration (showing old → new) or that document legacy behavior are exempt if clearly labeled.
 
@@ -290,7 +295,7 @@ Known return value documentation required:
 
 ---
 
-## 5 — Architecture & Structure
+### 5 — Architecture & Structure
 
 ### ARCH-1: Layer Boundary Enforcement [WARNING]
 
@@ -365,7 +370,7 @@ Then verify each one resolves to an actual target. Dangling references are ERROR
 
 ---
 
-## 6 — Integration-Specific Checks
+### 6 — Integration-Specific Checks
 
 ### INT-1: Conversation Agent Completeness [WARNING]
 
@@ -410,7 +415,7 @@ Then verify each one resolves to an actual target. Dangling references are ERROR
 
 ---
 
-## 7 — Zone & Presence Checks
+### 7 — Zone & Presence Checks
 
 ### ZONE-1: GPS Bounce Protection Guidance [WARNING]
 
@@ -428,7 +433,7 @@ Then verify each one resolves to an actual target. Dangling references are ERROR
 
 ---
 
-## 8 — Periodic Maintenance Checks
+### 8 — Periodic Maintenance Checks
 
 These checks should be run on a schedule (e.g., after every major HA release):
 
@@ -455,7 +460,7 @@ Verify all external links in the guide still resolve. Replace broken links with 
 
 ---
 
-## When to Run Checks
+## 15.2 — When to Run Checks
 
 ### Automatic (AI suggests when relevant)
 
@@ -505,7 +510,7 @@ If a fix session crashes or is resumed, read `fix_progress.log` FIRST and skip a
 
 ---
 
-## Appendix: Quick Grep Patterns
+## 15.3 — Quick Grep Patterns
 
 Useful searches to catch common violations in YAML files:
 

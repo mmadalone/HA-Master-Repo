@@ -1,8 +1,8 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.6 — 2026-02-13** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.7 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
 
-> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~90K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
+> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~92K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
 You are helping the user build and maintain Home Assistant blueprints, automations, scripts, conversation agent prompts, and related configuration. You have direct filesystem access to their HA config via SMB mount.
 
@@ -84,14 +84,14 @@ The section numbers are preserved across files for cross-referencing.
 
 | Doc | Sections | ~Tokens | Covers |
 |-----|----------|---------|--------|
-| [Core Philosophy](00_core_philosophy.md) | §1, §2, §9, §12 | ~8.5K (§1 alone: ~5.7K) | Design principles, git versioning workflow, naming conventions, communication style |
+| [Core Philosophy](00_core_philosophy.md) | §1, §2, §9, §12 | ~11.0K (§1 alone: ~7.9K) | Design principles, git versioning workflow, naming conventions, communication style |
 | [Blueprint Patterns](01_blueprint_patterns.md) | §3, §4 | ~6.8K | Blueprint YAML structure, inputs, variables, templates, script standards |
 | [Automation Patterns](02_automation_patterns.md) | §5 | ~6.2K | Error handling, modes, timeouts, triggers, GPS bounce, helpers, area/label targeting |
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.3K | Agent prompt structure, separation from blueprints, naming conventions |
 | [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.0K | Device config structure, packages, secrets, wake words, naming |
 | [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.5K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
 | [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~13.2K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, crash recovery (build + audit) |
-| [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.1K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
+| [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.9K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
 | [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~6K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
 
@@ -301,6 +301,14 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.7 — 2026-02-14
+- **Sanity check fixes** — All findings from the v3.6 sanity check resolved (1 ERROR, 2 WARNING, 2 INFO → 0).
+- **§15 renumbered** — `09_qa_audit_checklist.md` now uses `## 15.1 — Check Definitions`, `## 15.2 — When to Run Checks`, `## 15.3 — Quick Grep Patterns`. Categories 1–8 demoted to `###` under 15.1. Master index TOC §15.x references now resolve.
+- **Token estimates updated** — `00_core_philosophy.md`: ~8.5K → ~11.0K; §1 alone: ~5.7K → ~7.9K; `07_troubleshooting.md`: ~6.1K → ~6.9K. Added missing `09_qa_audit_checklist.md` row. Total: ~90K → ~92K.
+- **VER-3 compliance** — `data_template` deprecation info added to AP-10b scan table and §11.3 migration table (deprecated ~HA 0.115/2020, no removal date announced).
+- **VER-1 correction** — Two unverifiable MCP "2025.9+" claims in `03_conversation_agents.md` corrected to "2025.2+" (verified introduction date).
+- **CQ-6 definition corrected** — Replaced incorrect `automation:` → `automations:` / `script:` → `scripts:` rows with the actual 2024.10 changes (`trigger:` → `triggers:`, `condition:` → `conditions:`, `action:` → `actions:` inside automations). Added note that top-level singular keys are valid.
 
 ### v3.6 — 2026-02-13
 - **§11.8 updated** — Added build log boundary rule: build logs track decision metadata, not deliverable content. Codifies the correct approval-to-execution sequence: propose in conversation → user approves → create build log (metadata only) → write to target file. No re-presenting approved content, no intermediate draft files.

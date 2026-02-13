@@ -23,7 +23,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-09 | ⚠️ | Blueprint with 0 `input:` sections (no collapsible groups) | §3.2 |
 | AP-10 | ⚠️ | `service:` keyword in new code | §11.3 |
 | AP-10a | ⚠️ | `platform:` as trigger type prefix in new code (should be `trigger:`) | §11.3 |
-| AP-10b | ⚠️ | `data_template:` in new code (should be `data:`) | §11.3 |
+| AP-10b | ⚠️ | `data_template:` in new code (deprecated ~HA 0.115/2020, no removal date announced — use `data:`) | §11.3 |
 | AP-11 | ⚠️ | Action step missing `alias:` field | §3.5 |
 | AP-12 | ❌ | File edit without git checkpoint | §2.3 |
 | AP-13 | ℹ️ | `selector: text:` where `select:` with `options:` would constrain input | §10 #13 |
@@ -257,7 +257,7 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 | `trigger:` (singular, top-level) | `triggers:` | Automation top-level key |
 | `condition:` (singular, top-level) | `conditions:` | Automation top-level key |
 | `action:` (singular, top-level) | `actions:` | Automation top-level key |
-| `data_template:` | `data:` | Action data fields (templates auto-render in `data:` since 2021.x) |
+| `data_template:` | `data:` | Action data fields (deprecated ~HA 0.115/2020, no removal date announced — templates auto-render in `data:`) |
 | `value_template:` (in triggers) | `value_template:` under `trigger: template` | Trigger-level templates (context moved, key unchanged) |
 | `sensor:` > `platform: template` | `template:` > `sensor:` | Template entities (legacy deprecated 2025.12, removed 2026.6). Does NOT apply to ESPHome. |
 | Positional trigger references (`trigger[0]`, unnamed trigger access) | Named `trigger.id` + `trigger.` context object | Always assign `id:` to triggers and access data via `trigger.to_state`, `trigger.from_state`, `trigger.id` etc. (§5.6) |
