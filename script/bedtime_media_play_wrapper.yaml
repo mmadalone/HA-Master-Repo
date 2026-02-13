@@ -1,0 +1,92 @@
+blueprint:
+  name: bedtime media play wrapper (music assistant)
+  description: >
+    wrapper script to play bedtime media (especially audiobooks) via music assistant.
+    it always targets the passed-in music assistant media_player (so your bedtime blueprint can pass its selected player).
+  domain: script
+
+  input:
+    media_player:
+      name: target player (music assistant)
+      description: this is the player your bedtime blueprint selects from its menu and passes into this script.
+      selector:
+        entity:
+          filter:
+            integration: music_assistant
+            domain: media_player
+          multiple: false
+
+    media_type:
+      name: media type
+      description: for bedtime, you’ll usually use audiobook.
+      default: audiobook
+      selector:
+        select:
+          options:
+            - audiobook
+            - podcast
+            - radio
+            - track
+            - album
+            - artist
+            - playlist
+
+    media_id:
+      name: media id (name or uri)
+      description: >
+        can be a name (e.g. "bedtime stories for cynics") or a uri (e.g. "library://audiobook/86").
+      selector:
+        text:
+
+    enqueue:
+      name: enqueue
+      description: replace starts fresh; add appends to the queue.
+      default: replace
+      selector:
+        select:
+          options:
+            - replace
+            - add
+
+    shuffle:
+      name: shuffle
+      description: set shuffle on the target player after starting playback.
+      default: false
+      selector:
+        boolean:
+
+mode: queued
+max: 10
+
+sequence:
+  - variables:
+      _player: !input media_player
+      _media_type: "{{ (!input media_type) | string | trim }}"
+      _media_id: "{{ (!input media_id) | string | trim }}"
+      _enqueue: "{{ (!input enqueue) | string | trim }}"
+      _shuffle: "{{ (!input shuffle) | default(false) }}"
+
+      action_data: >
+        {{
+          dict(
+            media_id=_media_id,
+            media_type=_media_type,
+            enqueue=_enqueue
+          )
+        }}
+
+      target_data: >
+        {{
+          dict(entity_id=_player)
+        }}
+
+  - alias: play media via music assistant (forced target player)
+    action: music_assistant.play_media
+    data: "{{ action_data }}"
+    target: "{{ target_data }}"
+
+  - alias: set shuffle (optional)
+    action: media_player.shuffle_set
+    data:
+      shuffle: "{{ _shuffle }}"
+    target: "{{ target_data }}"

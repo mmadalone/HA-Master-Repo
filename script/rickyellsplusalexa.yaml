@@ -1,0 +1,156 @@
+blueprint:
+  name: Rick wake-up helper – TTS + Alexa music
+  description: |
+    **Rick wake-up helper – TTS + Alexa music**
+
+    This is a small reusable SCRIPT blueprint.  
+    It does exactly two things in sequence:
+
+    1. Uses your ElevenLabs (or other) TTS entity to make "Rick" speak on a
+       chosen media player.
+    2. After a configurable delay, sends two text commands to a chosen Alexa
+       device:
+       - One to set the volume.
+       - One to start a song / playlist / station.
+
+    You can call this script from ANY automation, for example:
+    - Morning routine ("if still in bed", "if motion not detected", etc.).
+    - Pomodoro overrun ("you worked too long, go stretch").
+    - Idle too long at PC, bedtime reminders, etc.
+
+    ---
+    💡 Requirements
+    - A TTS entity that supports `tts.speak` (e.g. ElevenLabs).
+    - A media_player where Rick should speak.
+    - Alexa Devices (or compatible) integration which exposes the
+      `alexa_devices.send_text_command` service and an Alexa device.
+
+    ---
+    🛠 How to set up
+    1. Save this file as e.g.:
+         `config/blueprints/script/rick_tts_alexa_helper.yaml`
+    2. Restart Home Assistant or reload blueprints.
+    3. Go to **Settings → Automations & Scenes → Scripts → Create script → From blueprint**
+       and select **"Rick wake-up helper – TTS + Alexa music"**.
+    4. Fill in:
+       - TTS entity, media player, message, voice profile.
+       - Delay before Alexa commands.
+       - Alexa device, volume command, and song command.
+    5. Use the created script in any automation as a normal `script.turn_on`.
+
+  domain: script
+
+  input:
+    tts_engine:
+      name: TTS entity (Rick voice)
+      description: >
+        Your ElevenLabs (or other) TTS entity that will be used with
+        `tts.speak`. Example: `tts.elevenlabs_custom_tts`.
+      selector:
+        entity:
+          domain: tts
+
+    tts_output_player:
+      name: Media player for Rick's voice
+      description: >
+        Media player where Rick should yell at you.
+        Example: `media_player.home_assistant_voice_0a0109_media_player_2_2`.
+      selector:
+        entity:
+          domain: media_player
+
+    tts_message:
+      name: Rick's message
+      description: >
+        The text Rick will shout. You can customize this freely per script
+        instance.
+      default: >
+        Hey Miquel, it's after eight. Get your lazy carbon-based ass out of bed
+        before I start charging you rent for lying there. Come on, I know you
+        hate your job but get up! Come on, get up and start your day! Come on
+        Come on Come on Come on!
+      selector:
+        text:
+          multiline: true
+
+    tts_voice_profile:
+      name: TTS voice profile
+      description: >
+        Value to send as `options.voice_profile` to your TTS service.
+        Example: "Rick Sanchez - Custom 11".
+      default: "Rick Sanchez - Custom 11"
+      selector:
+        text:
+          multiline: false
+
+    alexa_delay_after_tts:
+      name: Delay before Alexa commands (seconds)
+      description: >
+        How long to wait after Rick finishes yelling before sending the Alexa
+        commands (volume + song).
+      default: 40
+      selector:
+        number:
+          min: 0
+          max: 600
+          unit_of_measurement: s
+          mode: slider
+
+    alexa_device:
+      name: Alexa device
+      description: >
+        Alexa device that should receive the text commands.  
+        This must be a device supported by `alexa_devices.send_text_command`.
+      selector:
+        device: {}
+
+    alexa_volume_command:
+      name: Alexa volume command
+      description: >
+        Text command to set the volume before music starts.
+        Example: "set volume to 10".
+      default: "set volume to 10"
+      selector:
+        text:
+          multiline: false
+
+    alexa_song_command:
+      name: Alexa play command
+      description: >
+        Text command to start your wake-up song / playlist.
+        Example: "play Mark on the bus by the Beastie Boys".
+      default: "play Mark on the bus by the Beastie Boys"
+      selector:
+        text:
+          multiline: false
+
+mode: single
+
+sequence:
+  # 1) Rick yells via TTS on the selected media player
+  - service: tts.speak
+    target:
+      entity_id: !input tts_engine
+    data:
+      media_player_entity_id: !input tts_output_player
+      message: !input tts_message
+      options:
+        voice_profile: !input tts_voice_profile
+
+  # 2) Wait before sending Alexa commands
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: !input alexa_delay_after_tts
+
+  # 3) Alexa: set volume
+  - service: alexa_devices.send_text_command
+    data:
+      device_id: !input alexa_device
+      text_command: !input alexa_volume_command
+
+  # 4) Alexa: play wake-up song / playlist
+  - service: alexa_devices.send_text_command
+    data:
+      device_id: !input alexa_device
+      text_command: !input alexa_song_command

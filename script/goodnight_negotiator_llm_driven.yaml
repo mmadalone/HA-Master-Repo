@@ -1,0 +1,1037 @@
+blueprint:
+  name: "Goodnight LLM Negotiator (agent personas + stage modes + fallbacks)"
+  description: >
+    LLM-driven goodnight routine with resilient satellite handling.
+
+    Features:
+    - Persona comes from Home Assistant conversation agents (your existing persona setup).
+    - Optional custom opening/closing prompts (leave empty to use defaults).
+    - Per-stage mode: ask / just_do / skip.
+    - Per-stage fallback policies when voice fails or the answer is unclear.
+    - Music will NOT start unless explicitly confirmed when Stage 3 mode = ask.
+    - If Music Assistant queues but stays paused/idle, the script will issue media_play as fallback.
+
+  domain: script
+
+  input:
+    # =========================================================================
+    # 1) Persona (Conversation Agent) + optional prompt overrides
+    # =========================================================================
+    persona_agent_id:
+      name: Persona (Conversation Agent)
+      description: >
+        Select the conversation agent that already contains your persona prompt (e.g. Rick vs Quark).
+        This agent is used for all LLM-generated lines/questions in this routine.
+      selector:
+        conversation_agent:
+
+    bedtime_conversation_id:
+      name: Conversation ID (keep stable)
+      description: >
+        A stable ID helps the agent keep context during this routine.
+      default: bedtime_negotiator
+      selector:
+        text: {}
+
+    current_area_name:
+      name: Area name for context (optional)
+      description: >
+        Used for natural phrasing (e.g. "here" vs "in the workshop").
+      default: ""
+      selector:
+        text: {}
+
+    pre_prompt_custom:
+      name: Custom opening prompt (optional)
+      description: >
+        Leave empty to use the default opening prompt.
+        If set, this text is sent to the conversation agent as-is.
+      default: ""
+      selector:
+        text:
+          multiline: true
+
+    final_prompt_custom:
+      name: Custom closing prompt (optional)
+      description: >
+        Leave empty to use the default closing prompt.
+        If set, this text is sent to the conversation agent as-is.
+      default: ""
+      selector:
+        text:
+          multiline: true
+
+    # =========================================================================
+    # 2) Voice device + global voice behavior
+    # =========================================================================
+    assist_satellite:
+      name: Assist Satellite (voice device)
+      description: >
+        The device that will speak/ask questions (Voice Preview / Assist Satellite entity).
+      selector:
+        entity:
+          domain: assist_satellite
+
+    speech_guard_delay_seconds:
+      name: Speech guard delay (seconds)
+      description: >
+        Small delay before the first TTS/ask to reduce SatelliteBusy collisions when other automations are talking.
+        We intentionally do NOT retry announces to avoid repeated first lines.
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          mode: slider
+
+    fallback_ask_delay_seconds:
+      name: Fallback ask delay (seconds)
+      description: >
+        If a stage fallback is set to "ask", this is how long the script waits before trying to ask once more.
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 20
+          step: 1
+          mode: slider
+
+    say_pre_line:
+      name: Say opening line
+      default: true
+      selector:
+        boolean: {}
+
+    say_final_line:
+      name: Say closing line
+      default: true
+      selector:
+        boolean: {}
+
+    reprompt_once_on_unclear:
+      name: Reprompt once if answer is unclear
+      description: >
+        If enabled, the script asks one extra "yes or no" question when it cannot classify the answer.
+        (This is separate from "fallback=ask", which is used when voice fails/unclear overall.)
+      default: true
+      selector:
+        boolean: {}
+
+    yesno_language_profile:
+      name: Yes/No language profile
+      description: >
+        Affects yes/no word matching. "multi" supports English + Dutch + Spanish + Catalan.
+      default: multi
+      selector:
+        select:
+          options:
+            - multi
+            - en
+            - nl
+            - es
+            - ca
+
+    # =========================================================================
+    # 3) Stage 1 — TV / IR scripts
+    # =========================================================================
+    tv_stage_mode:
+      name: Stage 1 mode (TV/IR)
+      description: >
+        ask: ask if we should run the IR-off scripts
+        just_do: run IR-off scripts without asking
+        skip: do nothing
+      default: ask
+      selector:
+        select:
+          options:
+            - ask
+            - just_do
+            - skip
+
+    tv_friendly_name:
+      name: TV/IR friendly name (spoken)
+      default: "the tv"
+      selector:
+        text: {}
+
+    ir_off_scripts:
+      name: IR off scripts (TV/amp/etc.)
+      description: >
+        One or more scripts that turn off your TV/IR-controlled devices.
+      default: []
+      selector:
+        entity:
+          domain: script
+          multiple: true
+
+    tv_fallback_on_voice_fail:
+      name: Stage 1 fallback if voice fails/unclear (mode=ask only)
+      description: >
+        Used only when Stage 1 mode = ask AND the script cannot get a reliable yes/no
+        (satellite busy, no response, or unclear answer even after reprompt).
+
+        ask:
+        - Wait fallback_ask_delay_seconds, then ask ONE more time.
+        - If still unclear/unavailable, the script follows your critical policy and runs IR anyway.
+
+        do_it_anyway:
+        - Run the IR scripts without confirmation (your default for critical actions).
+
+        skip:
+        - Do nothing.
+      default: do_it_anyway
+      selector:
+        select:
+          options:
+            - ask
+            - do_it_anyway
+            - skip
+
+    # =========================================================================
+    # 4) Stage 2 — Other devices
+    # =========================================================================
+    devices_stage_mode:
+      name: Stage 2 mode (devices)
+      description: >
+        ask: ask if we should turn off the selected targets
+        just_do: turn them off without asking
+        skip: do nothing
+      default: ask
+      selector:
+        select:
+          options:
+            - ask
+            - just_do
+            - skip
+
+    devices_targets:
+      name: Devices to turn off
+      default: {}
+      selector:
+        target: {}
+
+    devices_fallback_on_voice_fail:
+      name: Stage 2 fallback if voice fails/unclear (mode=ask only)
+      description: >
+        ask:
+        - Wait fallback_ask_delay_seconds, then ask ONE more time.
+        - If still unclear/unavailable, follow your critical policy and turn devices off anyway.
+
+        do_it_anyway (default):
+        - Turn targets off without confirmation.
+
+        skip:
+        - Do nothing.
+      default: do_it_anyway
+      selector:
+        select:
+          options:
+            - ask
+            - do_it_anyway
+            - skip
+
+    # =========================================================================
+    # 5) Stage 3 — Music (Music Assistant)
+    # =========================================================================
+    music_stage_mode:
+      name: Stage 3 mode (music)
+      description: >
+        ask: ask if we should start bedtime audio (your default policy)
+        just_do: start bedtime audio without asking
+        skip: do nothing
+      default: ask
+      selector:
+        select:
+          options:
+            - ask
+            - just_do
+            - skip
+
+    music_player:
+      name: Music Assistant player entity
+      description: >
+        Use the Music Assistant player entity (e.g., media_player.workshop), not the raw Sonos entity.
+      selector:
+        entity:
+          domain: media_player
+
+    music_if_already_playing:
+      name: If music is already playing (mode=ask only)
+      description: >
+        What should happen if the player is already playing when the routine starts?
+      default: ask
+      selector:
+        select:
+          options:
+            - ask
+            - keep
+            - stop
+
+    music_volume:
+      name: Music volume (0..1)
+      default: 0.25
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+
+    music_media_id:
+      name: Music Assistant media_id / URI
+      description: >
+        Preferred: a Music Assistant URI like:
+        - library://playlist/123
+        - library://album/45
+        - spotify://playlist/...
+
+        How to get it (easy methods):
+        1) Home Assistant → Developer Tools → Actions:
+           - Run music_assistant.search (or music_assistant.get_library)
+           - Copy the "uri" from the response item you want
+        2) Create a temporary automation/action using music_assistant.play_media via the UI picker,
+           then view YAML and copy the generated media_id/uri.
+
+        Tip:
+        - If you paste a URI (library://... or spotify://...), you can usually leave media_type = auto.
+      default: ""
+      selector:
+        text: {}
+
+    music_media_type:
+      name: Music Assistant media_type
+      description: >
+        If you set a library:// URI, you can usually keep this on auto.
+        If you set a plain name instead of a URI, choose the correct type for better results.
+      default: auto
+      selector:
+        select:
+          options:
+            - auto
+            - playlist
+            - album
+            - track
+            - artist
+            - radio
+
+    music_fallback_on_voice_fail:
+      name: Stage 3 fallback if voice fails/unclear (mode=ask only)
+      description: >
+        Used only when Stage 3 mode = ask AND the script cannot get a reliable yes/no confirmation
+        (satellite busy, no response, or unclear answer even after reprompt).
+
+        skip (recommended / your default):
+        - Do nothing. Bedtime audio will NOT start unless confirmed.
+
+        ask:
+        - Wait fallback_ask_delay_seconds, then ask ONE more time.
+        - If still unclear/unavailable, behave like skip (no confirmation = no music).
+
+        safe_default:
+        - Start the configured music_media_id anyway (set above), as a predictable fallback.
+          This does NOT search or guess; it only plays the exact configured ID/URI.
+      default: skip
+      selector:
+        select:
+          options:
+            - skip
+            - ask
+            - safe_default
+
+mode: single
+icon: mdi:bed
+
+sequence:
+  - variables:
+      # inputs copied to variables (so we never use !input inside templates)
+      agent_id: !input persona_agent_id
+      conv_id: !input bedtime_conversation_id
+      sat: !input assist_satellite
+
+      speech_guard_delay: !input speech_guard_delay_seconds
+      fallback_ask_delay: !input fallback_ask_delay_seconds
+
+      say_pre: !input say_pre_line
+      say_final: !input say_final_line
+      reprompt_once: !input reprompt_once_on_unclear
+      lang_profile: !input yesno_language_profile
+
+      pre_custom: !input pre_prompt_custom
+      final_custom: !input final_prompt_custom
+
+      tv_mode: !input tv_stage_mode
+      tv_fallback: !input tv_fallback_on_voice_fail
+      tv_name_in: !input tv_friendly_name
+      ir_scripts: !input ir_off_scripts
+
+      dev_mode: !input devices_stage_mode
+      dev_fallback: !input devices_fallback_on_voice_fail
+
+      music_mode: !input music_stage_mode
+      music_player: !input music_player
+      music_if_playing: !input music_if_already_playing
+      music_volume: !input music_volume
+      music_id: !input music_media_id
+      music_type: !input music_media_type
+      music_fallback: !input music_fallback_on_voice_fail
+
+      area_in: !input current_area_name
+      area_name: >
+        {% set a = (area_in | default('') | trim) %}
+        {% if a == '' %}here{% else %}{{ a }}{% endif %}
+
+      tv_name: >
+        {% set t = (tv_name_in | default('') | trim) %}
+        {% if t == '' %}the tv{% else %}{{ t }}{% endif %}
+
+      # Word-boundary yes/no patterns
+      yes_pattern: >
+        {% if lang_profile == 'en' %}
+          \b(yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead)\b
+        {% elif lang_profile == 'nl' %}
+          \b(ja|jawel|zeker|prima|ok|oké|doe maar)\b
+        {% elif lang_profile == 'es' %}
+          \b(s[ií]|claro|vale|de acuerdo|ok)\b
+        {% elif lang_profile == 'ca' %}
+          \b(s[ií]|d'acord|va bé|ok)\b
+        {% else %}
+          \b(yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|ja|jawel|zeker|prima|oké|doe maar|s[ií]|claro|vale|de acuerdo|d'acord|va bé)\b
+        {% endif %}
+
+      no_pattern: >
+        {% if lang_profile == 'en' %}
+          \b(no|nope|nah|not now|don't|do not)\b
+        {% elif lang_profile == 'nl' %}
+          \b(nee|neen|liever niet)\b
+        {% elif lang_profile == 'es' %}
+          \b(no|para nada|mejor no)\b
+        {% elif lang_profile == 'ca' %}
+          \b(no|millor no)\b
+        {% else %}
+          \b(no|nope|nah|not now|don't|do not|nee|neen|liever niet|para nada|mejor no|millor no)\b
+        {% endif %}
+
+  - delay:
+      seconds: "{{ speech_guard_delay | int(0) }}"
+
+  # Opening line (single attempt; no retries)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ say_pre }}"
+        sequence:
+          - service: conversation.process
+            data:
+              agent_id: "{{ agent_id }}"
+              conversation_id: "{{ conv_id }}"
+              text: >
+                {% set c = (pre_custom | default('') | trim) %}
+                {% if c != '' %}
+                  {{ c }}
+                {% else %}
+                  Create ONE short opening line to start a goodnight routine for Miquel in "{{ area_name }}".
+                  One sentence max. No explanations.
+                {% endif %}
+            response_variable: pre_llm
+
+          - variables:
+              pre_line: >
+                {% if pre_llm and pre_llm.response and pre_llm.response.speech and pre_llm.response.speech.plain
+                      and pre_llm.response.speech.plain.speech %}
+                  {{ pre_llm.response.speech.plain.speech }}
+                {% else %}
+                  Alright Miquel, bedtime routine starting.
+                {% endif %}
+
+          - service: assist_satellite.announce
+            continue_on_error: true
+            target:
+              entity_id: "{{ sat }}"
+            data:
+              message: "{{ pre_line }}"
+              preannounce: false
+
+  # =========================
+  # Stage 1: TV/IR
+  # =========================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ tv_mode != 'skip' and (ir_scripts | count > 0) }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tv_mode == 'just_do' }}"
+                sequence:
+                  - service: script.turn_on
+                    target:
+                      entity_id: "{{ ir_scripts }}"
+
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tv_mode == 'ask' }}"
+                sequence:
+                  - service: conversation.process
+                    data:
+                      agent_id: "{{ agent_id }}"
+                      conversation_id: "{{ conv_id }}"
+                      text: >
+                        Ask Miquel ONE short yes/no question: should I turn off {{ tv_name }} now?
+                        One sentence. No extras.
+                    response_variable: tv_q
+
+                  - variables:
+                      tv_question: >
+                        {% if tv_q and tv_q.response and tv_q.response.speech and tv_q.response.speech.plain
+                              and tv_q.response.speech.plain.speech %}
+                          {{ tv_q.response.speech.plain.speech }}
+                        {% else %}
+                          Do you want me to turn off {{ tv_name }} now?
+                        {% endif %}
+
+                  - service: assist_satellite.ask_question
+                    continue_on_error: true
+                    data:
+                      entity_id: "{{ sat }}"
+                      question: "{{ tv_question }}"
+                      answers: []
+                    response_variable: tv_a
+
+                  - variables:
+                      tv_sentence: "{{ (tv_a.sentence | default('') | lower | trim) if tv_a is defined else '' }}"
+                      tv_yes: "{{ tv_sentence != '' and (tv_sentence | regex_search(yes_pattern)) }}"
+                      tv_no: "{{ tv_sentence != '' and (tv_sentence | regex_search(no_pattern)) }}"
+                      tv_decision: >
+                        {% if tv_yes and not tv_no %}yes
+                        {% elif tv_no %}no
+                        {% elif tv_sentence == '' %}unavailable
+                        {% else %}unknown{% endif %}
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ reprompt_once and tv_decision == 'unknown' }}"
+                        sequence:
+                          - service: assist_satellite.ask_question
+                            continue_on_error: true
+                            data:
+                              entity_id: "{{ sat }}"
+                              question: "Yes or no: turn off {{ tv_name }}?"
+                              answers: []
+                            response_variable: tv_a2
+                          - variables:
+                              tv_sentence2: "{{ (tv_a2.sentence | default('') | lower | trim) if tv_a2 is defined else '' }}"
+                              tv_yes2: "{{ tv_sentence2 != '' and (tv_sentence2 | regex_search(yes_pattern)) }}"
+                              tv_no2: "{{ tv_sentence2 != '' and (tv_sentence2 | regex_search(no_pattern)) }}"
+                              tv_decision: >
+                                {% if tv_yes2 and not tv_no2 %}yes
+                                {% elif tv_no2 %}no
+                                {% elif tv_sentence2 == '' %}unavailable
+                                {% else %}unknown{% endif %}
+
+                  # Apply decision or fallback
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ tv_decision == 'yes' }}"
+                        sequence:
+                          - service: script.turn_on
+                            target:
+                              entity_id: "{{ ir_scripts }}"
+
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ tv_decision in ['unknown','unavailable'] and tv_fallback == 'ask' }}"
+                        sequence:
+                          - delay:
+                              seconds: "{{ fallback_ask_delay | int(0) }}"
+                          - service: assist_satellite.ask_question
+                            continue_on_error: true
+                            data:
+                              entity_id: "{{ sat }}"
+                              question: "Yes or no: turn off {{ tv_name }}?"
+                              answers: []
+                            response_variable: tv_fallback_a
+                          - variables:
+                              tv_fb_sentence: "{{ (tv_fallback_a.sentence | default('') | lower | trim) if tv_fallback_a is defined else '' }}"
+                              tv_fb_yes: "{{ tv_fb_sentence != '' and (tv_fb_sentence | regex_search(yes_pattern)) }}"
+                              tv_fb_no: "{{ tv_fb_sentence != '' and (tv_fb_sentence | regex_search(no_pattern)) }}"
+                              tv_fb_decision: >
+                                {% if tv_fb_yes and not tv_fb_no %}yes
+                                {% elif tv_fb_no %}no
+                                {% elif tv_fb_sentence == '' %}unavailable
+                                {% else %}unknown{% endif %}
+                          - choose:
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ tv_fb_decision == 'yes' }}"
+                                sequence:
+                                  - service: script.turn_on
+                                    target:
+                                      entity_id: "{{ ir_scripts }}"
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ tv_fb_decision in ['unknown','unavailable'] }}"
+                                sequence:
+                                  # critical policy after fallback ask fails
+                                  - service: script.turn_on
+                                    target:
+                                      entity_id: "{{ ir_scripts }}"
+
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ tv_decision in ['unknown','unavailable'] and tv_fallback == 'do_it_anyway' }}"
+                        sequence:
+                          - service: script.turn_on
+                            target:
+                              entity_id: "{{ ir_scripts }}"
+                    default: []
+
+  # =========================
+  # Stage 2: Devices
+  # =========================
+  - variables:
+      devices_targets: !input devices_targets
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ dev_mode != 'skip' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ dev_mode == 'just_do' }}"
+                sequence:
+                  - service: homeassistant.turn_off
+                    target: !input devices_targets
+
+              - conditions:
+                  - condition: template
+                    value_template: "{{ dev_mode == 'ask' }}"
+                sequence:
+                  - service: conversation.process
+                    data:
+                      agent_id: "{{ agent_id }}"
+                      conversation_id: "{{ conv_id }}"
+                      text: >
+                        Ask Miquel ONE short yes/no question: should I turn off the selected devices in "{{ area_name }}"?
+                        One sentence. No extras.
+                    response_variable: dev_q
+
+                  - variables:
+                      dev_question: >
+                        {% if dev_q and dev_q.response and dev_q.response.speech and dev_q.response.speech.plain
+                              and dev_q.response.speech.plain.speech %}
+                          {{ dev_q.response.speech.plain.speech }}
+                        {% else %}
+                          Do you want me to turn off the devices?
+                        {% endif %}
+
+                  - service: assist_satellite.ask_question
+                    continue_on_error: true
+                    data:
+                      entity_id: "{{ sat }}"
+                      question: "{{ dev_question }}"
+                      answers: []
+                    response_variable: dev_a
+
+                  - variables:
+                      dev_sentence: "{{ (dev_a.sentence | default('') | lower | trim) if dev_a is defined else '' }}"
+                      dev_yes: "{{ dev_sentence != '' and (dev_sentence | regex_search(yes_pattern)) }}"
+                      dev_no: "{{ dev_sentence != '' and (dev_sentence | regex_search(no_pattern)) }}"
+                      dev_decision: >
+                        {% if dev_yes and not dev_no %}yes
+                        {% elif dev_no %}no
+                        {% elif dev_sentence == '' %}unavailable
+                        {% else %}unknown{% endif %}
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ reprompt_once and dev_decision == 'unknown' }}"
+                        sequence:
+                          - service: assist_satellite.ask_question
+                            continue_on_error: true
+                            data:
+                              entity_id: "{{ sat }}"
+                              question: "Yes or no: turn off the devices?"
+                              answers: []
+                            response_variable: dev_a2
+                          - variables:
+                              dev_sentence2: "{{ (dev_a2.sentence | default('') | lower | trim) if dev_a2 is defined else '' }}"
+                              dev_yes2: "{{ dev_sentence2 != '' and (dev_sentence2 | regex_search(yes_pattern)) }}"
+                              dev_no2: "{{ dev_sentence2 != '' and (dev_sentence2 | regex_search(no_pattern)) }}"
+                              dev_decision: >
+                                {% if dev_yes2 and not dev_no2 %}yes
+                                {% elif dev_no2 %}no
+                                {% elif dev_sentence2 == '' %}unavailable
+                                {% else %}unknown{% endif %}
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ dev_decision == 'yes' }}"
+                        sequence:
+                          - service: homeassistant.turn_off
+                            target: !input devices_targets
+
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ dev_decision in ['unknown','unavailable'] and dev_fallback == 'ask' }}"
+                        sequence:
+                          - delay:
+                              seconds: "{{ fallback_ask_delay | int(0) }}"
+                          - service: assist_satellite.ask_question
+                            continue_on_error: true
+                            data:
+                              entity_id: "{{ sat }}"
+                              question: "Yes or no: turn off the devices?"
+                              answers: []
+                            response_variable: dev_fb_a
+                          - variables:
+                              dev_fb_sentence: "{{ (dev_fb_a.sentence | default('') | lower | trim) if dev_fb_a is defined else '' }}"
+                              dev_fb_yes: "{{ dev_fb_sentence != '' and (dev_fb_sentence | regex_search(yes_pattern)) }}"
+                              dev_fb_no: "{{ dev_fb_sentence != '' and (dev_fb_sentence | regex_search(no_pattern)) }}"
+                              dev_fb_decision: >
+                                {% if dev_fb_yes and not dev_fb_no %}yes
+                                {% elif dev_fb_no %}no
+                                {% elif dev_fb_sentence == '' %}unavailable
+                                {% else %}unknown{% endif %}
+                          - choose:
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ dev_fb_decision == 'yes' }}"
+                                sequence:
+                                  - service: homeassistant.turn_off
+                                    target: !input devices_targets
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ dev_fb_decision in ['unknown','unavailable'] }}"
+                                sequence:
+                                  # critical policy after fallback ask fails
+                                  - service: homeassistant.turn_off
+                                    target: !input devices_targets
+
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ dev_decision in ['unknown','unavailable'] and dev_fallback == 'do_it_anyway' }}"
+                        sequence:
+                          - service: homeassistant.turn_off
+                            target: !input devices_targets
+                    default: []
+
+  # =========================
+  # Stage 3: Music (Music Assistant)
+  # =========================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ music_mode != 'skip' }}"
+        sequence:
+          # If already playing and mode=ask, handle policy
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ music_mode == 'ask' and music_if_playing == 'ask' and is_state(music_player, 'playing') }}"
+                sequence:
+                  - service: assist_satellite.ask_question
+                    continue_on_error: true
+                    data:
+                      entity_id: "{{ sat }}"
+                      question: "You already have audio playing. Switch to bedtime audio?"
+                      answers: []
+                    response_variable: sw_a
+                  - variables:
+                      sw_sentence: "{{ (sw_a.sentence | default('') | lower | trim) if sw_a is defined else '' }}"
+                      sw_yes: "{{ sw_sentence != '' and (sw_sentence | regex_search(yes_pattern)) }}"
+                      sw_no: "{{ sw_sentence != '' and (sw_sentence | regex_search(no_pattern)) }}"
+                      sw_decision: >
+                        {% if sw_yes and not sw_no %}yes
+                        {% elif sw_no %}no
+                        {% elif sw_sentence == '' %}unavailable
+                        {% else %}unknown{% endif %}
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ sw_decision != 'yes' }}"
+                        sequence:
+                          - stop: "music switch not confirmed"
+
+              - conditions:
+                  - condition: template
+                    value_template: "{{ music_mode == 'ask' and music_if_playing == 'stop' and is_state(music_player, 'playing') }}"
+                sequence:
+                  - service: media_player.media_stop
+                    target:
+                      entity_id: "{{ music_player }}"
+
+          - choose:
+              # just_do
+              - conditions:
+                  - condition: template
+                    value_template: "{{ music_mode == 'just_do' }}"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (music_id | trim) != '' }}"
+                        sequence:
+                          - service: media_player.volume_set
+                            target:
+                              entity_id: "{{ music_player }}"
+                            data:
+                              volume_level: "{{ music_volume | float(0.25) }}"
+                          - service: music_assistant.play_media
+                            target:
+                              entity_id: "{{ music_player }}"
+                            data:
+                              media_id: "{{ music_id }}"
+                              media_type: "{{ music_type }}"
+                              enqueue: replace
+                          - wait_template: "{{ is_state(music_player, 'playing') }}"
+                            timeout: "00:00:15"
+                            continue_on_timeout: true
+                          - choose:
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ not is_state(music_player, 'playing') }}"
+                                sequence:
+                                  - service: media_player.media_play
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: "{{ music_player }}"
+                    default:
+                      - stop: "music_mode=just_do but no music_media_id configured"
+
+              # ask (confirm first)
+              - conditions:
+                  - condition: template
+                    value_template: "{{ music_mode == 'ask' }}"
+                sequence:
+                  - service: conversation.process
+                    data:
+                      agent_id: "{{ agent_id }}"
+                      conversation_id: "{{ conv_id }}"
+                      text: >
+                        Ask Miquel ONE short yes/no question: should I start bedtime audio now?
+                        One sentence. No extras.
+                    response_variable: m_q
+
+                  - variables:
+                      m_question: >
+                        {% if m_q and m_q.response and m_q.response.speech and m_q.response.speech.plain
+                              and m_q.response.speech.plain.speech %}
+                          {{ m_q.response.speech.plain.speech }}
+                        {% else %}
+                          Do you want me to start bedtime audio?
+                        {% endif %}
+
+                  - service: assist_satellite.ask_question
+                    continue_on_error: true
+                    data:
+                      entity_id: "{{ sat }}"
+                      question: "{{ m_question }}"
+                      answers: []
+                    response_variable: m_a
+
+                  - variables:
+                      m_sentence: "{{ (m_a.sentence | default('') | lower | trim) if m_a is defined else '' }}"
+                      m_yes: "{{ m_sentence != '' and (m_sentence | regex_search(yes_pattern)) }}"
+                      m_no: "{{ m_sentence != '' and (m_sentence | regex_search(no_pattern)) }}"
+                      m_decision: >
+                        {% if m_yes and not m_no %}yes
+                        {% elif m_no %}no
+                        {% elif m_sentence == '' %}unavailable
+                        {% else %}unknown{% endif %}
+
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ reprompt_once and m_decision == 'unknown' }}"
+                        sequence:
+                          - service: assist_satellite.ask_question
+                            continue_on_error: true
+                            data:
+                              entity_id: "{{ sat }}"
+                              question: "Yes or no: start bedtime audio?"
+                              answers: []
+                            response_variable: m_a2
+                          - variables:
+                              m_sentence2: "{{ (m_a2.sentence | default('') | lower | trim) if m_a2 is defined else '' }}"
+                              m_yes2: "{{ m_sentence2 != '' and (m_sentence2 | regex_search(yes_pattern)) }}"
+                              m_no2: "{{ m_sentence2 != '' and (m_sentence2 | regex_search(no_pattern)) }}"
+                              m_decision: >
+                                {% if m_yes2 and not m_no2 %}yes
+                                {% elif m_no2 %}no
+                                {% elif m_sentence2 == '' %}unavailable
+                                {% else %}unknown{% endif %}
+
+                  # Apply decision or fallback (music policy: no confirmation = no music)
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ m_decision == 'yes' }}"
+                        sequence:
+                          - choose:
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ (music_id | trim) != '' }}"
+                                sequence:
+                                  - service: media_player.volume_set
+                                    target:
+                                      entity_id: "{{ music_player }}"
+                                    data:
+                                      volume_level: "{{ music_volume | float(0.25) }}"
+                                  - service: music_assistant.play_media
+                                    target:
+                                      entity_id: "{{ music_player }}"
+                                    data:
+                                      media_id: "{{ music_id }}"
+                                      media_type: "{{ music_type }}"
+                                      enqueue: replace
+                                  - wait_template: "{{ is_state(music_player, 'playing') }}"
+                                    timeout: "00:00:15"
+                                    continue_on_timeout: true
+                                  - choose:
+                                      - conditions:
+                                          - condition: template
+                                            value_template: "{{ not is_state(music_player, 'playing') }}"
+                                        sequence:
+                                          - service: media_player.media_play
+                                            continue_on_error: true
+                                            target:
+                                              entity_id: "{{ music_player }}"
+                            default:
+                              - stop: "confirmed music, but no music_media_id configured"
+
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ m_decision in ['unknown','unavailable'] and music_fallback == 'ask' }}"
+                        sequence:
+                          - delay:
+                              seconds: "{{ fallback_ask_delay | int(0) }}"
+                          - service: assist_satellite.ask_question
+                            continue_on_error: true
+                            data:
+                              entity_id: "{{ sat }}"
+                              question: "Yes or no: start bedtime audio?"
+                              answers: []
+                            response_variable: m_fb_a
+                          - variables:
+                              m_fb_sentence: "{{ (m_fb_a.sentence | default('') | lower | trim) if m_fb_a is defined else '' }}"
+                              m_fb_yes: "{{ m_fb_sentence != '' and (m_fb_sentence | regex_search(yes_pattern)) }}"
+                              m_fb_no: "{{ m_fb_sentence != '' and (m_fb_sentence | regex_search(no_pattern)) }}"
+                              m_fb_decision: >
+                                {% if m_fb_yes and not m_fb_no %}yes
+                                {% elif m_fb_no %}no
+                                {% elif m_fb_sentence == '' %}unavailable
+                                {% else %}unknown{% endif %}
+                          - choose:
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ m_fb_decision == 'yes' }}"
+                                sequence:
+                                  - choose:
+                                      - conditions:
+                                          - condition: template
+                                            value_template: "{{ (music_id | trim) != '' }}"
+                                        sequence:
+                                          - service: media_player.volume_set
+                                            target:
+                                              entity_id: "{{ music_player }}"
+                                            data:
+                                              volume_level: "{{ music_volume | float(0.25) }}"
+                                          - service: music_assistant.play_media
+                                            target:
+                                              entity_id: "{{ music_player }}"
+                                            data:
+                                              media_id: "{{ music_id }}"
+                                              media_type: "{{ music_type }}"
+                                              enqueue: replace
+                                          - wait_template: "{{ is_state(music_player, 'playing') }}"
+                                            timeout: "00:00:15"
+                                            continue_on_timeout: true
+                                          - choose:
+                                              - conditions:
+                                                  - condition: template
+                                                    value_template: "{{ not is_state(music_player, 'playing') }}"
+                                                sequence:
+                                                  - service: media_player.media_play
+                                                    continue_on_error: true
+                                                    target:
+                                                      entity_id: "{{ music_player }}"
+                                    default:
+                                      - stop: "confirmed music, but no music_media_id configured"
+                            default:
+                              # still not confirmed -> do nothing (your policy)
+                              - stop: "music not confirmed after fallback ask"
+
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ m_decision in ['unknown','unavailable'] and music_fallback == 'safe_default' and (music_id | trim) != '' }}"
+                        sequence:
+                          - service: media_player.volume_set
+                            target:
+                              entity_id: "{{ music_player }}"
+                            data:
+                              volume_level: "{{ music_volume | float(0.25) }}"
+                          - service: music_assistant.play_media
+                            target:
+                              entity_id: "{{ music_player }}"
+                            data:
+                              media_id: "{{ music_id }}"
+                              media_type: "{{ music_type }}"
+                              enqueue: replace
+                          - wait_template: "{{ is_state(music_player, 'playing') }}"
+                            timeout: "00:00:15"
+                            continue_on_timeout: true
+                          - choose:
+                              - conditions:
+                                  - condition: template
+                                    value_template: "{{ not is_state(music_player, 'playing') }}"
+                                sequence:
+                                  - service: media_player.media_play
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: "{{ music_player }}"
+                    default: []
+
+  # Closing line (single attempt; no retries)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ say_final }}"
+        sequence:
+          - service: conversation.process
+            data:
+              agent_id: "{{ agent_id }}"
+              conversation_id: "{{ conv_id }}"
+              text: >
+                {% set c = (final_custom | default('') | trim) %}
+                {% if c != '' %}
+                  {{ c }}
+                {% else %}
+                  Create ONE short final goodnight line for Miquel.
+                  One sentence max. No explanations.
+                {% endif %}
+            response_variable: final_llm
+
+          - variables:
+              final_line: >
+                {% if final_llm and final_llm.response and final_llm.response.speech and final_llm.response.speech.plain
+                      and final_llm.response.speech.plain.speech %}
+                  {{ final_llm.response.speech.plain.speech }}
+                {% else %}
+                  Good night, Miquel.
+                {% endif %}
+
+          - service: assist_satellite.announce
+            continue_on_error: true
+            target:
+              entity_id: "{{ sat }}"
+            data:
+              message: "{{ final_line }}"
+              preannounce: false

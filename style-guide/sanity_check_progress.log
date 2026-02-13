@@ -1,0 +1,14 @@
+# Sanity Check Progress Log
+# Started: 2026-02-13
+[SCANNED] ha_style_guide_project_instructions.md | issues found: 0
+[SCANNED] 00_core_philosophy.md | issues found: 0
+[SCANNED] 01_blueprint_patterns.md | issues found: 0
+[SCANNED] 02_automation_patterns.md | issues found: 0
+[SCANNED] 03_conversation_agents.md | issues found: 0 (1 potential issue pending verification)
+[SCANNED] 04_esphome_patterns.md | issues found: 0 (ESPHome version claims pending verification)
+[SCANNED] 05_music_assistant_patterns.md | issues found: 0 (music_assistant.search param name pending verification)
+[SCANNED] 06_anti_patterns_and_workflow.md | issues found: 0
+[SCANNED] 07_troubleshooting.md | issues found: 0
+[SCANNED] 08_voice_assistant_pattern.md | issues found: 0
+
+# All files scanned. Running verification searches for flagged claims.

@@ -1,0 +1,463 @@
+blueprint:
+  name: Voice PE – Restore media volumes after conversation (Alexa-safe, 8 players)
+  description: >
+    Restores the original volumes of your media players after a Voice PE
+    conversation has finished.
+
+    HOW IT WORKS
+    ------------
+    • Triggers whenever any selected Assist Satellite returns to 'idle'
+      from any other state (listening / processing / responding / cancelled).
+      This fixes cases where you cancel quickly with a second wake word or
+      the hardware button and the idle state is very short.
+
+    • A small internal delay is no longer required; duck/restore is now
+    tied only to:
+        - satellite goes idle
+        - ducking flag is ON
+
+    • If the ducking flag (input_boolean) is ON:
+        - For each media player:
+            * Read the stored volume from its input_number helper.
+            * Apply that value back to the media player.
+        - Turn the ducking flag OFF so the next conversation will store
+          volumes again.
+
+    COMBINED WITH THE DUCK BLUEPRINT
+    --------------------------------
+    • The duck blueprint still:
+        - Stores Alexa volumes in an Alexa-safe way.
+        - Ducks only when Assist goes idle → listening/responding.
+    • This restore blueprint now reliably restores for:
+        - normal conversations
+        - short or cancelled interactions
+        - “never mind” / double wake word / button cancels.
+
+  domain: automation
+
+  input:
+    satellites:
+      name: Voice PE Assist Satellites
+      description: >
+        Select the same Assist Satellites you used in the duck blueprint.
+        The automation runs when ANY of them returns to 'idle' from
+        any other state.
+      selector:
+        entity:
+          domain: assist_satellite
+          multiple: true
+
+    ducking_flag:
+      name: Ducking active flag (input_boolean)
+      description: >
+        The same input_boolean used in the duck blueprint. When this is ON,
+        volumes will be restored and the flag will be turned OFF afterwards.
+      selector:
+        entity:
+          domain: input_boolean
+
+    restore_delay:
+      name: Restore delay (seconds)
+      description: >
+        How long the satellite must stay idle before restoring volumes.
+        Prevents volume bouncing during multi-turn conversations where
+        the satellite briefly returns to idle between turns. 2–3 seconds
+        works well for most setups.
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.5
+          unit_of_measurement: s
+          mode: slider
+
+    announcement_player_1:
+      name: Announcement player 1
+      description: >
+        First Voice PE media player to restore after TTS.
+        Must match the duck blueprint configuration.
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_1_volume_helper:
+      name: Announcement player 1 – volume helper (input_number)
+      description: >
+        Same input_number helper used by the duck blueprint for
+        Announcement player 1.
+      selector:
+        entity:
+          domain: input_number
+
+    announcement_player_2:
+      name: Announcement player 2 (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_2_volume_helper:
+      name: Announcement player 2 – volume helper (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: input_number
+
+    announcement_player_3:
+      name: Announcement player 3 (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_3_volume_helper:
+      name: Announcement player 3 – volume helper (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: input_number
+
+    announcement_player_4:
+      name: Announcement player 4 (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_4_volume_helper:
+      name: Announcement player 4 – volume helper (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_1:
+      name: Media player 1
+      description: >
+        First media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_1_volume_helper:
+      name: Media player 1 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 1.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_2:
+      name: Media player 2
+      description: >
+        Second media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_2_volume_helper:
+      name: Media player 2 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 2.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_3:
+      name: Media player 3
+      description: >
+        Third media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_3_volume_helper:
+      name: Media player 3 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 3.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_4:
+      name: Media player 4
+      description: >
+        Fourth media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_4_volume_helper:
+      name: Media player 4 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 4.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_5:
+      name: Media player 5
+      description: >
+        Fifth media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_5_volume_helper:
+      name: Media player 5 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 5.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_6:
+      name: Media player 6
+      description: >
+        Sixth media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_6_volume_helper:
+      name: Media player 6 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 6.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_7:
+      name: Media player 7
+      description: >
+        Seventh media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_7_volume_helper:
+      name: Media player 7 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 7.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_8:
+      name: Media player 8
+      description: >
+        Eighth media player whose volume should be restored.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_8_volume_helper:
+      name: Media player 8 – volume helper (input_number)
+      description: >
+        The same input_number helper used by the duck blueprint for
+        Media player 8.
+      selector:
+        entity:
+          domain: input_number
+
+mode: single
+
+variables:
+  mp1: !input media_player_1
+  mp1_helper: !input media_player_1_volume_helper
+  mp2: !input media_player_2
+  mp2_helper: !input media_player_2_volume_helper
+  mp3: !input media_player_3
+  mp3_helper: !input media_player_3_volume_helper
+  mp4: !input media_player_4
+  mp4_helper: !input media_player_4_volume_helper
+  mp5: !input media_player_5
+  mp5_helper: !input media_player_5_volume_helper
+  mp6: !input media_player_6
+  mp6_helper: !input media_player_6_volume_helper
+  mp7: !input media_player_7
+  mp7_helper: !input media_player_7_volume_helper
+  mp8: !input media_player_8
+  mp8_helper: !input media_player_8_volume_helper
+  ap1: !input announcement_player_1
+  ap1_helper: !input announcement_player_1_volume_helper
+  ap2: !input announcement_player_2
+  ap2_helper: !input announcement_player_2_volume_helper
+  ap3: !input announcement_player_3
+  ap3_helper: !input announcement_player_3_volume_helper
+  ap4: !input announcement_player_4
+  ap4_helper: !input announcement_player_4_volume_helper
+
+trigger:
+  # Any time a selected satellite returns to idle (normal reply, short
+  # interaction, or cancelled with wake word / button)
+  - platform: state
+    entity_id: !input satellites
+    to: idle
+    for:
+      seconds: !input restore_delay
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input ducking_flag
+            state: "on"
+        sequence:
+          # Restore media player 1
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_1
+            data:
+              volume_level: >
+                {% set val = states(mp1_helper) | float(0) %}
+                {{ val }}
+
+          # Restore media player 2
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_2
+            data:
+              volume_level: >
+                {% set val = states(mp2_helper) | float(0) %}
+                {{ val }}
+
+          # Restore media player 3
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_3
+            data:
+              volume_level: >
+                {% set val = states(mp3_helper) | float(0) %}
+                {{ val }}
+
+          # Restore media player 4
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_4
+            data:
+              volume_level: >
+                {% set val = states(mp4_helper) | float(0) %}
+                {{ val }}
+
+          # Restore media player 5
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_5
+            data:
+              volume_level: >
+                {% set val = states(mp5_helper) | float(0) %}
+                {{ val }}
+
+          # Restore media player 6
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_6
+            data:
+              volume_level: >
+                {% set val = states(mp6_helper) | float(0) %}
+                {{ val }}
+
+          # Restore media player 7
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_7
+            data:
+              volume_level: >
+                {% set val = states(mp7_helper) | float(0) %}
+                {{ val }}
+
+          # Restore media player 8
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_8
+            data:
+              volume_level: >
+                {% set val = states(mp8_helper) | float(0) %}
+                {{ val }}
+
+          # Restore announcement player 1 (required)
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input announcement_player_1
+            data:
+              volume_level: >
+                {% set val = states(ap1_helper) | float(0) %}
+                {{ val }}
+
+          # Restore announcement player 2 (optional)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ ap2 != ap1 and not ap2.endswith('dummy_placeholder') }}"
+                sequence:
+                  - service: media_player.volume_set
+                    continue_on_error: true
+                    target:
+                      entity_id: !input announcement_player_2
+                    data:
+                      volume_level: >
+                        {% set val = states(ap2_helper) | float(0) %}
+                        {{ val }}
+
+          # Restore announcement player 3 (optional)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ ap3 != ap1 and not ap3.endswith('dummy_placeholder') }}"
+                sequence:
+                  - service: media_player.volume_set
+                    continue_on_error: true
+                    target:
+                      entity_id: !input announcement_player_3
+                    data:
+                      volume_level: >
+                        {% set val = states(ap3_helper) | float(0) %}
+                        {{ val }}
+
+          # Restore announcement player 4 (optional)
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ ap4 != ap1 and not ap4.endswith('dummy_placeholder') }}"
+                sequence:
+                  - service: media_player.volume_set
+                    continue_on_error: true
+                    target:
+                      entity_id: !input announcement_player_4
+                    data:
+                      volume_level: >
+                        {% set val = states(ap4_helper) | float(0) %}
+                        {{ val }}
+
+          # Wait for the volume sync cooldown to expire so the sync
+          # blueprint sees the flag is still ON and skips the restore
+          # volume change. 3 seconds covers the default 1s cooldown
+          # plus a safety buffer.
+          - delay:
+              seconds: 3
+
+          # Clear ducking flag so next conversation will store again
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input ducking_flag
+    default: []

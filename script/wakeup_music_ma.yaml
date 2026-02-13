@@ -1,0 +1,63 @@
+blueprint:
+  name: Wake-up music – Music Assistant (simple)
+  description: |
+    Simple helper: set volume, clear queue, play one item on a Music Assistant
+    player. No AFTER logic here – handle that with a separate automation if needed.
+
+  domain: script
+
+  input:
+    player:
+      name: Music Assistant player
+      selector:
+        entity:
+          domain: media_player
+
+    media_id:
+      name: Media ID (URI)
+      description: >
+        Example: spotify://track/5GdtONCuJl9N5kkzioFFUY
+      default: ""
+      selector:
+        text: {}
+
+    media_type:
+      name: Media type
+      default: "music"
+      selector:
+        text: {}
+
+    volume_before:
+      name: Volume BEFORE playback
+      description: "0.0–1.0 (1.0 = 100%)"
+      default: 0.6
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+
+mode: single
+
+sequence:
+  - alias: "Set volume BEFORE playback"
+    service: media_player.volume_set
+    target:
+      entity_id: !input player
+    data:
+      volume_level: !input volume_before
+
+  - alias: "Clear queue (optional but typical for wake-up)"
+    service: media_player.clear_playlist
+    target:
+      entity_id: !input player
+
+  - alias: "Play requested media"
+    service: media_player.play_media
+    target:
+      entity_id: !input player
+    data:
+      media:
+        media_content_id: !input media_id
+        media_content_type: !input media_type

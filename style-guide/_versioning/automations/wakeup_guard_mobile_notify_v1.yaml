@@ -1,0 +1,167 @@
+blueprint:
+  name: Wake-up guard – mobile Snooze/Stop handler (with player stop)
+  description: |
+    Handles Snooze/Stop actions for the "Wake-up guard" automation.
+
+    It reacts to:
+      - Companion app notification actions (GUARD_SNOOZE / GUARD_STOP)
+      - OR the Snooze/Stop input_booleans being turned ON
+        (e.g. from a dashboard button).
+
+    What it does:
+      - Turns on the same Snooze/Stop input_booleans used by the main
+        wake-up blueprint (so that automation can take the right branch).
+      - Immediately stops TTS media player.
+      - Optionally stops configured music players.
+
+    Use together with the Wake-up guard blueprint:
+      1. In Wake-up guard:
+         - Set "Snooze toggle" and "Stop toggle" to the same input_booleans
+           you configure here.
+         - Set "Mobile notify service" to send actions:
+             - GUARD_SNOOZE
+             - GUARD_STOP
+
+      2. Create an automation from this blueprint and configure:
+         - Snooze toggle
+         - Stop toggle
+         - TTS player (output)
+         - Optional music players (Music Assistant / SpotifyPlus outputs)
+
+  domain: automation
+
+  input:
+    snooze_toggle:
+      name: Snooze toggle
+      description: >
+        Same input_boolean as "Snooze toggle" in Wake-up guard.
+        Will be turned ON when Snooze is triggered.
+      selector:
+        entity:
+          domain: input_boolean
+
+    stop_toggle:
+      name: Stop toggle
+      description: >
+        Same input_boolean as "Stop toggle" in Wake-up guard.
+        Will be turned ON when Stop is triggered.
+      selector:
+        entity:
+          domain: input_boolean
+
+    tts_player:
+      name: TTS player (output)
+      description: >
+        Media player used by TTS (same as "Media player for voice"
+        in the main wake-up blueprint).
+      selector:
+        entity:
+          domain: media_player
+
+    music_players:
+      name: Music players to stop (optional)
+      description: >
+        Any media players that might be playing the wake-up music
+        (Music Assistant, SpotifyPlus, etc.). Optional.
+      default: []
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+
+    snooze_action_id:
+      name: Snooze action ID
+      description: >
+        Notification action id for Snooze. Must match the "action" in the
+        notification data (Wake-up guard uses: GUARD_SNOOZE).
+      default: "GUARD_SNOOZE"
+      selector:
+        text: {}
+
+    stop_action_id:
+      name: Stop action ID
+      description: >
+        Notification action id for Stop. Must match the "action" in the
+        notification data (Wake-up guard uses: GUARD_STOP).
+      default: "GUARD_STOP"
+      selector:
+        text: {}
+
+trigger:
+  # Mobile notification actions
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: !input snooze_action_id
+    id: snooze
+
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: !input stop_action_id
+    id: stop
+
+  # Input_boolean toggles (dashboard buttons, voice, etc.)
+  - platform: state
+    entity_id: !input snooze_toggle
+    to: "on"
+    id: snooze_toggle
+
+  - platform: state
+    entity_id: !input stop_toggle
+    to: "on"
+    id: stop_toggle
+
+condition: []
+
+action:
+  - choose:
+      - alias: "Snooze (phone action or toggle)"
+        conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: snooze
+              - condition: trigger
+                id: snooze_toggle
+        sequence:
+          # Ensure Snooze toggle is ON so the wake-up automation
+          # can see it in its wait_for_trigger
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input snooze_toggle
+
+          # Stop TTS player immediately
+          - service: media_player.media_stop
+            target:
+              entity_id: !input tts_player
+
+          # Stop any configured music players (optional)
+          - service: media_player.media_stop
+            target:
+              entity_id: !input music_players
+
+      - alias: "Stop (phone action or toggle)"
+        conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: stop
+              - condition: trigger
+                id: stop_toggle
+        sequence:
+          # Ensure Stop toggle is ON so the wake-up automation
+          # can see it in its wait_for_trigger
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input stop_toggle
+
+          # Stop TTS player immediately
+          - service: media_player.media_stop
+            target:
+              entity_id: !input tts_player
+
+          # Stop any configured music players (optional)
+          - service: media_player.media_stop
+            target:
+              entity_id: !input music_players

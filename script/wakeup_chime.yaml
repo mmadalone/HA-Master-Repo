@@ -1,0 +1,41 @@
+blueprint:
+  name: Wake-up chime
+  description: |
+    Plays a simple chime sound on a media_player before it starts yelling.
+
+  domain: script
+
+  input:
+    player:
+      name: Chime media_player
+      description: >
+        Media player that should play the chime.
+      selector:
+        entity:
+          domain: media_player
+
+    media_id:
+      name: Chime media URL or path
+      description: >
+        Example: /local/sounds/chime.mp3
+      default: "/local/sounds/chime.mp3"
+      selector:
+        text: {}
+
+    media_type:
+      name: Chime media type
+      description: >
+        Example: music, sound, audio/mp3.
+      default: "music"
+      selector:
+        text: {}
+
+sequence:
+  - service: media_player.play_media
+    target:
+      entity_id: !input player
+    data:
+      media_content_id: !input media_id
+      media_content_type: !input media_type
+
+mode: single

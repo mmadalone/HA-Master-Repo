@@ -1,0 +1,663 @@
+blueprint:
+  name: Voice PE – Duck media volumes while listening (Alexa-safe, 8 players)
+  description: >
+    Automatically lowers (ducks) the volume of your chosen media players
+    whenever one of your Home Assistant Voice PE satellites starts a
+    voice interaction.
+
+    HOW IT WORKS
+    ------------
+    • Triggers when any selected Assist Satellite goes:
+        - from 'idle' → 'listening' (wake word / user-initiated), or
+        - from 'idle' → 'responding' (announce / ask_question / script).
+    • First time per conversation:
+        - If the ducking flag (input_boolean) is OFF:
+            - Turn it ON.
+            - Store the current volume of each configured media player in its
+              own input_number helper (0.0–1.0 range, like the raw volume_level).
+
+      ALEXA-SAFE BEHAVIOUR:
+        - If a player does NOT expose 'volume_level' (common right after
+          a Home Assistant restart for some integrations like Alexa),
+          this blueprint will keep the LAST stored value in the helper
+          instead of overwriting it with 0.
+
+    • Then:
+        - For each media player that is currently 'playing', set its volume
+          to the ducked volume level.
+        - After ducking, set all configured Voice PE announcement players
+          to the announcement volume level so TTS output is heard clearly
+          even while other players are ducked.
+
+  domain: automation
+
+  input:
+    satellites:
+      name: Voice PE Assist Satellites
+      description: >
+        Select all Assist Satellite entities that represent your Home Assistant
+        Voice PE devices. The automation triggers when ANY of them goes from
+        'idle' to 'listening' or 'responding'.
+      selector:
+        entity:
+          domain: assist_satellite
+          multiple: true
+
+    ducking_flag:
+      name: Ducking active flag (input_boolean)
+      description: >
+        input_boolean helper used to mark that the system is currently ducking
+        volumes for an active voice interaction. This prevents overwriting the
+        stored "before" volumes if Voice PE briefly switches states.
+      selector:
+        entity:
+          domain: input_boolean
+
+    duck_volume_level:
+      name: Ducked volume level
+      description: >
+        Target volume level to use while Voice PE is listening or responding.
+        This is the volume each playing media player will be set to (0.0–1.0).
+      default: 0.15
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+
+    announcement_volume:
+      name: Announcement volume level
+      description: >
+        Volume level for Voice PE TTS output during a voice interaction.
+        This overrides the ducked volume on the announcement players so
+        the assistant speaks at a comfortable level (0.0–1.0).
+      default: 0.65
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+
+    announcement_player_1:
+      name: Announcement player 1
+      description: >
+        First Voice PE media player whose volume should be boosted
+        for TTS output during a voice interaction.
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_1_volume_helper:
+      name: Announcement player 1 – volume helper (input_number)
+      description: >
+        input_number helper to store the volume of Announcement player 1
+        before boosting. Used to restore volume after the conversation.
+      selector:
+        entity:
+          domain: input_number
+
+    announcement_player_2:
+      name: Announcement player 2 (optional)
+      description: >
+        Second Voice PE media player for TTS boost.
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_2_volume_helper:
+      name: Announcement player 2 – volume helper (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: input_number
+
+    announcement_player_3:
+      name: Announcement player 3 (optional)
+      description: >
+        Third Voice PE media player for TTS boost.
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_3_volume_helper:
+      name: Announcement player 3 – volume helper (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: input_number
+
+    announcement_player_4:
+      name: Announcement player 4 (optional)
+      description: >
+        Fourth Voice PE media player for TTS boost.
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: media_player
+
+    announcement_player_4_volume_helper:
+      name: Announcement player 4 – volume helper (optional)
+      default: input_number.dummy_placeholder
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_1:
+      name: Media player 1
+      description: >
+        First media player whose volume should be ducked (for example:
+        your main TV, Sonos, or an Alexa group).
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_1_volume_helper:
+      name: Media player 1 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 1
+        before ducking (0.0–1.0). This is used to restore the volume later.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_2:
+      name: Media player 2
+      description: >
+        Second media player whose volume should be ducked.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_2_volume_helper:
+      name: Media player 2 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 2
+        before ducking.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_3:
+      name: Media player 3
+      description: >
+        Third media player whose volume should be ducked.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_3_volume_helper:
+      name: Media player 3 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 3
+        before ducking.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_4:
+      name: Media player 4
+      description: >
+        Fourth media player whose volume should be ducked.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_4_volume_helper:
+      name: Media player 4 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 4
+        before ducking.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_5:
+      name: Media player 5
+      description: >
+        Fifth media player whose volume should be ducked.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_5_volume_helper:
+      name: Media player 5 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 5
+        before ducking.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_6:
+      name: Media player 6
+      description: >
+        Sixth media player whose volume should be ducked.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_6_volume_helper:
+      name: Media player 6 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 6
+        before ducking.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_7:
+      name: Media player 7
+      description: >
+        Seventh media player whose volume should be ducked.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_7_volume_helper:
+      name: Media player 7 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 7
+        before ducking.
+      selector:
+        entity:
+          domain: input_number
+
+    media_player_8:
+      name: Media player 8
+      description: >
+        Eighth media player whose volume should be ducked.
+      selector:
+        entity:
+          domain: media_player
+
+    media_player_8_volume_helper:
+      name: Media player 8 – volume helper (input_number)
+      description: >
+        input_number helper used to store the current volume of Media player 8
+        before ducking.
+      selector:
+        entity:
+          domain: input_number
+
+mode: single
+
+variables:
+  mp1: !input media_player_1
+  mp1_helper: !input media_player_1_volume_helper
+  mp2: !input media_player_2
+  mp2_helper: !input media_player_2_volume_helper
+  mp3: !input media_player_3
+  mp3_helper: !input media_player_3_volume_helper
+  mp4: !input media_player_4
+  mp4_helper: !input media_player_4_volume_helper
+  mp5: !input media_player_5
+  mp5_helper: !input media_player_5_volume_helper
+  mp6: !input media_player_6
+  mp6_helper: !input media_player_6_volume_helper
+  mp7: !input media_player_7
+  mp7_helper: !input media_player_7_volume_helper
+  mp8: !input media_player_8
+  mp8_helper: !input media_player_8_volume_helper
+  duck_volume_level: !input duck_volume_level
+  announcement_vol: !input announcement_volume
+  ap1: !input announcement_player_1
+  ap1_helper: !input announcement_player_1_volume_helper
+  ap2: !input announcement_player_2
+  ap2_helper: !input announcement_player_2_volume_helper
+  ap3: !input announcement_player_3
+  ap3_helper: !input announcement_player_3_volume_helper
+  ap4: !input announcement_player_4
+  ap4_helper: !input announcement_player_4_volume_helper
+
+trigger:
+  # Normal case: user says "Hey Rick / Hey Quark"
+  # Satellite goes idle → listening
+  - platform: state
+    entity_id: !input satellites
+    from: idle
+    to: listening
+
+  # Quark-initiated or announce case:
+  # Satellite goes idle → responding
+  - platform: state
+    entity_id: !input satellites
+    from: idle
+    to: responding
+
+condition: []
+
+action:
+  # 1) Only store volumes the first time per conversation
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input ducking_flag
+            state: "on"
+        sequence: []
+      - conditions:
+          - condition: state
+            entity_id: !input ducking_flag
+            state: "off"
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input ducking_flag
+
+          # Store volume for Media player 1 (Alexa-safe)
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_1_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp1, 'volume_level') %}
+                {% set prev = states(mp1_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+
+          # Store volume for Media player 2
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_2_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp2, 'volume_level') %}
+                {% set prev = states(mp2_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+
+          # Store volume for Media player 3
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_3_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp3, 'volume_level') %}
+                {% set prev = states(mp3_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+
+          # Store volume for Media player 4
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_4_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp4, 'volume_level') %}
+                {% set prev = states(mp4_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+
+          # Store volume for Media player 5
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_5_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp5, 'volume_level') %}
+                {% set prev = states(mp5_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+
+          # Store volume for Media player 6
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_6_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp6, 'volume_level') %}
+                {% set prev = states(mp6_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+
+          # Store volume for Media player 7
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_7_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp7, 'volume_level') %}
+                {% set prev = states(mp7_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+
+          # Store volume for Media player 8
+          - service: input_number.set_value
+            target:
+              entity_id: !input media_player_8_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(mp8, 'volume_level') %}
+                {% set prev = states(mp8_helper) %}
+                {% if vol is not none %}
+                  {{ vol | float(0) }}
+                {% elif prev not in ['unknown', 'unavailable', 'none', '', None] %}
+                  {{ prev | float(0) }}
+                {% else %}
+                  {{ 0 }}
+                {% endif %}
+    default: []
+
+  # 2) Duck volumes of all players that are currently playing
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_1
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_1
+            data:
+              volume_level: !input duck_volume_level
+
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_2
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_2
+            data:
+              volume_level: !input duck_volume_level
+
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_3
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_3
+            data:
+              volume_level: !input duck_volume_level
+
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_4
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_4
+            data:
+              volume_level: !input duck_volume_level
+
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_5
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_5
+            data:
+              volume_level: !input duck_volume_level
+
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_6
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_6
+            data:
+              volume_level: !input duck_volume_level
+
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_7
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_7
+            data:
+              volume_level: !input duck_volume_level
+
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player_8
+            state: playing
+        sequence:
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input media_player_8
+            data:
+              volume_level: !input duck_volume_level
+
+  # 3) Store announcement player volumes, then boost for TTS
+
+  # Announcement player 1 (required)
+  - service: input_number.set_value
+    continue_on_error: true
+    target:
+      entity_id: !input announcement_player_1_volume_helper
+    data:
+      value: >
+        {% set vol = state_attr(ap1, 'volume_level') %}
+        {{ vol | float(0) if vol is not none else 0 }}
+  - service: media_player.volume_set
+    continue_on_error: true
+    target:
+      entity_id: !input announcement_player_1
+    data:
+      volume_level: !input announcement_volume
+
+  # Announcement player 2 (optional)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ ap2 != ap1 and not ap2.endswith('dummy_placeholder') }}"
+        sequence:
+          - service: input_number.set_value
+            continue_on_error: true
+            target:
+              entity_id: !input announcement_player_2_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(ap2, 'volume_level') %}
+                {{ vol | float(0) if vol is not none else 0 }}
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input announcement_player_2
+            data:
+              volume_level: !input announcement_volume
+
+  # Announcement player 3 (optional)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ ap3 != ap1 and not ap3.endswith('dummy_placeholder') }}"
+        sequence:
+          - service: input_number.set_value
+            continue_on_error: true
+            target:
+              entity_id: !input announcement_player_3_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(ap3, 'volume_level') %}
+                {{ vol | float(0) if vol is not none else 0 }}
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input announcement_player_3
+            data:
+              volume_level: !input announcement_volume
+
+  # Announcement player 4 (optional)
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ ap4 != ap1 and not ap4.endswith('dummy_placeholder') }}"
+        sequence:
+          - service: input_number.set_value
+            continue_on_error: true
+            target:
+              entity_id: !input announcement_player_4_volume_helper
+            data:
+              value: >
+                {% set vol = state_attr(ap4, 'volume_level') %}
+                {{ vol | float(0) if vol is not none else 0 }}
+          - service: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: !input announcement_player_4
+            data:
+              volume_level: !input announcement_volume

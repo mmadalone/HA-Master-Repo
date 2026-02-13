@@ -1,0 +1,99 @@
+blueprint:
+  name: Chime TTS – Simple Announce (Quark edition)
+  description: >
+    Generic Chime TTS script blueprint.
+    Plays a chime + TTS on the selected media players using the chime_tts.say
+    service. Use this as a building block in your automations and other
+    blueprints.
+
+    How to use:
+    - Import this blueprint.
+    - Create a script from it (e.g. "Rick – Chime announce").
+    - Choose your media players, chime, volume and default message.
+    - Call that script from any automation / blueprint when you want
+      "chime + Rick voice".
+
+  domain: script
+
+  input:
+    target_players:
+      name: Target media players
+      description: >
+        Media players that should play the chime + TTS. Use only players that
+        already work with tts.speak / chime_tts.say (e.g. your Voice PE
+        satellites, Sonos, etc.).
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain:
+              - media_player
+
+    message_template:
+      name: Default message / template
+      description: >
+        The message that will be spoken. This can be plain text ("Portal opened,
+        music jumped to the workshop.") or a Jinja template if you want
+        something dynamic.
+
+        Example (random Rick lines):
+        {% set lines = [
+          "Rick here. Moving the music. Try to keep up.",
+          "Music transferred. Don't screw this up.",
+          "Yo! Your tunes just jumped dimensions.",
+          "Portal opened. Music landed where it belongs."
+        ] %}
+        {{ lines | random }}
+
+      default: "Portal opened. Music jumped to the workshop."
+      selector:
+        template:
+
+    chime_path:
+      name: Chime path / preset
+      description: >
+        Chime to play before the TTS. This can be the name of a built-in chime
+        (e.g. 'soft', 'doorbell', etc.) or a full path to an MP3 file
+        (e.g. '/media/sounds/chimes/doorbell.mp3').
+        Leave empty to let Chime TTS use its default.
+      default: "soft"
+      selector:
+        text:
+
+    tts_speed:
+      name: TTS speed (%)
+      description: >
+        Playback speed for the TTS. 100 = normal speed.
+      default: 100
+      selector:
+        number:
+          min: 50
+          max: 150
+          step: 5
+          unit_of_measurement: "%"
+
+    volume_level:
+      name: Volume level
+      description: >
+        -1 keeps current volume.
+        0.0–1.0 sets an explicit volume for the announcement.
+      default: -1
+      selector:
+        number:
+          min: -1
+          max: 1
+          step: 0.05
+
+sequence:
+  - alias: "Play chime + TTS via chime_tts.say"
+    service: chime_tts.say
+    target:
+      entity_id: !input target_players
+    data:
+      message: !input message_template
+      chime_path: !input chime_path
+      tts_speed: !input tts_speed
+      volume_level: !input volume_level
+      cache: false
+
+mode: queued

@@ -1,0 +1,258 @@
+blueprint:
+  domain: automation
+  name: "Proactive – Presence-based Last Call (announcement + optional script)"
+  description: >
+    Speaks a single, AI-generated 'last call' message when presence is detected
+    in an area during an allowed time window. Optionally runs an external script
+    after the announcement (e.g. turn off lights, TV, start audio, etc.).
+    No questions, no repeats, no cooldowns.
+
+  ############################################################
+  ## INPUTS
+  ############################################################
+
+  input:
+
+    ############################################################
+    ## CORE – PRESENCE & AREA
+    ############################################################
+
+    presence_sensors:
+      name: Presence sensors
+      description: >
+        One or more binary sensors indicating presence in this area.
+        The automation triggers when ANY of these turns ON.
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    area_name:
+      name: Area name (spoken context)
+      description: >
+        Friendly area name used in the spoken message and LLM context.
+      default: Living room
+      selector:
+        select:
+          options:
+            - Living room
+            - Bedroom
+            - Office
+            - Kitchen
+            - Workshop
+            - Bathroom
+          custom_value: true
+
+    ############################################################
+    ## CORE – TIME & DAY RULES
+    ############################################################
+
+    start_time:
+      name: Active from
+      description: >
+        Start time of the window where this automation is allowed to run.
+      default: "20:00:00"
+      selector:
+        time: {}
+
+    end_time:
+      name: Active until
+      description: >
+        End time of the active window. Can be earlier than start time
+        to allow crossing midnight (e.g. 22:00 → 02:00).
+      default: "01:00:00"
+      selector:
+        time: {}
+
+    run_days:
+      name: Allowed days
+      description: >
+        Days of the week on which this automation is allowed to run.
+      default:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        - sat
+        - sun
+      selector:
+        select:
+          options:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+            - sat
+            - sun
+          multiple: true
+
+    ############################################################
+    ## CORE – SPEECH OUTPUT
+    ############################################################
+
+    media_player:
+      name: Media player for speech
+      description: >
+        Speaker or media player used for the spoken announcement.
+      selector:
+        entity:
+          domain: media_player
+
+    tts_mode:
+      name: TTS mode
+      description: >
+        Choose which TTS integration to use.
+      default: standard_tts_entity
+      selector:
+        select:
+          options:
+            - standard_tts_entity
+            - elevenlabs_custom_service
+
+    tts_entity:
+      name: TTS entity
+      description: >
+        TTS entity used to speak the message.
+      selector:
+        entity:
+          domain: tts
+
+    elevenlabs_voice_profile:
+      name: ElevenLabs voice profile (optional)
+      description: >
+        Only used when TTS mode is ElevenLabs custom service.
+      default: ""
+      selector:
+        text:
+          multiline: false
+
+    ############################################################
+    ## ADVANCED – SAFETY GUARDS
+    ############################################################
+
+    safety_guards:
+      name: Safety & interruption guards
+      icon: mdi:shield-check
+      collapsed: true
+      description: >
+        Optional protections to prevent unwanted announcements,
+        such as walk-by triggers or interrupting active playback.
+      input:
+
+        min_presence_seconds:
+          name: Minimum presence duration
+          description: >
+            Presence must be continuously detected for this many seconds
+            before the automation fires. Set to 0 to disable.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 600
+              step: 5
+              unit_of_measurement: seconds
+
+        block_if_media_playing:
+          name: Do not speak if media is playing
+          description: >
+            Prevents the announcement from interrupting active playback
+            on the selected media player.
+          default: false
+          selector:
+            boolean: {}
+
+    ############################################################
+    ## ADVANCED – AI MESSAGE GENERATION
+    ############################################################
+
+    ai_message_settings:
+      name: AI message generation
+      icon: mdi:robot-outline
+      collapsed: true
+      description: >
+        Controls how the AI generates the spoken 'last call' sentence.
+      input:
+
+        conversation_agent:
+          name: Conversation / LLM agent
+          description: >
+            Conversation agent that generates the spoken message.
+          selector:
+            conversation_agent:
+
+        llm_prompt:
+          name: LLM prompt style
+          description: >
+            Instructions for how the AI should phrase the last-call message.
+            Keep it short; the automation enforces a single sentence.
+          default: >
+            You are a smart home assistant. Speak ONE short, natural
+            'last call' sentence to the user. Maximum 220 characters.
+            No quotation marks.
+          selector:
+            text:
+              multiline: true
+
+        context_entities:
+          name: Extra context entities
+          description: >
+            Optional entities whose state should be passed to the AI
+            as additional context (temperature, lights, media, etc.).
+          default: []
+          selector:
+            entity:
+              multiple: true
+
+    ############################################################
+    ## ADVANCED – FOLLOW-UP SCRIPT
+    ############################################################
+
+    followup_script_settings:
+      name: Follow-up script after announcement
+      icon: mdi:script-text-outline
+      collapsed: true
+      description: >
+        Optional automation step that runs an external script
+        after the spoken announcement finishes.
+      input:
+
+        enable_followup_script:
+          name: Enable follow-up script
+          description: >
+            If enabled, the selected script will automatically run
+            after the announcement.
+          default: false
+          selector:
+            boolean: {}
+
+        followup_delay_seconds:
+          name: Delay before running script
+          description: >
+            Optional delay to ensure the TTS message has finished
+            playing before the script runs.
+          default: 5
+          selector:
+            number:
+              min: 0
+              max: 30
+              step: 1
+              unit_of_measurement: seconds
+
+        followup_script:
+          name: Script to run
+          description: >
+            External script to execute after the announcement.
+            This blueprint does not define what the script does.
+          selector:
+            entity:
+              domain: script
+triggers:
+  - trigger: state
+    entity_id: !input presence_sensors
+    from: "off"
+    to: "on"
+
+actions:
+  - choose: []

@@ -1,0 +1,122 @@
+blueprint:
+  name: "UPS – Notify on power events (NUT status sensor)"
+  description: >
+    Send notifications when your UPS switches to battery power, when
+    utility power returns, and when the UPS battery is low. Uses the
+    NUT status sensor (e.g. sensor.madups_status, values like
+    'OL', 'OB DISCHRG', 'OL CHRG').
+  domain: automation
+  source_url: "https://chatgpt.local/madups_notify_status_blueprint"
+
+  input:
+    ups_status:
+      name: UPS status sensor
+      description: >
+        Select the sensor from the NUT integration that reports the UPS
+        status (e.g. sensor.madups_status). Values typically contain:
+        OL = On line (mains), OB = On battery, LB = Low battery.
+      selector:
+        entity:
+          domain: sensor
+
+    ups_battery_percent:
+      name: UPS battery percentage
+      description: >
+        Select the sensor that reports the UPS battery charge in percent
+        (e.g. sensor.madups_battery_charge).
+      selector:
+        entity:
+          domain: sensor
+
+    low_battery_percent:
+      name: Low battery warning threshold (%)
+      description: >
+        When the battery drops below this value while on battery, send
+        a low-battery warning. NUT itself will still handle the actual
+        host shutdown based on its own config.
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
+    notify_service:
+      name: Notification service
+      description: >
+        Home Assistant notify service to use, e.g.
+        notify.mobile_app_madaringer
+      default: notify.mobile_app_madaringer
+      selector:
+        text:
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  # Any change of UPS status (OL/OB/etc.)
+  - id: status_change
+    platform: state
+    entity_id: !input ups_status
+
+  # Battery percentage threshold
+  - id: low_battery
+    platform: numeric_state
+    entity_id: !input ups_battery_percent
+    below: !input low_battery_percent
+
+condition: []
+
+action:
+  - variables:
+      notify_service: !input notify_service
+      ups_status_entity: !input ups_status
+      ups_batt_entity: !input ups_battery_percent
+      current_status: "{{ states(ups_status_entity) | string }}"
+      previous_status: "{{ trigger.from_state.state if trigger.from_state is not none else '' }}"
+      batt_pct: "{{ states(ups_batt_entity) }}"
+
+  - choose:
+      # UPS went ON BATTERY (status now contains OB)
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.id == 'status_change'
+                 and 'OB' in current_status }}
+        sequence:
+          - service: "{{ notify_service }}"
+            data:
+              title: "Power outage: UPS on battery"
+              message: >
+                Mains power is out. UPS switched to battery.
+                Current charge: {{ batt_pct }}%.
+      # UPS went back ON MAINS (was OB, now no OB)
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.id == 'status_change'
+                 and 'OB' in previous_status
+                 and 'OB' not in current_status }}
+        sequence:
+          - service: "{{ notify_service }}"
+            data:
+              title: "Power restored"
+              message: >
+                Utility power has returned. UPS is back on mains.
+                Battery now at {{ batt_pct }}%.
+
+      # Battery low while ON BATTERY
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'low_battery' }}"
+          - condition: template
+            value_template: >
+              {{ 'OB' in states(ups_status_entity) | string }}
+        sequence:
+          - service: "{{ notify_service }}"
+            data:
+              title: "UPS battery low"
+              message: >
+                UPS battery is low ({{ batt_pct }}%).
+                System will shut down soon according to NUT settings.

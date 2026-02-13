@@ -1,0 +1,30 @@
+blueprint:
+  name: Music Assistant – Follow me (multi-room advanced)
+  author: madalone
+  description: >
+    ![Image](https://brands.home-assistant.io/_/music_assistant/logo.png)
+
+    # Music Assistant – Follow me (multi-room advanced)
+
+    Presence-driven follow-me for Music Assistant queues across multiple zones.
+    Transfers the active queue to whichever room you walk into, with priority
+    ordering, anti-flicker, cooldown, playback protection, optional announcements,
+    and a TTS duration filter to ignore short clips.
+
+    ### Recent changes
+
+    - **v4:** Added TTS output players list (parallel to presence sensors and
+      MA players) so announcement scripts target physical hardware speakers
+      instead of MA virtual players. Added divert TTS player for divert mode.
+      Fixes TTS hang when announcing on MA player abstractions during playback.
+
+    - **v3:** Added excluded source players blacklist, follow-paused-music toggle,
+      and divert mode to redirect music to a fixed player instead of following
+      presence.
+
+    - **v2:** Style guide compliance — modern syntax (`action:`, `triggers:`),
+      collapsible input sections, aliases on all steps, MA integration filter,
+      removed dead variables, added template safety defaults.
+  domain: automation
+  homeassistant:
+    min_version: "2024.6.0"

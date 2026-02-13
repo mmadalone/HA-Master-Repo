@@ -1,0 +1,215 @@
+blueprint:
+  name: Coming home – AI welcome
+  description: >
+    When a person arrives home, waits for entrance occupancy, resets speakers
+    (by toggling switches), turns on one or more temporary switches, then starts
+    an Assist conversation via a dedicated conversation agent.
+    Includes GPS-bounce cooldown, timeout handling, and guaranteed cleanup.
+    The conversation agent handles personality, device control, and all rules.
+  domain: automation
+  input:
+    person_entity:
+      name: Person
+      description: Person whose arrival should trigger the automation.
+      selector:
+        entity:
+          domain: person
+
+    reset_switches:
+      name: Reset switches (speakers power, etc.)
+      description: >
+        One or more switches that will be turned OFF, then ON again with a delay
+        to "reset" speakers or audio chains.
+      selector:
+        target:
+          entity:
+            domain: switch
+
+    reset_switch_delay:
+      name: Reset delay
+      description: How long to wait between turning switches off and on.
+      default: "0:00:02"
+      selector:
+        duration: {}
+
+    entrance_sensor:
+      name: Entrance occupancy sensor
+      description: Binary sensor that detects presence in the entrance/doorway.
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: occupancy
+
+    entrance_wait_timeout:
+      name: Entrance wait timeout
+      description: How long to wait for the sensor to detect arrival before giving up.
+      default: "0:02:00"
+      selector:
+        duration: {}
+
+    arrival_switches:
+      name: Temporary switches
+      description: >
+        One or more switches to turn on while the arrival / greeting flow is
+        running (they will be turned off again at the end).
+      selector:
+        target:
+          entity:
+            domain: switch
+
+    cooldown_seconds:
+      name: Cooldown (seconds)
+      description: >
+        Minimum seconds between runs to prevent GPS bounce re-triggers.
+      default: 900
+      selector:
+        number:
+          min: 60
+          max: 3600
+          unit_of_measurement: seconds
+
+    conversation_agent:
+      name: Conversation agent
+      description: >
+        Dedicated conversation agent for the arrival flow.
+        The agent's own system prompt handles personality, allowed devices,
+        and all control rules.
+      default: conversation.rick_extended_coming_home
+      selector:
+        entity:
+          domain: conversation
+
+    ai_greeting_prompt:
+      name: AI greeting prompt
+      description: >
+        Prompt sent to the conversation agent to generate the first line.
+        Use {{ person_name }} to insert the arriving person's name.
+      default: >
+        {{ person_name }} has just arrived home and walked through the entrance.
+        Generate ONE short, snarky greeting that directly addresses
+        {{ person_name }} and invites them to choose between the workshop
+        lights, the living room lights, or both. Do NOT control any devices
+        in this response. Just return the line you would say.
+      selector:
+        text:
+          multiline: true
+
+    assist_satellites:
+      name: Assist satellites
+      description: >
+        One or more Voice PEs / Assist satellites that should speak the greeting
+        and handle the conversation.
+      selector:
+        target:
+          entity:
+            domain: assist_satellite
+
+    post_conversation_delay:
+      name: Post-conversation delay
+      description: How long to wait before turning the temporary switches back off.
+      default: "0:01:00"
+      selector:
+        duration: {}
+
+trigger:
+  - platform: state
+    entity_id: !input person_entity
+    from: not_home
+    to: home
+
+condition:
+  # GPS bounce protection — skip if this automation ran recently
+  - condition: template
+    value_template: >-
+      {{ (now() - (this.attributes.last_triggered
+         | default(as_datetime('2000-01-01'), true)))
+         .total_seconds() > cooldown_seconds }}
+
+variables:
+  cooldown_seconds: !input cooldown_seconds
+  person_entity: !input person_entity
+  person_name: "{{ state_attr(person_entity, 'friendly_name') | default('someone') }}"
+
+action:
+  # 1) Wait until entrance zone detects arrival (BEFORE resetting speakers)
+  - wait_for_trigger:
+      - platform: state
+        entity_id: !input entrance_sensor
+        to: "on"
+    timeout: !input entrance_wait_timeout
+    continue_on_timeout: true
+
+  - if:
+      - condition: template
+        value_template: "{{ not wait.completed }}"
+    then:
+      - stop: "Entrance sensor timed out — nobody showed up. Aborting."
+
+  # 2) Reset speakers by toggling switches OFF -> delay -> ON
+  - service: switch.turn_off
+    target: !input reset_switches
+
+  - delay: !input reset_switch_delay
+
+  - service: switch.turn_on
+    target: !input reset_switches
+
+  # 3) Turn on the temporary switches (helpers / relays / etc.)
+  - service: switch.turn_on
+    target: !input arrival_switches
+
+  # 4) Wait until entrance is clear (person moved past the door)
+  - wait_for_trigger:
+      - platform: state
+        entity_id: !input entrance_sensor
+        to: "off"
+    timeout: !input entrance_wait_timeout
+    continue_on_timeout: true
+
+  - if:
+      - condition: template
+        value_template: "{{ not wait.completed }}"
+    then:
+      - service: switch.turn_off
+        target: !input arrival_switches
+      - stop: "Entrance never cleared — aborting and cleaning up."
+
+  # 5) Generate AI greeting line via conversation agent
+  - service: conversation.process
+    response_variable: ai_greeting
+    data:
+      agent_id: !input conversation_agent
+      text: !input ai_greeting_prompt
+
+  # 6) Extract greeting (with robust fallback)
+  - variables:
+      welcome_line: >-
+        {% if ai_greeting is defined
+           and ai_greeting.response is defined
+           and ai_greeting.response.speech is defined %}
+          {{ ai_greeting.response.speech.plain.speech
+             | default("Yo " ~ person_name ~ ", you're back. Workshop, living room, or both?") }}
+        {% else %}
+          Yo {{ person_name }}, you're back. Workshop, living room, or both?
+        {% endif %}
+
+  # 7) Start Assist conversation on the Voice PE(s)
+  #    The agent already has its full system prompt with personality, rules,
+  #    and device permissions. We only pass the dynamic arrival context.
+  - service: assist_satellite.start_conversation
+    target: !input assist_satellites
+    data:
+      preannounce: true
+      start_message: "{{ welcome_line }}"
+      extra_system_prompt: >-
+        {{ person_name }} just arrived home and heard: "{{ welcome_line }}".
+        This is an arrival conversation. Help them set up their lights, TV,
+        and music as per your rules.
+
+  # 8) Wait, then clean up temporary switches
+  - delay: !input post_conversation_delay
+
+  - service: switch.turn_off
+    target: !input arrival_switches
+
+mode: restart

@@ -1,0 +1,108 @@
+blueprint:
+  name: "Temperature hub – cooling fan per device"
+  description: >
+    Generic temperature-based cooling controller. Monitors one
+    temperature sensor and turns a smart plug (fan) ON when it is above
+    a high threshold and OFF again when it drops below a lower
+    threshold. If the sensor becomes unavailable/unknown, the fan is
+    turned OFF as a safety fallback. Create one automation per device
+    (madteevee, retropie, etc).
+  domain: automation
+  source_url: "https://chatgpt.local/temperature_hub_cooling_fan_v2"
+
+  input:
+    temp_sensor:
+      name: Temperature sensor
+      description: >
+        Temperature sensor to monitor for this device
+        (e.g. Glances CPU temp from madteevee).
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+
+    fan_switch:
+      name: Fan smart switch
+      description: >
+        Smart plug / switch that powers the external fan for this
+        device.
+      selector:
+        entity:
+          domain: switch
+
+    high_temp:
+      name: Turn fan ON above (°C)
+      description: >
+        If the temperature is above this value, the fan will be turned
+        ON.
+      default: 60
+      selector:
+        number:
+          min: 30
+          max: 90
+          step: 1
+          unit_of_measurement: "°C"
+
+    low_temp:
+      name: Turn fan OFF below (°C)
+      description: >
+        If the temperature is below this value, the fan will be turned
+        OFF. Use a lower value than the ON threshold to avoid flapping.
+      default: 50
+      selector:
+        number:
+          min: 20
+          max: 85
+          step: 1
+          unit_of_measurement: "°C"
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  # Run whenever the temperature sensor state changes
+  - platform: state
+    entity_id: !input temp_sensor
+
+  # Also sync on HA start so fan matches current temperature
+  - platform: homeassistant
+    event: start
+
+condition: []
+
+action:
+  - choose:
+      # Too hot -> fan ON
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input temp_sensor
+            above: !input high_temp
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: !input fan_switch
+
+      # Cooled down -> fan OFF
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input temp_sensor
+            below: !input low_temp
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input fan_switch
+
+      # Sensor offline/unknown -> fan OFF as safety
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: !input temp_sensor
+                state: "unavailable"
+              - condition: state
+                entity_id: !input temp_sensor
+                state: "unknown"
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input fan_switch
