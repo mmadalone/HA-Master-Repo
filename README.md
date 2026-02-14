@@ -23,24 +23,74 @@ Many of these blueprints are still in testing phase.
 - Assorted Alexa devices
 
 **Key Integrations:**
-- OpenAI (GPT-4o) — conversation agents with custom personas
-- ElevenLabs — text-to-speech with character voices
+- [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) — LLM-driven conversation agents with tool calling and custom personas
+- OpenAI (GPT-4o) — LLM backend for conversation agents
+- ElevenLabs — text-to-speech with custom character voices
 - Music Assistant — multi-room audio management
-- ESPHome — device firmware and voice pipeline
+- ESPHome — device firmware and voice pipelines
+- [microWakeWord](https://github.com/kahrendt/microWakeWord) — on-device custom wake word detection
 
 ---
 
 ## Voice Assistants
 
-Two AI personalities run the house, each with a dedicated wake word, conversation agent, and TTS voice:
+Two AI personalities run the house, each with a dedicated room, conversation agent, and ElevenLabs TTS voice. What makes it interesting is the **dual wake word system** — each persona has two wake words that route to different agent configurations:
 
-**Rick Sanchez** — Wake word: *"Hey Rick"*
-Nihilistic genius scientist. Sarcastic, perpetually annoyed, curses freely. Will help you but makes sure you know it's beneath him. Handles the workshop and general-purpose commands.
+**Rick Sanchez** — Workshop satellite
+Nihilistic genius scientist. Sarcastic, perpetually annoyed, curses freely. Will help you but makes sure you know it's beneath him.
 
-**Quark** — Wake word: *"Hey Quark"*
-Ferengi bartender from Deep Space Nine. Sees everything through the lens of profit and the Rules of Acquisition. Scheming but ultimately helpful. Handles living room and bedtime routines.
+- *"Hey Rick"* → concise responses, quick commands
+- *"Yo Rick"* → verbose mode, detailed answers and longer conversations
 
-Both run through OpenAI's conversation agent with extensive system prompts and ElevenLabs custom voices.
+**Quark** — Living room satellite
+Ferengi bartender from Deep Space Nine. Sees everything through the lens of profit and the Rules of Acquisition. Scheming but ultimately helpful.
+
+- *"Hey Quark"* → concise responses, quick commands
+- *"Yo Quark"* → verbose mode, detailed answers and longer conversations
+
+The "Hey" wake words route to the standard agent — fast, short answers for things like "Hey Rick, what time is it?" The "Yo" wake words route to the verbose agent variant — longer, more detailed responses with expanded tool access for when you want an actual conversation or need the agent to do something complex.
+
+All four custom wake word models are trained with [microWakeWord](https://github.com/kahrendt/microWakeWord) and run on-device on the Voice PE's ESP32-S3. The trained models are available in the [mmadalone/microwakeword](https://github.com/mmadalone/microwakeword) repository. Each satellite also retains the default *"Okay Nabu"* wake word from the base Voice PE package.
+
+---
+
+## Conversation Agents
+
+All agents run through [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) with GPT-4o as the LLM backend, extensive system prompts defining each persona's personality, and ElevenLabs custom voices for TTS output. Agent names follow a `<Persona> - <Integration> - <Variant>` naming convention.
+
+**Pipeline agents** — triggered by wake words through the voice satellite:
+
+| Agent | Triggered by | Role |
+|-------|-------------|------|
+| Rick - Extended | *"Hey Rick"* | General-purpose, concise workshop assistant |
+| Rick - Extended - Verbose | *"Yo Rick"* | Detailed responses, expanded tool access |
+| Quark - Extended | *"Hey Quark"* | General-purpose, concise living room assistant |
+| Quark - Extended - Verbose | *"Yo Quark"* | Detailed responses, expanded tool access |
+
+**Music-specialized:**
+
+| Agent | Role |
+|-------|------|
+| Rick - Extended - Verbose - Music | Music control with exposed Music Assistant tool scripts — play, stop, skip, volume, search |
+
+**Scenario agents** — called by blueprints via `conversation.process`, not directly by wake words:
+
+| Agent | Called by | Role |
+|-------|----------|------|
+| Rick - Extended - Coming Home | Coming Home blueprint | Arrival greeting, helps set up lights/TV/music |
+| Rick - Extended - Bedtime | Bedtime Negotiator blueprint | Bedtime routine negotiation, Rick style |
+| Quark - Extended - Bedtime | Bedtime Negotiator blueprint | Bedtime routine negotiation, Quark style |
+
+**Anthropic/Claude agents** (configured but not yet tested with blueprints):
+
+| Agent | Role |
+|-------|------|
+| Rick - Anthropic | Claude-based Rick, general purpose |
+| Quark - Anthropic | Claude-based Quark, general purpose |
+
+The general-purpose agents use `execute_services` for basic HA service calls. The music and scenario-specific agents have dedicated HA scripts exposed as callable tools (e.g., `voice_stop_radio`, `voice_play_bedtime_audiobook`, `voice_shut_up`) — the agent calls the script, the script handles the actual service call with proper error handling. See the style guide's §8.3.2 for the script-as-tool pattern.
+
+**Compatibility note:** All LLM-driven blueprints (Bedtime Negotiator, Coming Home, Voice Music Control, Escalating Wake-Up Guard) have been tested exclusively with Extended OpenAI Conversation and GPT-4o. The Anthropic/Claude conversation agents are configured but have not yet been validated with the blueprint toolchains.
 
 ---
 
@@ -58,7 +108,7 @@ A multi-stage bedtime routine blueprint that uses the AI conversation agent to n
 - Sleep timers and gradual wind-down
 - ~1900 lines of YAML. Yes, really.
 
-### 🎤 Voice-Controlled Music ssistant
+### 🎤 Voice-Controlled Music Assistant
 Full voice control over MA with play/pause, search, genre/mood playback, shuffle/repeat, volume management, and multi-language support (English + German). Includes "play something else" cycling through search results.
 
 ### 📡 Volume Ducking
@@ -89,12 +139,27 @@ The guide is opinionated — it enforces `!secret` usage in all examples, requir
 
 ## Attribution & Credits
 
-Some blueprints in this repository are based on or inspired by community-contributed work. I haven't yet done a proper audit to credit every original author — that's on my to-do list and I'll update this section with proper attribution once I've traced everything back to its source. If you recognize your work here and I haven't credited you, I apologize — please reach out and I'll fix it immediately.
+**Integrations & Tools:**
+- [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) by jekalmin — the conversation agent integration that powers all LLM-driven voice interactions, tool registration, and multi-agent coordination
+- [microWakeWord](https://github.com/kahrendt/microWakeWord) by Kevin Ahrendt — on-device wake word detection engine for ESP32-S3, used to train all four custom persona wake words
+- [Music Assistant](https://music-assistant.io/) — multi-room audio management, play_media service, and queue control
+- [ESPHome](https://esphome.io/) — device firmware framework for Voice PE satellites
+- [Nabu Casa Voice PE](https://github.com/esphome/home-assistant-voice-pe) — base ESPHome packages for Home Assistant Voice Preview Edition hardware
+- [ElevenLabs](https://elevenlabs.io/) — custom TTS voices for Rick and Quark personas
 
-Known influences and sources:
+**Blueprint Inspiration:**
 - [brix29/ha_music_voice_control_spotifyplus](https://github.com/brix29/ha_music_voice_control_spotifyplus) — voice control patterns for SpotifyPlus
 - [Phil Hawthorne's music follow-me concept](https://philhawthorne.com/making-music-follow-you-around-the-home-with-home-assistant-and-sonos/) — presence-based audio routing inspiration
 - Home Assistant community blueprints exchange — various patterns and approaches
+
+**Custom Wake Word Models:**
+- Trained models for *Hey Rick*, *Yo Rick*, *Hey Quark*, and *Yo Quark* are available at [mmadalone/microwakeword](https://github.com/mmadalone/microwakeword)
+
+**Cultural References:**
+- *Star Trek: Deep Space Nine* (Paramount) — Quark, the Ferengi Rules of Acquisition, and the style guide's personality
+- *Rick and Morty* (Adult Swim) — Rick Sanchez persona and collaborative imagery
+
+If you recognize your work here and I haven't credited you, please reach out and I'll fix it immediately.
 
 ---
 
