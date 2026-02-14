@@ -727,7 +727,7 @@ conditions:
       {% if not block_if_media_playing %}
         true
       {% else %}
-        {{ states(player_entity | default('')) not in ['playing', 'buffering'] }}
+        {{ states(player_entity | default('')) | default('idle') not in ['playing', 'buffering'] }}
       {% endif %}
 
   # Optional: require presence to be stable for at least N seconds
