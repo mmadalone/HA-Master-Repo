@@ -266,6 +266,7 @@ Claude has access to multiple MCP tool servers. Using the wrong one wastes time,
 | **Write** (new file or overwrite) | **Desktop Commander** `write_file` | — | Default `mode: rewrite`. |
 | **Write** (files > 30KB) | **Desktop Commander** `write_file` with append | — | First chunk: `mode: rewrite`. Subsequent chunks: `mode: append`. Never attempt a monolithic write for large files. |
 | **List directory** | **Desktop Commander** `list_directory` | Filesystem MCP `list_directory` | Either works. DC is the conventional default. |
+| **Git operations** (status, diff, log, add, commit) | **git MCP** (`git_status`, `git_diff`, `git_log`, `git_add`, `git_commit`) | — | For `GIT_REPO` only. HA config git uses HA MCP (§1.13.2). Triggered by the Post-Edit Publish Workflow in project instructions. |
 
 > **Filesystem MCP scope:** The v3.2 blanket prohibition is lifted. Filesystem MCP is now authorized for **reads and line-range targeting only**. All writes still go exclusively through Desktop Commander — mixing write tools creates confusion over which tool wrote what.
 
@@ -279,6 +280,7 @@ Claude has access to multiple MCP tool servers. Using the wrong one wastes time,
 | **Container shell / logs** | **ha-ssh** (`execute-command`) | Surgical reads only — never dump full logs. See §13.6.1. |
 | **Blueprint header images** | **Gemini** (`gemini-generate-image`) | Per AP-15. No other Gemini uses. |
 | **Automation traces** | **HA UI** (not tools) | Claude cannot reliably retrieve traces via API. Ask the user to check Settings → Automations → Traces. See §13.1. |
+| **Documentation lookups** (HA Jinja2, ESPHome, Music Assistant, integration docs) | **Context7** (`resolve-library-id` → `query-docs`) | Two-step: resolve the library ID first, then query with a specific question. Coverage varies by library — fall back to web search if Context7 returns nothing useful. Key libraries: `/home-assistant/home-assistant.io` (user docs, 7101 snippets), `/home-assistant/developers.home-assistant` (dev docs, 2045 snippets). |
 
 #### 1.13.3 Known quirks — stop rediscovering these
 
@@ -289,6 +291,9 @@ Claude has access to multiple MCP tool servers. Using the wrong one wastes time,
 | DC `edit_block` | May reject matches if `old_string` isn't unique in the file | Expand `old_string` to include more surrounding lines for uniqueness |
 | Filesystem MCP | Redundant with DC for writes; reliable for reads | **Reads and line-range targeting only.** All writes → Desktop Commander. |
 | ripgrep | Search-only — cannot write or edit files | Pair with DC `edit_block` for search-then-edit workflows |
+| git MCP | `repo_path` required on every single call — no default, no memory between calls | Always pass the full canonical `GIT_REPO` path from project instructions. Never abbreviate or assume. |
+| Context7 | Coverage gaps — not all integrations are documented; results can be shallow or outdated | Verify Context7 results against your own knowledge. If results are thin or missing, fall back to web search immediately — don't retry with different queries hoping for better coverage. |
+| Context7 | `resolve-library-id` may return multiple matches for broad terms like "Home Assistant" | Pick the library with the highest snippet count and source reputation for the specific domain (user docs vs dev docs). |
 
 #### 1.13.4 Decision rules
 
@@ -300,10 +305,12 @@ Claude has access to multiple MCP tool servers. Using the wrong one wastes time,
 6. **Need container shell access (logs, CLI, diagnostics)?** → ha-ssh.
 7. **Need a blueprint header image?** → Gemini.
 8. **Need to see an automation trace?** → Ask the user to check the HA UI.
+9. **Git operations on the style guide repo (`GIT_REPO`)?** → git MCP. Follow the Post-Edit Publish Workflow in project instructions (sync → stage → commit → push gate).
+10. **Need current integration or library documentation?** → Context7 (`resolve-library-id` → `query-docs`). If coverage is thin or the library isn't indexed, fall back to web search.
 
 **Why this matters:** The v3.2 version of §1.13 assigned tools by identity ("use Desktop Commander for everything"). In practice, DC search returns filenames without context, its `read_file` range targeting is unreliable, and every search requires two calls. Routing by operation type — ripgrep for search, Filesystem MCP for precise reads, Desktop Commander for writes and edits — eliminates 5–10 wasted tool calls per session.
 
-**Cross-references:** §2.6 (git scope boundaries — which git tool for which path), §13.6.1 (AI log file access protocol — how to use ha-ssh for log reads), §13.1 (automation traces — HA UI first).
+**Cross-references:** §2.6 (git scope boundaries — which git tool for which path), §13.6.1 (AI log file access protocol — how to use ha-ssh for log reads), §13.1 (automation traces — HA UI first). Post-Edit Publish Workflow (project instructions — sync + git MCP commit chain for `GIT_REPO`).
 
 ### 1.14 Session discipline and context hygiene
 
@@ -449,15 +456,15 @@ This replaces the old filesystem-based recovery (scanning `_versioning/` directo
 
 The HA MCP git tools (`ha_create_checkpoint`, `ha_git_commit`, `ha_git_rollback`) only track `HA_CONFIG`. They know nothing about `PROJECT_DIR` or `GIT_REPO`.
 
-Style guide edits in `PROJECT_DIR` are synced and committed by the user via `sync-to-repo.sh`. That's not the AI's problem — don't try to manage it.
+Style guide edits in `PROJECT_DIR` are synced and committed via the Post-Edit Publish Workflow defined in the project instructions. Claude handles the sync (rsync) and commit (git MCP) natively — no external script required.
 
 **Decision rule — two paths, zero deliberation:**
 
 | You edited files in… | Do this |
 |---|---|
 | `HA_CONFIG` | Use HA MCP git tools (checkpoint → edit → commit). Standard §2.2 workflow. |
-| `PROJECT_DIR` | Provide a concise commit message summarizing what changed. Tell the user to sync when they're ready. Done. |
-| Both in one task | Do both — HA MCP commit for the config changes, commit message + sync reminder for the style guide changes. Two separate actions, no need to unify them. |
+| `PROJECT_DIR` | Follow the Post-Edit Publish Workflow (project instructions): rsync → git MCP stage + commit → push gate. |
+| Both in one task | Do both — HA MCP commit for the config changes, Post-Edit Publish Workflow for the style guide changes. Two separate actions, no need to unify them. |
 
 **Do not deliberate about which git workflow applies.** The path you edited determines the answer. If you catch yourself writing a paragraph about "which versioning mechanism covers this file," you've already violated this rule — pick the path, apply the matching action, move on.
 

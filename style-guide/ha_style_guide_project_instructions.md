@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.10 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.11 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -302,6 +302,16 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.11 — 2026-02-14
+- **§1.13 updated** — Added git MCP and Context7 to routing tables:
+  - §1.13.1: git operations row (status, diff, log, add, commit) → git MCP for `GIT_REPO`. References Post-Edit Publish Workflow in project instructions.
+  - §1.13.2: Context7 documentation lookups row (HA Jinja2, ESPHome, Music Assistant, integration docs). Two-step resolve → query pattern with web search fallback.
+  - §1.13.3: Four new quirk entries — git MCP `repo_path` requirement, Context7 coverage gaps, Context7 multi-match disambiguation.
+  - §1.13.4: Decision rules #9 (git on GIT_REPO → git MCP + publish workflow) and #10 (integration docs → Context7 → web search fallback).
+  - Cross-references updated to include Post-Edit Publish Workflow.
+- **§2.6 updated** — Replaced `sync-to-repo.sh` reference with Post-Edit Publish Workflow (Claude-native rsync + git MCP commit chain). Decision table updated for both `PROJECT_DIR` and mixed-scope edits.
+- Build log: `_build_logs/2026-02-14_new_tool_integration_build_log.md`
 
 ### v3.10 — 2026-02-14
 - **§1.13 rewritten** — Replaced tool-identity routing with operation-based routing. Tools assigned by what you're doing (search, read, edit, write), not which MCP server to reach for. Key changes:
