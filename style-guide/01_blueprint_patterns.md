@@ -34,7 +34,8 @@ blueprint:
 
 **Header fields:**
 - `author:` — Always include. Even for personal blueprints, it identifies ownership.
-- `source_url:` — Include if the blueprint lives on GitHub or will be shared. This enables one-click reimport/update in the HA UI. Omit for strictly private blueprints.
+- `source_url:` — Include if the blueprint lives on GitHub or will be shared. This enables one-click reimport/update in the HA UI. Omit for strictly private blueprints. Use `GIT_REPO_URL` as the base (defined in Project Instructions).
+- `description:` image URL — Use `HEADER_IMG_RAW` + `<blueprint_name>-header.<ext>` (defined in Project Instructions). Never use `github.com/blob/...` — blob URLs render HTML, not the image binary. See §11.1 step 4 for full image specs.
 - `min_version:` — **Required** when using features from a specific HA version. Always verify which version introduced the features you use.
 - `icon:` — **NOT valid** in the `blueprint:` schema block. HA will reject it with `extra keys not allowed @ data['blueprint']['icon']`. Icons are only available on **instances** created from blueprints, not the blueprint definition itself. See also §4.1.
 

@@ -375,7 +375,7 @@ Then verify each one resolves to an actual target. Dangling references are ERROR
 **Verification procedure:**
 1. List all blueprint YAML files in `HA_CONFIG/blueprints/automation/madalone/` and `HA_CONFIG/blueprints/script/madalone/`.
 2. For each YAML file, check that a corresponding `<stem>-readme.md` exists in `README_AUTO_DIR` or `README_SCRI_DIR`.
-3. For each existing README, verify the header image URL matches the blueprint's `description:` field.
+3. For each existing README, verify the header image URL matches the blueprint's `description:` field (both should use `HEADER_IMG_RAW` + filename).
 4. Flag READMEs whose feature lists, input tables, or changelogs are visibly stale (e.g., README lists fewer inputs than the blueprint, changelog is behind the YAML description's "Recent changes").
 
 **Naming convention check:**

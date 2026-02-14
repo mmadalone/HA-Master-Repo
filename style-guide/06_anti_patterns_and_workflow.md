@@ -225,8 +225,9 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
    - **Style:** Rick & Morty (Adult Swim cartoon)
    - **Filename:** `<blueprint_name>-header.<ext>` — allowed extensions: `.jpeg`, `.jpg`, `.png`, `.webp` (pick whichever the generation tool outputs — do not convert between formats just to match a convention)
    - **Save location:** `HEADER_IMG` (defined in Project Instructions — resolves to `GIT_REPO/images/header/`)
-   - **Blueprint URL:** `https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/<blueprint_name>-header.<ext>`
-   - After generating, rename the output file from its auto-generated name to the proper `<blueprint_name>-header.<ext>` convention. Save it to `GIT_REPO/images/header/`. Ensure the extension in the YAML `![Image](...)` URL matches the actual filename in the repo exactly. **Use `raw.githubusercontent.com`** — never `github.com/blob/...` (blob URLs render HTML, not the image binary).
+   - **Blueprint URL:** `HEADER_IMG_RAW` + `<blueprint_name>-header.<ext>` (defined in Project Instructions — resolves to `https://raw.githubusercontent.com/...`)
+   - After generating, rename the output file from its auto-generated name to the proper `<blueprint_name>-header.<ext>` convention. Save it to `HEADER_IMG`. Ensure the extension in the YAML `![Image](...)` URL matches the actual filename in the repo exactly. **Use `HEADER_IMG_RAW`** — never `github.com/blob/...` (blob URLs render HTML, not the image binary).
+   - **Image cleanup (MANDATORY):** After the user approves an image, delete the original auto-generated file (the one with the tool's default filename) if it differs from the renamed target. If earlier attempts were rejected during the session, delete those too — don't accumulate orphaned `attempt-1.jpeg`, `attempt-2.jpeg` files. If the user declines a header image entirely, delete all generated files. Verify `HEADER_IMG` contains only the final approved file for this blueprint (no duplicates with different extensions, e.g., both `.jpeg` and `.png` for the same blueprint).
 5. **Edit directly** — write to the SMB mount. Don't ask "should I write this?" — just do it.
    - **Checkpoint:** If the build requires ≥3 chunks (§11.5), create a build log (§11.8) after completing the outline (step 3) and update it after each chunk is confirmed.
 6. **Verify output (MANDATORY)** — after writing the file:
@@ -235,11 +236,12 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
    - **For blueprints:** Remind the user to create an instance from the blueprint and verify all `!input` references resolve (missing inputs show as errors in the UI editor).
    - **For templates:** Suggest testing complex templates in Developer Tools → Template before relying on them in automation.
 7. **If a conversation agent prompt is involved**, consult the integration's official docs, then produce the prompt as a separate deliverable (file for copy-paste into the UI).
+8. **README generation (§11.14)** — After the blueprint/script is verified and the user has confirmed it works, generate the companion README. Use the §11.14 template. Save to the appropriate `readme/` subdirectory (`README_AUTO_DIR`, `README_SCRI_DIR`, or `README_TEMPL_DIR` per Project Instructions). If the build session is long and the user seems done, offer rather than force: *"Blueprint's working — want me to generate the README now, or save it for later?"* For fresh builds, default to generating it immediately.
 
 ### 11.2 When the user asks to review/improve something
 0. **(Mandatory for 3+ files OR single-file reviews with 5+ violations/changes)** Create an audit/build log per §11.8.1 before scanning the first file. Update it after each file completes. Single-file reviews with fewer than 5 findings don't require a log file but MUST report findings in-chat using the structured `[ISSUE]` format: `[ISSUE] filename | AP-ID | severity | line | description | fix`. Skipping this when the threshold is met is a violation of AP-39.
 1. Read the file from the SMB mount.
-1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist. For images: verify the file exists at `HEADER_IMG` (`GIT_REPO/images/header/`) and that the GitHub raw URL in the description resolves correctly (`https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/<name>`). Flag missing assets as AP-15 violations. Additionally, verify that a companion README exists in the appropriate `readme/` subdirectory (see §11.14). Flag missing READMEs as documentation gaps.
+1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist. For images: verify the file exists at `HEADER_IMG` (`GIT_REPO/images/header/`) and that the GitHub raw URL in the description resolves correctly (should match `HEADER_IMG_RAW` + filename). Flag missing assets as AP-15 violations. Additionally, verify that a companion README exists in the appropriate `readme/` subdirectory (see §11.14). Flag missing READMEs as documentation gaps.
 2. Identify issues against this style guide.
 3. Present findings as a prioritized list.
 4. **Ask before making changes** — especially removals or architectural changes.
@@ -249,6 +251,7 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 1. **Always checkpoint.** Run `ha_create_checkpoint` before your first edit. Git tracks the diff — no manual copying needed.
 2. Update the blueprint/script description to reflect the last 3 changes.
 3. Edit the new version file directly on the SMB mount.
+4. **README sync check** — If the edit changed inputs, features, or flow materially, check whether a README exists for this blueprint (see §11.14). If yes, update it to reflect the changes in the same atomic batch (§2.4). If no README exists, offer to create one: *"This blueprint doesn't have a README yet. Want me to generate one while we're here?"* Trivial edits (alias renames, comment changes, timeout tweaks) don't trigger this step.
 
 **MANDATORY — Modern syntax enforcement:** All generated code MUST use current HA syntax. Old syntax still works in HA but MUST NOT be generated. This ensures consistency with HA UI editor output and future-proofs all code.
 
@@ -641,14 +644,14 @@ Every blueprint and script gets a companion README as a deliverable. The README 
 - Script blueprints: `README_SCRI_DIR`
 - Template blueprints: `README_TEMPL_DIR`
 
-**Header image reuse:** The README uses the identical `raw.githubusercontent.com` URL from the blueprint's `description:` field. No separate image generation — one image, two references.
+**Header image reuse:** The README uses the identical `HEADER_IMG_RAW` URL from the blueprint's `description:` field. No separate image generation — one image, two references.
 
 **Template structure:**
 
 ```markdown
 # <Blueprint name — human-readable title>
 
-![<name> header](<raw.githubusercontent.com URL from blueprint description>)
+![<name> header](<HEADER_IMG_RAW URL from blueprint description>)
 
 <Summary paragraph: what it does, 2-4 sentences. Match the blueprint description but expand for context.>
 
