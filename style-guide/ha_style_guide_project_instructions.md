@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.13 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.14 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -20,7 +20,7 @@ Every task falls into one of three modes. The mode determines which style guide 
 |------|----------------|------------|-----------------|-------------|
 | **🔨 BUILD** | "create", "build", "add X to Y", "implement", "write", "new blueprint/script/automation" | Core Philosophy (§1) + relevant pattern doc(s) + Anti-Patterns & Workflow (§10, §11) | Everything — git versioning, build log gate (AP-39, every edit), header image gate (AP-15), pre-flight, anti-pattern scan, security checklist | ~15K |
 | **🔧 TROUBLESHOOT** | "why isn't", "debug", "broken", "not working", "fix this", "error", "trace shows" | Troubleshooting (§13) + relevant domain pattern doc (optional, on demand) | Git versioning (if files are edited). Skip build logs, image gate, compliance sweep, anti-pattern scan | ~6–8K |
-| **🔍 AUDIT** | "review", "check", "audit", "scan", "compliance", "violations" | Anti-Patterns §10 (scan tables + security checklist §10.5) + §11.2 (review workflow) | Security checklist (S1–S8), structured issue reporting. No build logs. No file edits — report only | ~5–7K |
+| **🔍 AUDIT** | "review", "check", "audit", "scan", "sanity check", "compliance", "violations" | Anti-Patterns §10 (scan tables + security checklist §10.5) + §11.2 (review workflow) | Security checklist (S1–S8), structured issue reporting. **Mandatory log pairs** (§11.8.2) for every check command — unconditional, even with zero findings. No file edits — report only. Fixes require BUILD escalation. | ~5–7K |
 
 **Mode escalation — TROUBLESHOOT → BUILD:**
 When a troubleshooting session requires editing YAML to fix the issue, escalate to BUILD mode *before writing the first line*. On escalation:
@@ -34,7 +34,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 
 ## AI Task Routing — Load Only What You Need
 
-> **🚨 BUILD LOG GATE (AP-39) — BUILD mode only:** Every BUILD-mode file edit requires a log in `_build_logs/` **BEFORE the first write**. No threshold — one fix or a twenty-chunk build, the log comes first. Simple edits use the compact log format; multi-chunk builds and complex scopes use the full build log schema. See §11.8 for both formats. This is a hard gate — not "I'll do it after" and not "it's just one line."
+> **🚨 LOG GATES (AP-39):** (a) **BUILD mode:** Every file edit requires a build log in `_build_logs/` **BEFORE the first write**. Compact or full format per §11.8. (b) **AUDIT mode:** Every `sanity check` or audit command (§15.2) requires a log pair (progress + report) per §11.8.2 **BEFORE the first check runs** — unconditional, even with zero findings. (c) **Escalation:** When check findings are approved for fixing, create a build log before the first edit. These are hard gates — not "I'll do it after."
 
 > **🚨 HEADER IMAGE GATE (AP-15) — BUILD mode only:** When building a new blueprint/script OR reviewing one that has no `![` image in its description **or whose referenced image file does not exist on disk** (`/config/www/blueprint-images/`): **ask the user** about the header image, generate it, present it, and **wait for explicit approval or decline**. Do NOT write any YAML until you get a clear answer. If the user ignores the question, **insist** — repeat the ask. No exceptions. See §11.1 step 4 for defaults (1K, 16:9, Rick & Morty style). Allowed image formats: `.jpeg`, `.jpg`, `.png`, `.webp`.
 
@@ -91,7 +91,7 @@ The section numbers are preserved across files for cross-referencing.
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.3K | Agent prompt structure, separation from blueprints, naming conventions |
 | [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.0K | Device config structure, packages, secrets, wake words, naming |
 | [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.5K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
-| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~16.0K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), crash recovery (build + audit) |
+| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~18.5K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), crash recovery (build + audit) |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.9K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
 | [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~6K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
@@ -239,6 +239,7 @@ The section numbers are preserved across files for cross-referencing.
   - §11.7 — Prompt decomposition — how to break complex requests
   - §11.8 — Resume from crash — recovering mid-build or mid-audit
     - §11.8.1 — Audit and multi-file scan logs
+    - §11.8.2 — Sanity check and audit check log pairs (MANDATORY)
   - §11.9 — Convergence criteria — when to stop iterating
   - §11.10 — Abort protocol — when the user says stop
   - §11.11 — Prompt templates — starter prompts for common tasks
@@ -302,6 +303,15 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.14 — 2026-02-14
+- **§11.8.2 added** — Mandatory log pairs for sanity checks and audit commands. Every `sanity check`, `run audit`, `check <ID>`, `check versions`, `check secrets`, `check vibe readiness`, and `run maintenance` now requires a progress + report log pair in `_build_logs/` BEFORE the first check runs. Unconditional — zero findings still gets logged.
+- **AP-39 updated** — Three explicit gates: (a) BUILD-mode build log before first write, (b) AUDIT-mode log pair before first check, (c) BUILD escalation log before first fix. Scan table row and rule #39 prose rewritten.
+- **AUDIT mode row updated** — Now requires mandatory log pairs (§11.8.2) unconditionally. "No build logs" guidance removed and replaced with log pair requirement.
+- **LOG GATES callout updated** — Replaces "BUILD LOG GATE" — now covers BUILD, AUDIT, and escalation gates.
+- **Sanity check prompt updated** — `_build_logs/sanity_check_prompt.md` now instructs creation of log pair before first check.
+- **QA checklist updated** — §15.2 command table now includes log pair requirement callout with AP-39 cross-reference.
+- Build log: `_build_logs/2026-02-14_sanity_audit_log_pairs_build_log.md`
 
 ### v3.12 — 2026-02-14
 - **AP-39 — all thresholds eliminated** — Every BUILD-mode file edit now requires a log in `_build_logs/` before the first write, regardless of change count or file count. Every AUDIT with findings requires an audit log, regardless of finding count or file count. Compact log format introduced for simple BUILD edits; full build log schema unchanged for multi-chunk builds and complex scopes.

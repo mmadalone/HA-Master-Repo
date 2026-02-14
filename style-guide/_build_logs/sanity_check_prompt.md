@@ -23,5 +23,5 @@ After the scan, produce:
 - For each WARNING or ERROR finding, propose a specific fix (the exact text to change, not just "update this").
 - Do NOT apply any fixes yet — report only. I'll approve before you touch anything.
 
-This is AUDIT mode — load §10 scan tables and §11.2 review workflow if you need workflow guidance. No build logs required, no file edits until I say so.
+This is AUDIT mode — load §10 scan tables and §11.2 review workflow if you need workflow guidance. Create the mandatory sanity check log pair (§11.8.2) — `sanity_progress.log` and `sanity_report.log` — before running the first check. No file edits until I say so.
 ```

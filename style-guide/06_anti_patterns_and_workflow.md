@@ -66,7 +66,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-36 | ❌ | `bash_tool` / `view` / `create_file` used for HA config file operations | §10 #36 |
 | AP-37 | ⚠️ | Single-pass generation over ~150 lines OR >3 complex template blocks | §11.5 |
 | AP-38 | ⚠️ | First output block is YAML/code with no preceding reasoning | §1.10 |
-| AP-39 | ⚠️ | Any BUILD-mode file edit — regardless of size — with no build log created in `_build_logs/` before the first write. One-line fix or twenty-chunk blueprint: log comes first. Use compact format (§11.8) for simple edits, full build log for multi-chunk builds, crash recovery, or multi-file scopes. Any AUDIT with findings also requires an audit log (§11.8.1) regardless of file count or finding count. | §11.8, §11.8.1 |
+| AP-39 | ⚠️ | (a) Any BUILD-mode file edit — regardless of size — with no build log in `_build_logs/` before the first write. Compact or full format per §11.8. (b) Any `sanity check` or audit command (§15.2) executed without creating the mandatory log pair (progress + report) per §11.8.2. Logs are unconditional — zero findings still gets logged. (c) Any check findings approved for fixing without a BUILD-mode escalation and build log before the first edit. | §11.8, §11.8.1, §11.8.2 |
 | AP-40 | ⚠️ | Full-file `read_file` on a 1000+ line file when the task only requires editing a specific section | §11.13 |
 | AP-41 | ⚠️ | User indicates a crash/interruption occurred but AI begins fresh work without checking `_build_logs/`, git state, or past conversations for recovery context | §11.0 |
 
@@ -180,7 +180,7 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 36. **Never use container/sandbox tools (`bash_tool`, `view`, `create_file`) for HA config or project file operations.** All filesystem access goes through Desktop Commander or Filesystem MCP tools targeting the user's actual filesystem. The container environment is for Claude's internal scratch work only — the user's files don't live there. Using the wrong toolset creates delays, generates errors, and wastes everyone's time.
 37. **Never generate a file over ~150 lines in a single uninterrupted pass.** Context compression during long outputs causes dropped sections, forgotten decisions, and inconsistent logic. Use the chunked generation workflow (§11.5) instead.
 38. **Never jump straight to YAML/code without explaining your approach first.** The reasoning-first directive (§1.10) is MANDATORY — state your understanding, explain chosen patterns, flag ambiguities, THEN generate. If your first output block is a code fence, you skipped the step.
-39. **Never edit a file in BUILD mode without a build log on disk first. Never report audit findings without an audit log on disk first.** Every BUILD-mode file edit gets a log (compact or full per §11.8) before the first write. Every AUDIT with findings gets an audit log (§11.8.1) before reporting. No threshold — one fix, one finding, doesn't matter. Create the log before starting work, update it after each milestone, and log every finding in `[ISSUE]` format with AP-ID and line number. Without the log, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it's just one file" rationalization is exactly how audit trails disappear.
+39. **Never edit a file in BUILD mode without a build log on disk first. Never run a sanity check or audit command without creating the mandatory log pair first.** Three gates, no exceptions: (a) Every BUILD-mode file edit gets a build log (compact or full per §11.8) before the first write. (b) Every `sanity check` or audit command (§15.2) gets a log pair — progress + report per §11.8.2 — before the first check runs. Logs are unconditional: zero findings still gets logged. (c) When check findings are approved for fixing, that's a BUILD-mode escalation — build log before the first edit, referencing the report log. Without the log pair, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it found nothing, why log it?" rationalization is exactly how audit trails disappear.
 40. **Never load an entire large file (1000+ lines) into context just to edit a specific section.** Use `read_file` with line range parameters to read only the relevant section. Use `edit_block` for surgical edits — replace only what changed. Verify with a targeted `read_file` of the edited section, not the whole file. If you need to understand the file's structure first, read the first ~50 lines or use `search_files` / `grep` to locate the target section. Full file reads are only justified when the task genuinely requires understanding the entire file (e.g., full audits, refactors, or new builds). See §11.13.
 41. **Never ignore crash recovery signals.** When the user says "it crashed," "you bugged out," "pick up where we left off," or any variation implying a previous session was interrupted, always execute the §11.0 crash-recovery protocol before starting new work. Check `_build_logs/` for incomplete logs, run `ha_git_pending` / `ha_git_diff` for uncommitted changes, and use `conversation_search` / `recent_chats` to recover conversation context. Present findings to the user before touching any files. Skipping recovery because "it's faster to start fresh" is how you overwrite 80% of a working build with a blank file.
 
@@ -548,6 +548,62 @@ For users who prefer flat log files over structured markdown, the audit log can 
 - **Line:** `L<number>` for specific lines, `L~<number>` for approximate, `header`/`inputs`/`actions` for section-level issues.
 
 The structured markdown format is preferred for complex audits; the flat log format works for quick sweeps where the overhead of maintaining a full markdown schema isn't worth it. Either way, the key invariant holds: **write the checkpoint before touching the file, update it after completing the file.**
+
+#### 11.8.2 Sanity check and audit check log pairs (MANDATORY)
+
+Every `sanity check` and every audit command (`run audit`, `run audit on <file>`, `check <CHECK-ID>`, `check versions`, `check secrets`, `check vibe readiness`, `run maintenance`) produces **two log files unconditionally** — regardless of whether findings exist. A clean scan is still a scan worth documenting. The progress log is the crash recovery artifact; the report log is the permanent record.
+
+**When to create:**
+- `sanity check` command → sanity log pair (always)
+- `run audit` / `run audit on <file>` / `check <CHECK-ID>` → audit log pair (always)
+- `check versions` / `check secrets` / `check vibe readiness` / `run maintenance` → audit log pair (always — these are scoped audits)
+
+**Naming convention:**
+
+| Check type | Progress log | Report log |
+|------------|-------------|------------|
+| Sanity check | `YYYY-MM-DD_<scope>_sanity_progress.log` | `YYYY-MM-DD_<scope>_sanity_report.log` |
+| Audit | `YYYY-MM-DD_<scope>_audit_progress.log` | `YYYY-MM-DD_<scope>_audit_report.log` |
+
+**Save location:** `PROJECT_DIR/_build_logs/` (same as build logs).
+
+**Progress log** — created BEFORE the first check runs. Updated in real time as each check or file completes. This is what a crash-recovery session reads first.
+
+```
+[SESSION] YYYY-MM-DD | type: sanity | scope: style guide v3.14
+[CHECK] SEC-1 | PASS | 0 findings
+[CHECK] VER-1 | FAIL | 2 findings
+[CHECK] VER-3 | IN_PROGRESS
+```
+
+Status markers:
+- `PASS` — check fully executed, no findings
+- `FAIL` — check fully executed, findings logged in report
+- `IN_PROGRESS` — check started but not completed (crash point)
+- `SKIP` — intentionally skipped, with reason
+- `PENDING` — not yet started
+
+**Report log** — created at completion (or at crash, with partial results). Contains all findings in structured format, plus a summary.
+
+```
+[SESSION] YYYY-MM-DD | type: sanity | scope: style guide v3.14 | status: complete
+[FINDING] VER-1 | ⚠️ WARNING | 04_esphome_patterns.md | Dual wake word version claim unverified
+[FINDING] ARCH-4 | ⚠️ WARNING | master index | Section count stale (14→15)
+[SUMMARY] 8 checks executed | 6 PASS | 2 FAIL (4 findings) | 0 SKIP
+[ACTION] Findings ready for user review. Fixes require BUILD-mode escalation with build log.
+```
+
+Finding format: `[FINDING] CHECK-ID | severity | file | description`
+- Uses `[FINDING]` to distinguish QA check results from anti-pattern scan `[ISSUE]` entries (§11.8.1).
+
+**The escalation chain:**
+When check findings are approved for fixing, that's a BUILD-mode escalation. The escalation creates a build log (compact or full per §11.8) BEFORE the first edit. The build log's `Decisions` section references the report log by filename. This creates a complete paper trail: progress → report → build log → git commit.
+
+**Relationship to §11.8.1 audit logs:**
+The structured markdown audit log format in §11.8.1 remains valid for multi-file blueprint/script compliance sweeps (e.g., "scan all 18 blueprints against §10"). The log pairs defined here cover style guide QA checks (§15 commands). Use whichever format fits the task:
+- Scanning blueprints against anti-pattern tables → §11.8.1 audit log (markdown)
+- Running `sanity check` or `run audit` on the style guide → §11.8.2 log pairs
+- If in doubt, log pairs are simpler and always sufficient.
 
 ### 11.9 Convergence criteria — when to stop iterating
 A build is "done" when all five conditions are met:

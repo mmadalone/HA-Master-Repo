@@ -516,6 +516,8 @@ The user can say any of these at any time:
 
 > **Execution standard (applies to ALL commands above):** Every check runs to its full procedure as defined in §15.1. Spot-checking, eyeballing, sampling, or "structural scans" do not satisfy a check. If a procedure says "verify all 9 claims," verify all 9. If it says "parse every YAML block," parse every YAML block. If it says "compute the set difference," compute it — don't declare PASS on vibes. A check is either fully executed or reported as `[SKIP]` with a reason.
 
+> **📋 Log pair requirement (§11.8.2):** Every command in the table above requires a mandatory log pair (progress + report) in `_build_logs/` before the first check runs. This is unconditional — a clean scan with zero findings still gets both logs. See §11.8.2 for naming conventions and format. Skipping the log pair is an AP-39 violation.
+
 ### Progress tracking
 
 When fixing findings from any audit run, maintain a progress log:
