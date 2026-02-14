@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.9 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.10 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -85,7 +85,7 @@ The section numbers are preserved across files for cross-referencing.
 
 | Doc | Sections | ~Tokens | Covers |
 |-----|----------|---------|--------|
-| [Core Philosophy](00_core_philosophy.md) | §1, §2, §9, §12 | ~11.0K (§1 alone: ~7.9K) | Design principles, git versioning workflow, naming conventions, communication style |
+| [Core Philosophy](00_core_philosophy.md) | §1, §2, §9, §12 | ~12.0K (§1 alone: ~8.9K) | Design principles, git versioning workflow, naming conventions, communication style |
 | [Blueprint Patterns](01_blueprint_patterns.md) | §3, §4 | ~6.8K | Blueprint YAML structure, inputs, variables, templates, script standards |
 | [Automation Patterns](02_automation_patterns.md) | §5 | ~6.2K | Error handling, modes, timeouts, triggers, GPS bounce, helpers, area/label targeting |
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.3K | Agent prompt structure, separation from blueprints, naming conventions |
@@ -123,7 +123,7 @@ The section numbers are preserved across files for cross-referencing.
   - §1.10 — Reasoning-first directive — explain before you code (MANDATORY)
   - §1.11 — Violation report severity taxonomy (ERROR / WARNING / INFO)
   - §1.12 — Directive precedence — when MANDATORYs conflict
-  - §1.13 — Available tools and when to use them (MANDATORY)
+  - §1.13 — Available tools and when to use them (MANDATORY) — §1.13.1 file ops, §1.13.2 HA ops, §1.13.3 known quirks, §1.13.4 decision rules
   - §1.14 — Session discipline and context hygiene
 - **§2** — Git Versioning (Mandatory)
   - §2.1 — Scope — what gets versioned
@@ -302,6 +302,14 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.10 — 2026-02-14
+- **§1.13 rewritten** — Replaced tool-identity routing with operation-based routing. Tools assigned by what you're doing (search, read, edit, write), not which MCP server to reach for. Key changes:
+  - **ripgrep** added as primary search tool — single-call context lines, line numbers, multi-match detail. DC `start_search` demoted to fallback.
+  - **Filesystem MCP** blanket prohibition lifted — now authorized for reads and precise line-range targeting. Write prohibition remains.
+  - **Known quirks table** (§1.13.3) added — documents DC `read_file` range unreliability, DC `start_search` context gaps, `edit_block` uniqueness requirements.
+  - Section expanded from flat table to four subsections: §1.13.1 (file ops), §1.13.2 (HA ops), §1.13.3 (quirks), §1.13.4 (decision rules).
+- Master index TOC updated with subsection references.
 
 ### v3.7 — 2026-02-14
 - **Sanity check fixes** — All findings from the v3.6 sanity check resolved (1 ERROR, 2 WARNING, 2 INFO → 0).
