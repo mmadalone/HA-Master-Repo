@@ -1,8 +1,10 @@
 # Build Log — Sleepy TV PVR Detection + PVR Tracker Cleanup
 
-- **Date:** 2026-02-14 (scoped, not started)
+- **Date:** 2026-02-15 (completed)
 - **Mode:** BUILD
-- **Status:** pending
+- **Status:** completed
+- **Checkpoint:** `checkpoint_20260215_000208` (tag), `72524ab6` (commit)
+- **Commits:** `5b879ef3` (Part 1), `e0e29010` (Part 2), `021f6abf` (instance update)
 - **Depends on:** RESTful PVR sensor (commit `34d5e83b`, sensor `sensor.madteevee_pvr_channel`)
 - **Blueprint:** `bedtime_routine_plus.yaml` (2020 lines, current version v5.1.2)
 - **Cleanup target:** `pvr_channel_tracker.yaml` (deprecated by REST sensor)

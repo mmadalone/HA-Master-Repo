@@ -23,6 +23,9 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.2.0:** Sleepy TV — added PVR channel detection method using REST sensor.
+    New input: PVR channel sensor entity. Genres now optional when PVR detection active.
+
     - **v5.1.2:** Fixed Kodi CHANNEL crash — auto-detect content type from URI pattern
 
     - **v5.1.1:** Fixed LLM error messages spoken as TTS — added response_type guard
@@ -439,6 +442,8 @@ blueprint:
                   value: media_content_id_matches
                 - label: "Playing + title contains match string"
                   value: state_playing_and_title
+                - label: "PVR channel matches (REST sensor)"
+                  value: pvr_channel_matches
 
         sleepytv_match_string:
           name: Match string
@@ -449,6 +454,17 @@ blueprint:
           default: ""
           selector:
             text: {}
+
+        sleepytv_pvr_sensor:
+          name: PVR channel sensor
+          description: >
+            REST sensor entity that reports the current PVR channel name.
+            Only used when detection method is "PVR channel matches".
+            Default: sensor.madteevee_pvr_channel
+          default: sensor.madteevee_pvr_channel
+          selector:
+            entity:
+              domain: sensor
 
     # ===========================================================================
     # ⑥ KODI LIBRARY & GENRE PREFERENCES
@@ -824,6 +840,7 @@ variables:
   # --- Sleepy TV inputs ---
   sleepytv_detection: !input sleepytv_detection_method
   sleepytv_match: !input sleepytv_match_string
+  sleepytv_pvr_entity: !input sleepytv_pvr_sensor
 
   # --- Library inputs ---
   library_fetch_enabled: !input kodi_library_fetch_enabled
@@ -882,6 +899,10 @@ variables:
         {{ kodi_content_id == kodi_preset_content_id }}
       {% elif sleepytv_detection == 'state_playing_and_title' %}
         {{ kodi_state == 'playing' and match in kodi_title }}
+      {% elif sleepytv_detection == 'pvr_channel_matches' %}
+        {% set pvr_ch = states(sleepytv_pvr_entity) | default('') %}
+        {{ pvr_ch not in ['off', 'not_pvr', 'unknown', 'unavailable', '']
+           and match | lower in pvr_ch | lower }}
       {% else %}
         false
       {% endif %}
