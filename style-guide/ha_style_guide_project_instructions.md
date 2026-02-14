@@ -91,7 +91,7 @@ The section numbers are preserved across files for cross-referencing.
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.3K | Agent prompt structure, separation from blueprints, naming conventions |
 | [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.0K | Device config structure, packages, secrets, wake words, naming |
 | [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.5K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
-| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~14.8K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), crash recovery (build + audit) |
+| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~16.0K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), crash recovery (build + audit) |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.9K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
 | [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~6K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
@@ -104,7 +104,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**14 top-level sections · 128 subsections · 40 anti-patterns (36 AP codes + 4 sub-items) · 8 security checks · 10 files**
+**15 top-level sections · 128 subsections · 42 anti-patterns (38 AP codes + 4 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 

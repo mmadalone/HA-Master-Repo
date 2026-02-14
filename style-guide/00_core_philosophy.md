@@ -162,11 +162,11 @@ This style guide is ~93K tokens across 9 files (plus master index). **Never load
 | `03_conversation_agents.md` | ~8.3K | ~5.3K (§8.1–8.4 for most tasks) |
 | `04_esphome_patterns.md` | ~6.0K | ~6.0K (load fully for ESPHome tasks) |
 | `05_music_assistant_patterns.md` | ~11.5K | ~6.3K (duck/restore + play_media + voice bridge sections) |
-| `06_anti_patterns_and_workflow.md` | ~14.8K | ~4.9K (scan table + one workflow section) |
+| `06_anti_patterns_and_workflow.md` | ~16.0K | ~4.9K (scan table + one workflow section) |
 | `07_troubleshooting.md` | ~6.9K | ~3.0K (load specific §13.X on demand) |
 | `08_voice_assistant_pattern.md` | ~11.8K | ~5.3K (relevant layers only) |
 | `09_qa_audit_checklist.md` | ~6K | ~3K (check definitions only, skip grep appendix) |
-| **Total if everything loaded** | **~92K** | **Never do this** |
+| **Total if everything loaded** | **~93K** | **Never do this** |
 
 **Budget ceiling:** Aim to keep total loaded style guide content under ~15K tokens for any single task. That leaves room for the user's actual content, tool outputs, and conversation history. If a cross-domain task pushes past ~15K, apply drop rules below.
 
