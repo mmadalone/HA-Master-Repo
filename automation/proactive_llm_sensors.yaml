@@ -17,7 +17,7 @@ blueprint:
     ### Recent changes
 
     - **v7.1:** Cross-midnight day attribution fix — effective_day_key
-      shifts post-midnight hours to the previous day's run_days entry,
+      shifts post-midnight hours to the previous day''s run_days entry,
       preventing unwanted evening activations on the next calendar day
 
     - **v7:** Section key/name convention alignment, > → >- on all computed
