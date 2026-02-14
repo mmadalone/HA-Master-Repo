@@ -146,7 +146,7 @@ This style guide is ~93K tokens across 9 files (plus master index). **Never load
 
 | Tier | When to load | Files | ~Tokens (measured) |
 |------|-------------|-------|--------------------|
-| **T0 — Always (BUILD mode)** | Every BUILD task, no exceptions | `00_core_philosophy.md` (§1 only, skip §2/§9/§12 unless editing those) | ~7.9K (§1 alone) |
+| **T0 — Always (BUILD mode)** | Every BUILD task, no exceptions | `00_core_philosophy.md` (§1 only, skip §2/§9/§12 unless editing those) | ~8.8K (§1 alone) |
 | **T1 — Task-specific** | When the routing table (master index) maps to it | The ONE pattern doc for the task at hand | 6.0–11.8K (see table below) |
 | **T2 — Review/edit** | Only when reviewing or editing existing code | `06_anti_patterns_and_workflow.md` (§10 scan table + relevant §11 workflow) | ~13.2K full, ~4.9K (scan table + one §11 section) |
 | **T3 — Reference only** | Only when explicitly needed | `07_troubleshooting.md`, `08_voice_assistant_pattern.md` | ~6.9K / ~11.8K |
@@ -156,7 +156,7 @@ This style guide is ~93K tokens across 9 files (plus master index). **Never load
 | File | Full size | Typical load (skip irrelevant sections) |
 |------|-----------|-----------------------------------------|
 | Master index | ~4.6K | ~2K (routing table only) |
-| `00_core_philosophy.md` | ~11.0K | ~7.9K (§1 only, drop §2/§9/§12) |
+| `00_core_philosophy.md` | ~12.0K | ~8.8K (§1 only, drop §2/§9/§12) |
 | `01_blueprint_patterns.md` | ~6.8K | ~6.8K (usually need all of it) |
 | `02_automation_patterns.md` | ~6.2K | ~3.7K (§5.1 + §5.4 for most tasks) |
 | `03_conversation_agents.md` | ~8.3K | ~5.3K (§8.1–8.4 for most tasks) |

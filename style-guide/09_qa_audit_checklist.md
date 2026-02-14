@@ -77,7 +77,7 @@ api_key: !secret openai_api_key
 | `ask_question` full capabilities require HA 2025.7+ | 08_voice_assistant_pattern.md | HA release notes |
 | TTS streaming requires HA 2025.10+ | 08_voice_assistant_pattern.md | HA release notes |
 | MCP servers introduced HA 2025.2+, improved native support 2025.9+ | 03_conversation_agents.md | HA release notes |
-| `data_template` deprecation target: 2025.12 | 06_anti_patterns_and_workflow.md | HA release notes |
+| `data_template` deprecated ~HA 0.115/2020, no removal date announced | 06_anti_patterns_and_workflow.md | HA release notes |
 
 **Procedure:**
 1. Web search: `site:home-assistant.io "<feature_name>" release`
@@ -104,8 +104,8 @@ homeassistant:
 
 **Format:**
 ```markdown
-> ⚠️ **Deprecated:** `data_template` was deprecated in HA 2024.x.
-> Target removal: HA 2025.12 (verify against release notes).
+> ⚠️ **Deprecated:** `data_template` was deprecated in ~HA 0.115 (2020).
+> Target removal: No removal date announced (verify against release notes).
 > Migration: Replace with `data:` under the new `action:` syntax.
 ```
 

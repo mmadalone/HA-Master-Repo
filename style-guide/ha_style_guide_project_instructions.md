@@ -74,6 +74,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 |------|-----------------|
 | Review/improve existing code | `06_anti_patterns_and_workflow.md` (§10, §10.5, §11.2) + relevant pattern doc for context |
 | Multi-file compliance sweep | `06_anti_patterns_and_workflow.md` (§10, §10.5, §11.2, §11.8.1) |
+| QA check commands (`sanity check`, `run audit`, `check <ID>`, `check versions`, etc.) | `09_qa_audit_checklist.md` (§15) + `06_anti_patterns_and_workflow.md` (§11.8.2 log pairs) |
 
 > **Cross-domain tasks** (e.g., "blueprint that uses MA with voice control"): load each relevant pattern doc. When in doubt, load the anti-patterns file — it catches the most common AI mistakes.
 
@@ -85,7 +86,7 @@ The section numbers are preserved across files for cross-referencing.
 
 | Doc | Sections | ~Tokens | Covers |
 |-----|----------|---------|--------|
-| [Core Philosophy](00_core_philosophy.md) | §1, §2, §9, §12 | ~12.0K (§1 alone: ~8.9K) | Design principles, git versioning workflow, naming conventions, communication style |
+| [Core Philosophy](00_core_philosophy.md) | §1, §2, §9, §12 | ~12.0K (§1 alone: ~8.8K) | Design principles, git versioning workflow, naming conventions, communication style |
 | [Blueprint Patterns](01_blueprint_patterns.md) | §3, §4 | ~6.8K | Blueprint YAML structure, inputs, variables, templates, script standards |
 | [Automation Patterns](02_automation_patterns.md) | §5 | ~6.2K | Error handling, modes, timeouts, triggers, GPS bounce, helpers, area/label targeting |
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.3K | Agent prompt structure, separation from blueprints, naming conventions |

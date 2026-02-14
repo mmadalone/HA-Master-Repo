@@ -1,0 +1,30 @@
+# Sanity Check Report — Style Guide v3.14
+**Date:** 2026-02-14
+**Scope:** SEC-1 + VER-1 + VER-3 + CQ-5 + CQ-6 + AIR-6 + ARCH-4 + ARCH-5
+
+## Summary
+- 8/8 checks executed
+- 6 PASS, 1 PASS with INFO, 1 FAIL
+- 1 ERROR finding (AIR-6), 2 INFO findings (VER-3, ARCH-5), 2 unverified items (VER-1)
+
+## Findings
+
+[FINDING] AIR-6 | ❌ ERROR | ha_style_guide_project_instructions.md + 00_core_philosophy.md | Token claim mismatch: master index doc table claims "§1 alone: ~8.9K" but measured §1 span (lines 7–378) in 00_core_philosophy.md yields ~7.3K by character count. One of the two claims is stale. Fix: re-measure §1 actual token count and update both locations to match.
+
+[FINDING] VER-3 | ℹ️ INFO | 09_qa_audit_checklist.md | QA checklist VER-1 table/example mentions data_template removal "2025.12" but guide §11.3 migration table says "no removal date announced." Internal inconsistency within the guide — one location needs correction.
+
+[FINDING] VER-1 | ℹ️ INFO | 03_conversation_agents.md + 04_esphome_patterns.md | 2 version claims unverified: (1) MCP 2025.9 improvements reference, (2) ESPHome sub-devices 2025.7 reference. Not falsified — just unverifiable from available release notes. Low risk.
+
+[FINDING] ARCH-5 | ℹ️ INFO | ha_style_guide_project_instructions.md | 09_qa_audit_checklist.md (§15) has no explicit "load this file" entry in any of the three operational routing tables (BUILD, TROUBLESHOOT, AUDIT). It's indirectly reachable via the "sanity check" trigger phrase in the AUDIT mode row and the user-triggered commands quick reference, but an AI following routing tables literally would never load it unprompted. Fix: add explicit routing entry in AUDIT mode task-specific table for QA check commands → `09_qa_audit_checklist.md`.
+
+## No Findings (Clean Passes)
+- SEC-1: No inline secrets in guide examples (hits were in pedagogical blocks, correctly placed)
+- CQ-6: All legacy syntax confined to exempt # ❌ OLD demonstration blocks
+- CQ-5: 124 YAML blocks validated; 14 INFO-level multi-snippet documentation patterns (acceptable), 10 exempt marked-bad blocks
+- ARCH-4: All cross-references resolve — §X.X, file refs, AP-01..AP-41, check-IDs all verified
+
+## Recommended Actions (priority order)
+1. **AIR-6 fix** (ERROR): Re-measure §1 token count, update both master index and 00_core_philosophy.md
+2. **VER-3 fix** (INFO): Reconcile data_template removal date between QA checklist and §11.3
+3. **ARCH-5 fix** (INFO): Add explicit routing for 09_qa_audit_checklist.md to AUDIT mode table
+4. **VER-1 follow-up** (INFO): Verify MCP 2025.9 and ESPHome 2025.7 claims when release notes become available
