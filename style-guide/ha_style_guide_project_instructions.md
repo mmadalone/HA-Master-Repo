@@ -309,7 +309,7 @@ The section numbers are preserved across files for cross-referencing.
 - **AP-39 updated** — Three explicit gates: (a) BUILD-mode build log before first write, (b) AUDIT-mode log pair before first check, (c) BUILD escalation log before first fix. Scan table row and rule #39 prose rewritten.
 - **AUDIT mode row updated** — Now requires mandatory log pairs (§11.8.2) unconditionally. "No build logs" guidance removed and replaced with log pair requirement.
 - **LOG GATES callout updated** — Replaces "BUILD LOG GATE" — now covers BUILD, AUDIT, and escalation gates.
-- **Sanity check prompt updated** — `_build_logs/sanity_check_prompt.md` now instructs creation of log pair before first check.
+- **Sanity check prompt retired** — `_build_logs/sanity_check_prompt.md` deleted. Redundant — §15.2 execution standard and check definitions in §15.1 already cover the same ground. "Run a sanity check" is all that's needed.
 - **QA checklist updated** — §15.2 command table now includes log pair requirement callout with AP-39 cross-reference.
 - Build log: `_build_logs/2026-02-14_sanity_audit_log_pairs_build_log.md`
 
