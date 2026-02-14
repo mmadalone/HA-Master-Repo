@@ -1,1 +1,0 @@
-Backup created before §4.1 icon clarification edit.
