@@ -68,10 +68,11 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-38 | ⚠️ | First output block is YAML/code with no preceding reasoning | §1.10 |
 | AP-39 | ⚠️ | Any BUILD-mode file edit — regardless of size — with no build log created in `_build_logs/` before the first write. One-line fix or twenty-chunk blueprint: log comes first. Use compact format (§11.8) for simple edits, full build log for multi-chunk builds, crash recovery, or multi-file scopes. Any AUDIT with findings also requires an audit log (§11.8.1) regardless of file count or finding count. | §11.8, §11.8.1 |
 | AP-40 | ⚠️ | Full-file `read_file` on a 1000+ line file when the task only requires editing a specific section | §11.13 |
+| AP-41 | ⚠️ | User indicates a crash/interruption occurred but AI begins fresh work without checking `_build_logs/`, git state, or past conversations for recovery context | §11.0 |
 
 **Severity key:** ❌ ERROR = must fix before presenting · ⚠️ WARNING = fix unless user explicitly accepts · ℹ️ INFO = flag to user, fix if trivial
 
-**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-40 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
+**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-41 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
 
 *Rules #14 (verify integration docs) and #28-29 (ESPHome debug sensors, config archiving) require architectural judgment and cannot be mechanically scanned. Everything else is in the tables above.*
 
@@ -174,13 +175,14 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 34. **Never place conditions before the input_boolean auto-reset in voice command → MA bridges.** If a condition aborts the run, the boolean stays ON and the next voice command can't re-trigger it (see §7.7).
 35. **Never use `media_player.media_stop` when you might want to resume.** Stop destroys the queue. Use `media_player.media_pause` for anything that could be temporary (see §7.3).
 
-### Development Environment (36–40)
+### Development Environment (36–41)
 
 36. **Never use container/sandbox tools (`bash_tool`, `view`, `create_file`) for HA config or project file operations.** All filesystem access goes through Desktop Commander or Filesystem MCP tools targeting the user's actual filesystem. The container environment is for Claude's internal scratch work only — the user's files don't live there. Using the wrong toolset creates delays, generates errors, and wastes everyone's time.
 37. **Never generate a file over ~150 lines in a single uninterrupted pass.** Context compression during long outputs causes dropped sections, forgotten decisions, and inconsistent logic. Use the chunked generation workflow (§11.5) instead.
 38. **Never jump straight to YAML/code without explaining your approach first.** The reasoning-first directive (§1.10) is MANDATORY — state your understanding, explain chosen patterns, flag ambiguities, THEN generate. If your first output block is a code fence, you skipped the step.
 39. **Never edit a file in BUILD mode without a build log on disk first. Never report audit findings without an audit log on disk first.** Every BUILD-mode file edit gets a log (compact or full per §11.8) before the first write. Every AUDIT with findings gets an audit log (§11.8.1) before reporting. No threshold — one fix, one finding, doesn't matter. Create the log before starting work, update it after each milestone, and log every finding in `[ISSUE]` format with AP-ID and line number. Without the log, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it's just one file" rationalization is exactly how audit trails disappear.
 40. **Never load an entire large file (1000+ lines) into context just to edit a specific section.** Use `read_file` with line range parameters to read only the relevant section. Use `edit_block` for surgical edits — replace only what changed. Verify with a targeted `read_file` of the edited section, not the whole file. If you need to understand the file's structure first, read the first ~50 lines or use `search_files` / `grep` to locate the target section. Full file reads are only justified when the task genuinely requires understanding the entire file (e.g., full audits, refactors, or new builds). See §11.13.
+41. **Never ignore crash recovery signals.** When the user says "it crashed," "you bugged out," "pick up where we left off," or any variation implying a previous session was interrupted, always execute the §11.0 crash-recovery protocol before starting new work. Check `_build_logs/` for incomplete logs, run `ha_git_pending` / `ha_git_diff` for uncommitted changes, and use `conversation_search` / `recent_chats` to recover conversation context. Present findings to the user before touching any files. Skipping recovery because "it's faster to start fresh" is how you overwrite 80% of a working build with a blank file.
 
 ---
 
@@ -210,6 +212,14 @@ If a task involves editing multiple files, a single `ha_create_checkpoint` cover
 **Step 3 — If no signals found:** Proceed normally. The overhead of this check is one `ha_git_pending` call — 30 seconds, not 30 minutes.
 
 This applies even to single-file tasks. The key insight: *git* knows about crashed sessions even when no build log exists and the user forgets to mention it. Trust `ha_git_pending` and `ha_git_diff`, not memory.
+
+**Reactive crash detection (user-triggered — AP-41):** The protocol above runs proactively at the start of every non-trivial task. But crashes also surface *reactively* — when the user explicitly tells you a previous session died. Trigger phrases include "it crashed," "you bugged out," "pick up where we left off," "continue the build," or any reference to incomplete prior work (see project instructions "Crash Recovery — The Salvage Directive" for the full trigger list). When detected:
+
+- Execute Steps 1–3 above immediately, even if the current request looks like a simple task that wouldn't normally trigger pre-flight checks.
+- Additionally, use `conversation_search` and/or `recent_chats` to recover context from the crashed session — build logs capture *what was done*, but past conversation history captures *why decisions were made* and *what was discussed but not yet logged*.
+- Present a recovery summary before proceeding. Never silently resume — the user needs to confirm the recovered state matches their expectations.
+
+The proactive check catches crashes the user *forgot* to mention. The reactive check handles crashes the user *explicitly reports*. Together, they ensure no interrupted work is silently lost or overwritten.
 
 **Log-before-edit invariant (MANDATORY — BUILD mode only):** Every BUILD-mode file edit requires a log in `_build_logs/` before the first write to any target file. No threshold, no minimum change count — one fix or fifty, the log comes first. Simple edits use the compact log format (§11.8); multi-chunk builds, crash recovery, and multi-file scopes use the full build log schema. Scanning, analyzing, planning, and reporting findings in-chat do not count as edits — but the moment you write to the target file, the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
 
@@ -383,6 +393,17 @@ During any multi-step build, maintain a running decision log as a file. After ea
 <!-- What's done, what's next, any blockers. This is what a new session reads first. -->
 File is partially written through the trigger block. Next: actions part 1.
 No blockers. All decisions are final unless user revisits presence detection approach.
+
+## Recovery (for cold-start sessions)
+<!-- Structured checklist for a new AI session picking up after a crash.
+     Current State is the human-readable narrative; this is the machine-parseable companion. -->
+- **Resume from:** <chunk N of M — "<chunk description>">
+- **Next action:** <specific instruction for where to start writing, e.g. "Write chunk 3
+  starting at the choose: block after the presence detection variable assignment">
+- **Decisions still open:** <None | list of unresolved design questions>
+- **Blockers:** <None | list of blockers preventing progress>
+- **Context recovery:** <search query hint for conversation_search / recent_chats,
+  e.g. "bedtime routine blueprint v5.1.3">
 ```
 
 **Build logs are metadata, not staging areas. Proposals don't get repeated.** The correct sequence is: (1) propose changes in conversation, including the actual text to be added or changed, (2) user approves, (3) create build log if threshold is met — the log records *decisions and plan metadata*, not the content itself, (4) write directly to the target file, (5) update build log with completion status. There is no step where the AI re-presents the approved content or asks for a second confirmation. Approval means "do it now." A build log entry for a 40-line addition to §13.6.2 reads *"Add §13.6.2 live troubleshooting protocol — round-based workflow covering baseline, trigger, wait, targeted read, phase repeat"* — one line of decision metadata, not the full text. A build log that contains the actual deliverable content is a draft file wearing a build log's name, and it inserts an unnecessary gate between approval and execution.
@@ -394,6 +415,7 @@ No blockers. All decisions are final unless user revisits presence detection app
 - **Style guide sections loaded** — so the new session loads the same context, not the whole guide.
 - **Files modified** — so the new session knows what to version-check before continuing.
 - **Current state** — so the new session doesn't re-debate settled decisions.
+- **Recovery** — so the new session has a machine-parseable checklist instead of parsing prose. `Current state` is the human-readable narrative; `Recovery` is the structured companion optimized for cold-start AI sessions. Both are optional individually (one is enough), but together they cover both human and AI readers.
 
 **Recovery — when starting a new conversation after a crash:**
 
