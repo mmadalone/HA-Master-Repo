@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.11 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.12 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -18,7 +18,7 @@ Every task falls into one of three modes. The mode determines which style guide 
 
 | Mode | Trigger phrases | What loads | What's enforced | Token budget |
 |------|----------------|------------|-----------------|-------------|
-| **🔨 BUILD** | "create", "build", "add X to Y", "implement", "write", "new blueprint/script/automation" | Core Philosophy (§1) + relevant pattern doc(s) + Anti-Patterns & Workflow (§10, §11) | Everything — git versioning, build log gate (AP-39), header image gate (AP-15), pre-flight, anti-pattern scan, security checklist | ~15K |
+| **🔨 BUILD** | "create", "build", "add X to Y", "implement", "write", "new blueprint/script/automation" | Core Philosophy (§1) + relevant pattern doc(s) + Anti-Patterns & Workflow (§10, §11) | Everything — git versioning, build log gate (AP-39, every edit), header image gate (AP-15), pre-flight, anti-pattern scan, security checklist | ~15K |
 | **🔧 TROUBLESHOOT** | "why isn't", "debug", "broken", "not working", "fix this", "error", "trace shows" | Troubleshooting (§13) + relevant domain pattern doc (optional, on demand) | Git versioning (if files are edited). Skip build logs, image gate, compliance sweep, anti-pattern scan | ~6–8K |
 | **🔍 AUDIT** | "review", "check", "audit", "scan", "compliance", "violations" | Anti-Patterns §10 (scan tables + security checklist §10.5) + §11.2 (review workflow) | Security checklist (S1–S8), structured issue reporting. No build logs. No file edits — report only | ~5–7K |
 
@@ -34,7 +34,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 
 ## AI Task Routing — Load Only What You Need
 
-> **🚨 BUILD LOG GATE (AP-39) — BUILD mode only:** Before editing ANY file, count your planned changes. If you have **5+ violations/changes on a single file** OR **3+ files in scope**, you MUST create a build/audit log in `_build_logs/` per §11.8 **BEFORE your first edit**. The log must be on disk before any target file is touched. This is a hard gate — not "I'll do it after" and not "it's just one file." Check the threshold, create the log, THEN edit. Every time.
+> **🚨 BUILD LOG GATE (AP-39) — BUILD mode only:** Every BUILD-mode file edit requires a log in `_build_logs/` **BEFORE the first write**. No threshold — one fix or a twenty-chunk build, the log comes first. Simple edits use the compact log format; multi-chunk builds and complex scopes use the full build log schema. See §11.8 for both formats. This is a hard gate — not "I'll do it after" and not "it's just one line."
 
 > **🚨 HEADER IMAGE GATE (AP-15) — BUILD mode only:** When building a new blueprint/script OR reviewing one that has no `![` image in its description **or whose referenced image file does not exist on disk** (`/config/www/blueprint-images/`): **ask the user** about the header image, generate it, present it, and **wait for explicit approval or decline**. Do NOT write any YAML until you get a clear answer. If the user ignores the question, **insist** — repeat the ask. No exceptions. See §11.1 step 4 for defaults (1K, 16:9, Rick & Morty style). Allowed image formats: `.jpeg`, `.jpg`, `.png`, `.webp`.
 
@@ -302,6 +302,15 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.12 — 2026-02-14
+- **AP-39 — all thresholds eliminated** — Every BUILD-mode file edit now requires a log in `_build_logs/` before the first write, regardless of change count or file count. Every AUDIT with findings requires an audit log, regardless of finding count or file count. Compact log format introduced for simple BUILD edits; full build log schema unchanged for multi-chunk builds and complex scopes.
+  - AP-39 scan table trigger text rewritten for zero-threshold enforcement across both BUILD and AUDIT modes.
+  - §11.0 log-before-edit invariant reworded — unconditional, no minimum change count.
+  - §11.8 "When to create" rewritten with universal requirement + two-tier format table (compact vs full). Explicit TROUBLESHOOT→BUILD and AUDIT→BUILD escalation rules added. "When NOT to bother" section removed.
+  - §11.2 step 0 rewritten — audit log now mandatory for any review with findings, not just 3+ files or 5+ findings. AUDIT→BUILD cross-reference added.
+  - Master index BUILD LOG GATE callout and operational modes table updated.
+- Build log: `_build_logs/2026-02-14_ap39_zero_threshold_build_log.md`
 
 ### v3.11 — 2026-02-14
 - **§1.13 updated** — Added git MCP and Context7 to routing tables:

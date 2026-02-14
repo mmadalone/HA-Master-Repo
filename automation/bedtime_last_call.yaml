@@ -15,6 +15,8 @@ blueprint:
     No questions, no repeats, no cooldowns.
 
     ### Recent changes
+    - **v2.1:** Cross-midnight day attribution fix — effective_day_key
+      shifts post-midnight hours to the previous day's run_days entry
     - **v2:** Style guide compliance — collapsible sections, aliases, error handling
     - **v1:** Initial version
 
@@ -294,6 +296,17 @@ variables:
     {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
     {{ days[now().weekday()] }}
 
+  effective_day_key: >-
+    {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
+    {% set start = today_at(effective_start_time) %}
+    {% set end = today_at(effective_end_time) %}
+    {% set crosses_midnight = as_timestamp(end) < as_timestamp(start) %}
+    {% if crosses_midnight and now() < end %}
+      {{ days[(now().weekday() - 1) % 7] }}
+    {% else %}
+      {{ today_key }}
+    {% endif %}
+
 triggers:
   - alias: "Presence detected — any sensor turns on"
     trigger: state
@@ -305,7 +318,7 @@ conditions:
   - condition: template
     alias: "Allowed on this day"
     value_template: >-
-      {{ today_key in run_days }}
+      {{ effective_day_key in run_days }}
 
   - condition: template
     alias: "Within active time window"

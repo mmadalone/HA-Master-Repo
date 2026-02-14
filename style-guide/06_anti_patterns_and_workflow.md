@@ -66,7 +66,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-36 | ❌ | `bash_tool` / `view` / `create_file` used for HA config file operations | §10 #36 |
 | AP-37 | ⚠️ | Single-pass generation over ~150 lines OR >3 complex template blocks | §11.5 |
 | AP-38 | ⚠️ | First output block is YAML/code with no preceding reasoning | §1.10 |
-| AP-39 | ⚠️ | Review/audit of 3+ files, OR single-file fix pass with 5+ violations/changes, OR resumed/retried crashed session — with no build/audit log created in `_build_logs/` | §11.8, §11.8.1 |
+| AP-39 | ⚠️ | Any BUILD-mode file edit — regardless of size — with no build log created in `_build_logs/` before the first write. One-line fix or twenty-chunk blueprint: log comes first. Use compact format (§11.8) for simple edits, full build log for multi-chunk builds, crash recovery, or multi-file scopes. Any AUDIT with findings also requires an audit log (§11.8.1) regardless of file count or finding count. | §11.8, §11.8.1 |
 | AP-40 | ⚠️ | Full-file `read_file` on a 1000+ line file when the task only requires editing a specific section | §11.13 |
 
 **Severity key:** ❌ ERROR = must fix before presenting · ⚠️ WARNING = fix unless user explicitly accepts · ℹ️ INFO = flag to user, fix if trivial
@@ -179,7 +179,7 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 36. **Never use container/sandbox tools (`bash_tool`, `view`, `create_file`) for HA config or project file operations.** All filesystem access goes through Desktop Commander or Filesystem MCP tools targeting the user's actual filesystem. The container environment is for Claude's internal scratch work only — the user's files don't live there. Using the wrong toolset creates delays, generates errors, and wastes everyone's time.
 37. **Never generate a file over ~150 lines in a single uninterrupted pass.** Context compression during long outputs causes dropped sections, forgotten decisions, and inconsistent logic. Use the chunked generation workflow (§11.5) instead.
 38. **Never jump straight to YAML/code without explaining your approach first.** The reasoning-first directive (§1.10) is MANDATORY — state your understanding, explain chosen patterns, flag ambiguities, THEN generate. If your first output block is a code fence, you skipped the step.
-39. **Never run a substantial review without creating a build/audit log.** This applies to: (a) multi-file reviews or audits (3+ files), (b) single-file fix passes with 5+ violations or changes, and (c) any task that is a retry or resumption of a previously crashed session. Create the log per §11.8 / §11.8.1 before starting work, update it after each milestone, and log every finding in `[ISSUE]` format with AP-ID and line number. Without the log, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it's just one file" rationalization is exactly how substantial rewrites lose their audit trail.
+39. **Never edit a file in BUILD mode without a build log on disk first. Never report audit findings without an audit log on disk first.** Every BUILD-mode file edit gets a log (compact or full per §11.8) before the first write. Every AUDIT with findings gets an audit log (§11.8.1) before reporting. No threshold — one fix, one finding, doesn't matter. Create the log before starting work, update it after each milestone, and log every finding in `[ISSUE]` format with AP-ID and line number. Without the log, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it's just one file" rationalization is exactly how audit trails disappear.
 40. **Never load an entire large file (1000+ lines) into context just to edit a specific section.** Use `read_file` with line range parameters to read only the relevant section. Use `edit_block` for surgical edits — replace only what changed. Verify with a targeted `read_file` of the edited section, not the whole file. If you need to understand the file's structure first, read the first ~50 lines or use `search_files` / `grep` to locate the target section. Full file reads are only justified when the task genuinely requires understanding the entire file (e.g., full audits, refactors, or new builds). See §11.13.
 
 ---
@@ -211,7 +211,7 @@ If a task involves editing multiple files, a single `ha_create_checkpoint` cover
 
 This applies even to single-file tasks. The key insight: *git* knows about crashed sessions even when no build log exists and the user forgets to mention it. Trust `ha_git_pending` and `ha_git_diff`, not memory.
 
-**Log-before-edit invariant (MANDATORY — BUILD mode only):** When a task meets ANY build/audit log trigger (§11.8 "When to create" or §11.2 step 0), the log file MUST exist in `_build_logs/` before the first edit to any target file. Scanning, analyzing, planning, and reporting findings in-chat do not count as edits — but the moment you write to the target file, the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
+**Log-before-edit invariant (MANDATORY — BUILD mode only):** Every BUILD-mode file edit requires a log in `_build_logs/` before the first write to any target file. No threshold, no minimum change count — one fix or fifty, the log comes first. Simple edits use the compact log format (§11.8); multi-chunk builds, crash recovery, and multi-file scopes use the full build log schema. Scanning, analyzing, planning, and reporting findings in-chat do not count as edits — but the moment you write to the target file, the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
 
 **`_build_logs/` location (MANDATORY):** Build and audit logs are ALWAYS created in `PROJECT_DIR/_build_logs/`, never in `HA_CONFIG` or any other directory. `HA_CONFIG` is for Home Assistant configuration — not development artifacts. If you catch yourself writing a log to the SMB mount path, you're targeting the wrong filesystem. This applies regardless of whether the files being edited live in `PROJECT_DIR` or `HA_CONFIG`.
 
@@ -239,7 +239,7 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 8. **README generation (§11.14)** — After the blueprint/script is verified and the user has confirmed it works, generate the companion README. Use the §11.14 template. Save to the appropriate `readme/` subdirectory (`README_AUTO_DIR`, `README_SCRI_DIR`, or `README_TEMPL_DIR` per Project Instructions). If the build session is long and the user seems done, offer rather than force: *"Blueprint's working — want me to generate the README now, or save it for later?"* For fresh builds, default to generating it immediately.
 
 ### 11.2 When the user asks to review/improve something
-0. **(Mandatory for 3+ files OR single-file reviews with 5+ violations/changes)** Create an audit/build log per §11.8.1 before scanning the first file. Update it after each file completes. Single-file reviews with fewer than 5 findings don't require a log file but MUST report findings in-chat using the structured `[ISSUE]` format: `[ISSUE] filename | AP-ID | severity | line | description | fix`. Skipping this when the threshold is met is a violation of AP-39.
+0. **(Mandatory for any review that produces findings)** Create an audit log per §11.8.1 before reporting findings — even one finding on one file gets a log on disk. Update it after each file completes. Findings are also reported in-chat using the structured `[ISSUE]` format: `[ISSUE] filename | AP-ID | severity | line | description | fix`. Skipping the log is a violation of AP-39. If the review leads to edits (AUDIT → BUILD escalation), a build log (compact or full per §11.8) is required before the first edit.
 1. Read the file from the SMB mount.
 1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist. For images: verify the file exists at `HEADER_IMG` (`GIT_REPO/images/header/`) and that the GitHub raw URL in the description resolves correctly (should match `HEADER_IMG_RAW` + filename). Flag missing assets as AP-15 violations. Additionally, verify that a companion README exists in the appropriate `readme/` subdirectory (see §11.14). Flag missing READMEs as documentation gaps.
 2. Identify issues against this style guide.
@@ -400,16 +400,30 @@ No blockers. All decisions are final unless user revisits presence detection app
 The user pastes or points to the build log. The AI reads it, reads the partially-written file, and picks up from the last completed chunk. No re-debating decisions, no re-reading the entire style guide (use the routing table in the index).
 
 **When to create a build log:**
-- Any build expected to take more than 3 chunks (§11.5)
-- Any build preceded by significant design discussion (§11.6)
-- Any build the user says "this is going to be a big one"
-- Any task that is a retry or continuation of a previously crashed/interrupted session (even single-file tasks)
-- Any single-file fix pass involving 5+ violations or changes
+- **Every BUILD-mode file edit. No exceptions.** One change or twenty — the log exists on disk before the first write.
+- TROUBLESHOOT mode does NOT require a log — until it escalates to BUILD (see operational modes in master index), at which point the escalation creates a log before the first edit.
+- AUDIT mode requires an audit log (§11.8.1) whenever there are findings — even one finding on one file. If the audit leads to fixes, that’s a BUILD escalation — build log (compact or full) before you edit.
 
-**When NOT to bother:**
-- Quick single-file edits with fewer than 5 changes
-- Simple scripts under 50 lines
-- First-attempt single-file reviews that stay under the 5-violation threshold (report in-chat per §11.2 step 0 instead)
+**Two formats, scaled to complexity:**
+
+| Format | Use when | Schema |
+|--------|----------|--------|
+| **Compact log** | Simple edits — quick fixes, single-file changes, small additions | Compact schema below |
+| **Full build log** | Any build using chunked generation (§11.5), crash recovery/resumed sessions, significant design discussion (§11.6), user flags the task as large, multi-file edits where changes are interdependent | Full schema above |
+
+When in doubt, use the full format — the overhead is five extra minutes, and the recovery value is worth it. If an edit starts compact and grows, upgrade by appending the remaining full-schema sections (Decisions, Chunks, Files Modified, Current State, Blockers).
+
+**Compact log schema** — the minimum viable receipt:
+
+```markdown
+# Edit Log — <brief_description>
+**Date:** YYYY-MM-DD · **Status:** complete | in-progress
+**File(s):** `path/to/file.yaml`
+**Changes:** <1–3 line summary of what changed and why>
+**Git:** checkpoint created before edit: yes/no
+```
+
+Same naming convention as full logs: `YYYY-MM-DD_<slug>_build_log.md`. Same location: `PROJECT_DIR/_build_logs/`.
 
 ---
 
@@ -418,7 +432,7 @@ The user pastes or points to the build log. The AI reads it, reads the partially
 Multi-file audits, reviews, and compliance sweeps carry state that is just as vulnerable to crashes as builds — which files have been scanned, what issues were found, what's been fixed, and what's still queued. Without a checkpoint trail, a crashed session forces a full re-scan just to rediscover where it left off. That wastes tokens (§1.9) and the user's time.
 
 **When to use an audit log:**
-- Any review/audit touching 3+ files
+- Any review/audit that produces findings — even one finding on one file
 - Any systematic compliance sweep (e.g., "scan all blueprints against §10")
 - Any multi-file refactor where edits depend on scan findings
 
