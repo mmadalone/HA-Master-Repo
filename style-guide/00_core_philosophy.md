@@ -140,7 +140,7 @@ To prevent runaway generation, observe these hard ceilings:
 | **Complex** | Multi-trigger, parallel actions, 3+ template conditions, state machine behavior, or cross-entity coordination. Example: bedtime negotiator with LLM conversation + multi-room lights + music duck/restore. | **Must decompose** — extract scripts, use helpers for state, discuss architecture with user before generating. |
 
 ### 1.9 Token budget management — load only what you need
-This style guide is ~83K tokens across 9 files (plus master index). **Never load all files for every task.** AI context is expensive — every token spent on irrelevant rules is a token not available for the user's actual content.
+This style guide is ~93K tokens across 9 files (plus master index). **Never load all files for every task.** AI context is expensive — every token spent on irrelevant rules is a token not available for the user's actual content.
 
 **Priority tiers — what to load and when:**
 
@@ -162,7 +162,7 @@ This style guide is ~83K tokens across 9 files (plus master index). **Never load
 | `03_conversation_agents.md` | ~8.3K | ~5.3K (§8.1–8.4 for most tasks) |
 | `04_esphome_patterns.md` | ~6.0K | ~6.0K (load fully for ESPHome tasks) |
 | `05_music_assistant_patterns.md` | ~11.5K | ~6.3K (duck/restore + play_media + voice bridge sections) |
-| `06_anti_patterns_and_workflow.md` | ~13.2K | ~4.9K (scan table + one workflow section) |
+| `06_anti_patterns_and_workflow.md` | ~14.8K | ~4.9K (scan table + one workflow section) |
 | `07_troubleshooting.md` | ~6.9K | ~3.0K (load specific §13.X on demand) |
 | `08_voice_assistant_pattern.md` | ~11.8K | ~5.3K (relevant layers only) |
 | `09_qa_audit_checklist.md` | ~6K | ~3K (check definitions only, skip grep appendix) |

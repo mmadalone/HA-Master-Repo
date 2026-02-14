@@ -27,7 +27,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-11 | ⚠️ | Action step missing `alias:` field | §3.5 |
 | AP-12 | ❌ | File edit without git checkpoint | §2.3 |
 | AP-13 | ℹ️ | `selector: text:` where `select:` with `options:` would constrain input | §10 #13 |
-| AP-15 | ⚠️ | Blueprint `description:` field with no `![` image markdown **OR** `![` present but referenced image file does not exist on disk (`/config/www/blueprint-images/`) *(project convention, not HA standard)* — **blocking gate:** do not write YAML until image is approved or explicitly declined | §11.1 step 4 |
+| AP-15 | ⚠️ | Blueprint `description:` field with no `![` image markdown **OR** `![` present but referenced image file does not exist on disk at `HEADER_IMG` (`GIT_REPO/images/header/` — see Project Instructions for resolved path) *(project convention, not HA standard)* — **blocking gate:** do not write YAML until image is approved or explicitly declined. **Note:** The legacy path `/config/www/blueprint-images/` is deprecated — all header images live in `HEADER_IMG`. | §11.1 step 4 |
 | AP-16 | ❌ | `states()` or `state_attr()` without `\| default()` | §3.6 |
 | AP-17 | ⚠️ | `continue_on_error: true` on critical-path actions | §5.2 |
 | AP-18 | ℹ️ | Explicit entity list where area/label target would work | §5.9 |
@@ -145,7 +145,7 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 12. **Never edit a file without completing the §2.3 git pre-flight checklist first.** This applies to ALL project files — YAML, markdown, docs, prompts, everything. "It's just a small change" and "it's just docs" are not exemptions. See §2.1 for the full scope definition.
 13. **Never use free-text inputs when a dropdown or multi-select would work.** Constrain user input whenever possible.
 14. **Never assume integration syntax.** Always verify against the official docs for the specific integration.
-15. **Never create a blueprint or script without a header image** in its description, **and never leave a broken image reference** (file referenced but not on disk) *(project convention — not an HA community standard, but mandatory for this project)*. This is a **blocking gate** — do not write a single line of YAML until the header image is either approved by the user or explicitly declined. Always ask. If the user blows past the question, insist — repeat the ask and do not proceed until you get a clear answer. **During reviews**, verify the referenced image file actually exists at `/config/www/blueprint-images/`. Allowed formats: `.jpeg`, `.jpg`, `.png`, `.webp`. See §11.1 step 4 for default image specs (1K, 16:9, Rick & Morty style).
+15. **Never create a blueprint or script without a header image** in its description, **and never leave a broken image reference** (file referenced but not on disk) *(project convention — not an HA community standard, but mandatory for this project)*. This is a **blocking gate** — do not write a single line of YAML until the header image is either approved by the user or explicitly declined. Always ask. If the user blows past the question, insist — repeat the ask and do not proceed until you get a clear answer. **During reviews**, verify the referenced image file actually exists at `HEADER_IMG` (`GIT_REPO/images/header/` — see Project Instructions for resolved path). Allowed formats: `.jpeg`, `.jpg`, `.png`, `.webp`. See §11.1 step 4 for default image specs (1K, 16:9, Rick & Morty style). **Deprecated:** The legacy path `/config/www/blueprint-images/` is no longer used — if you find references to it in existing blueprints, migrate them to `HEADER_IMG`.
 16. **Never write a template without `| default()` safety.** All `states()` and `state_attr()` calls must have fallback values.
 17. **Never blanket-apply `continue_on_error: true`.** Only use it on genuinely non-critical steps — otherwise it masks real bugs.
 18. **Never use entity lists when area/label targeting would work.** Area and label targets auto-include new devices; entity lists require manual updates.
@@ -213,6 +213,8 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 
 **Log-before-edit invariant (MANDATORY — BUILD mode only):** When a task meets ANY build/audit log trigger (§11.8 "When to create" or §11.2 step 0), the log file MUST exist in `_build_logs/` before the first edit to any target file. Scanning, analyzing, planning, and reporting findings in-chat do not count as edits — but the moment you write to the target file, the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
 
+**`_build_logs/` location (MANDATORY):** Build and audit logs are ALWAYS created in `PROJECT_DIR/_build_logs/`, never in `HA_CONFIG` or any other directory. `HA_CONFIG` is for Home Assistant configuration — not development artifacts. If you catch yourself writing a log to the SMB mount path, you're targeting the wrong filesystem. This applies regardless of whether the files being edited live in `PROJECT_DIR` or `HA_CONFIG`.
+
 ### 11.1 When the user asks to build something new
 1. **Clarify scope** — ask about complexity and whether this should be one blueprint, multiple, with helper scripts, etc.
 2. **Check existing patterns** — look at what's already in the blueprints folder. Reuse patterns and stay consistent.
@@ -237,7 +239,7 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 ### 11.2 When the user asks to review/improve something
 0. **(Mandatory for 3+ files OR single-file reviews with 5+ violations/changes)** Create an audit/build log per §11.8.1 before scanning the first file. Update it after each file completes. Single-file reviews with fewer than 5 findings don't require a log file but MUST report findings in-chat using the structured `[ISSUE]` format: `[ISSUE] filename | AP-ID | severity | line | description | fix`. Skipping this when the threshold is met is a violation of AP-39.
 1. Read the file from the SMB mount.
-1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist. For images: verify the file exists at `GIT_REPO/images/header/<name>` and that the GitHub raw URL in the description resolves correctly (`https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/<name>`). Flag missing assets as AP-15 violations.
+1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist. For images: verify the file exists at `HEADER_IMG` (`GIT_REPO/images/header/`) and that the GitHub raw URL in the description resolves correctly (`https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/<name>`). Flag missing assets as AP-15 violations. Additionally, verify that a companion README exists in the appropriate `readme/` subdirectory (see §11.14). Flag missing READMEs as documentation gaps.
 2. Identify issues against this style guide.
 3. Present findings as a prioritized list.
 4. **Ask before making changes** — especially removals or architectural changes.
@@ -516,7 +518,7 @@ A build is "done" when all five conditions are met:
 | 1 | **Functional** | Passes HA config check, loads without errors, no YAML syntax issues |
 | 2 | **Complete** | All required inputs defined, all actions have aliases, all waits have timeouts (§5.1), all templates have `\| default()` guards (§3.6) |
 | 3 | **Tested** | User has run it at least once and confirmed trace shows expected behavior |
-| 4 | **Documented** | Blueprint description is current, changelog updated (§2.4), header image present (§3.1) |
+| 4 | **Documented** | Blueprint description is current, changelog updated (§2.4), header image present (§3.1), README exists and reflects current state (§11.14) |
 | 5 | **Within budget** | Doesn't exceed complexity limits from §1.8 |
 
 **Stop iterating if:**
@@ -620,3 +622,95 @@ Loading an entire large file into context just to change a few lines is wasteful
 - Files under ~200 lines where the overhead of locating a section exceeds just reading it all.
 
 **Why this matters:** A 1500-line blueprint dumped into context consumes tokens that could be spent on reasoning, compresses earlier conversation history, and creates a temptation to "while I'm here" rewrite sections that don't need touching. Surgical edits are faster, safer, and leave a cleaner diff in git.
+
+### 11.14 README generation workflow (MANDATORY for blueprints and scripts)
+
+Every blueprint and script gets a companion README as a deliverable. The README is the human-readable documentation that lives in the git repo — it's what someone reads on GitHub to understand what a blueprint does without opening the YAML.
+
+**When to generate:**
+- **BUILD mode:** Every new blueprint or script gets a README before the build is considered done. README creation is part of the §11.9 convergence criteria (criterion #4 "Documented").
+- **EDIT mode:** When a blueprint's inputs, flow, or features change materially, update the README in the same atomic batch (§2.4). Trivial edits (alias renames, comment tweaks, timeout adjustments) don't require a README update.
+- **AUDIT mode:** Verify the README exists and reflects current state. Flag missing or stale READMEs as issues.
+
+**Naming convention:**
+- Filename: `<blueprint_stem>-readme.md` — must match the blueprint YAML filename stem exactly.
+- Examples: `bedtime_routine.yaml` → `bedtime_routine-readme.md`, `wake_up_guard.yaml` → `wake-up-guard-readme.md` (match the YAML stem, hyphens and all).
+
+**Save location (defined in Project Instructions):**
+- Automation blueprints: `README_AUTO_DIR`
+- Script blueprints: `README_SCRI_DIR`
+- Template blueprints: `README_TEMPL_DIR`
+
+**Header image reuse:** The README uses the identical `raw.githubusercontent.com` URL from the blueprint's `description:` field. No separate image generation — one image, two references.
+
+**Template structure:**
+
+```markdown
+# <Blueprint name — human-readable title>
+
+![<name> header](<raw.githubusercontent.com URL from blueprint description>)
+
+<Summary paragraph: what it does, 2-4 sentences. Match the blueprint description but expand for context.>
+
+> **Companion blueprint:** <if variant exists, link to it here>
+
+## How It Works
+
+<ASCII flow diagram showing the automation's decision tree and action sequence.
+Use box-drawing characters. Keep it readable — max ~40 lines.>
+
+## Key Design Decisions
+
+<2-5 subsections explaining non-obvious architectural choices.
+Why this pattern over alternatives, trade-offs made, gotchas addressed.>
+
+## Features
+
+<Bulleted list of user-facing capabilities. Each item: bold label + brief description.
+Match the blueprint's actual feature set — don't embellish.>
+
+## Prerequisites
+
+<What the user needs before installing: HA version, integrations, entities, helpers.>
+
+## Installation
+
+<Copy-to-directory instructions + blueprint import URL if hosted.>
+
+## Configuration
+
+<Input tables organized by the blueprint's collapsible input sections.
+Use the same section numbering (①, ②, etc.) as the YAML input groups.
+Table columns: Input | Default | Description>
+
+## Comparison with <Variant Name>
+
+<If a companion/variant blueprint exists: side-by-side feature table.
+If no variant exists: omit this section entirely.>
+
+## Technical Notes
+
+<Implementation details for power users: mode, trace storage, error handling
+patterns, template safety notes, edge cases.>
+
+## Changelog
+
+<Mirror the blueprint description's "Recent changes" section.
+Expand entries slightly for README context. Most recent first.>
+
+## Author
+
+**<author name>**
+
+## License
+
+See repository for license details.
+```
+
+**What NOT to include in READMEs:**
+- Full YAML code listings — the YAML file is right there in the repo.
+- LLM system prompts — those are separate deliverables (§11.4).
+- Implementation details that duplicate the YAML comments/aliases.
+- Setup instructions for integrations themselves (link to official docs instead).
+
+**Existing README cleanup:** Some existing READMEs don't follow the `-readme.md` naming convention (e.g., `wake-up-guard.md` without the `-readme` suffix, agent prompt files mixed into the readme directory). These should be normalized during audits. Agent prompt files (`*_agent_prompt_*.md`) are separate deliverables — they may coexist in the readme directory but are not READMEs.

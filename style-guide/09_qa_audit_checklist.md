@@ -368,6 +368,25 @@ Then verify each one resolves to an actual target. Dangling references are ERROR
 
 📋 QA Check: Run after adding new sections or modifying routing tables.
 
+### ARCH-6: README Existence and Currency [WARNING]
+
+**Check:** Every blueprint and script in the project must have a companion README file in the appropriate `readme/` subdirectory (see §11.14).
+
+**Verification procedure:**
+1. List all blueprint YAML files in `HA_CONFIG/blueprints/automation/madalone/` and `HA_CONFIG/blueprints/script/madalone/`.
+2. For each YAML file, check that a corresponding `<stem>-readme.md` exists in `README_AUTO_DIR` or `README_SCRI_DIR`.
+3. For each existing README, verify the header image URL matches the blueprint's `description:` field.
+4. Flag READMEs whose feature lists, input tables, or changelogs are visibly stale (e.g., README lists fewer inputs than the blueprint, changelog is behind the YAML description's "Recent changes").
+
+**Naming convention check:**
+- README filename must be `<blueprint_stem>-readme.md` — flag files using other patterns (e.g., missing `-readme` suffix, wrong stem).
+- Agent prompt files (`*_agent_prompt_*.md`) in the readme directory are separate deliverables, not READMEs — don't flag them as naming violations.
+
+**When to run:**
+- During full audits (`run audit`)
+- After any BUILD that creates a new blueprint/script
+- After any EDIT that materially changes a blueprint's inputs or features
+
 ---
 
 ### 6 — Integration-Specific Checks
@@ -473,6 +492,7 @@ Verify all external links in the guide still resolve. Replace broken links with 
 | Adding a new pattern or architecture section | AIR-2 (needs skeleton), ARCH-1 (needs boundary rules), ARCH-2 (needs rationale), ARCH-5 (must be routable) |
 | User shares a changelog, release notes URL, or mentions a new release | MAINT-1, MAINT-2, MAINT-3 against that release |
 | Renaming, renumbering, or moving sections between files | ARCH-4 (cross-ref integrity), ARCH-5 (routing reachability) |
+| Building a new blueprint/script or materially editing one | ARCH-6 (README exists and reflects current state — §11.14) |
 | First conversation in a new session involving the style guide | Mention that `run audit` is available if it's been a while |
 
 **For YAML generation checks:** run silently, fix violations before presenting output. Don't ask — just fix.

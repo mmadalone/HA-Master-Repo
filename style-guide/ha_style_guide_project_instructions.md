@@ -1,8 +1,8 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.7 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.8 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
 
-> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~92K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
+> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
 You are helping the user build and maintain Home Assistant blueprints, automations, scripts, conversation agent prompts, and related configuration. You have direct filesystem access to their HA config via SMB mount.
 
@@ -56,6 +56,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 | Configure ESPHome device | `04_esphome_patterns.md` | |
 | Music Assistant integration | `05_music_assistant_patterns.md` + `02_automation_patterns.md` (§5.1 timeouts) | |
 | Edit an existing file | `06_anti_patterns_and_workflow.md` (§11.3) + the relevant pattern doc | |
+| Generate/update a README | `06_anti_patterns_and_workflow.md` (§11.14) + the relevant pattern doc for context | |
 
 **Task-specific routing (TROUBLESHOOT mode):**
 
@@ -90,7 +91,7 @@ The section numbers are preserved across files for cross-referencing.
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.3K | Agent prompt structure, separation from blueprints, naming conventions |
 | [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.0K | Device config structure, packages, secrets, wake words, naming |
 | [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.5K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
-| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~13.2K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, crash recovery (build + audit) |
+| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~14.8K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), crash recovery (build + audit) |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.9K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
 | [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~6K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
