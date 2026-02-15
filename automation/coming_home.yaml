@@ -14,20 +14,40 @@ blueprint:
     every wait, and guaranteed cleanup of temporary switches on all exit paths.
 
     ### Recent changes
+    - **v3:** Multi-person support — person selector accepts multiple entities,
+      new multiline text field for custom arrival names (overrides entity
+      friendly names). Reset switches now optional (empty = skip power-cycle).
     - **v2:** Full style guide compliance — collapsible sections, modern syntax, aliases, variable scope fix
     - **v1:** Initial version
   domain: automation
   homeassistant:
     min_version: "2024.10.0"
   input:
-    person_entity:
-      name: Person
+    person_entities:
+      name: Persons (optional)
       description: >-
-        Person entity whose home/not_home state transition triggers this
-        automation. The person's friendly_name is used in the AI greeting.
+        Person entities whose home/not_home state transition triggers this
+        automation. When any selected person arrives home, the flow runs.
+        Friendly names from these entities are used in the AI greeting
+        unless overridden by the arrival names field below. Select multiple
+        persons to trigger on any of them arriving.
+      default: []
       selector:
         entity:
           domain: person
+          multiple: true
+
+    person_names:
+      name: Arrival names (optional)
+      description: >-
+        Custom names to use in the AI greeting. One name per line. When
+        provided, these override the person entity friendly names in the
+        greeting prompt. Useful when the arriving party includes people
+        without HA person entities (partner, guest, frequent visitor).
+      default: ""
+      selector:
+        text:
+          multiline: true
 
     # ===========================================================================
     # ① DETECTION & TRIGGERS
@@ -84,15 +104,17 @@ blueprint:
         helper switches to activate during the arrival flow.
       input:
         reset_switches:
-          name: Reset switches
+          name: Reset switches (optional)
           description: >-
-            Switches that will be power-cycled (OFF → delay → ON) to reset
-            speakers or audio chains before the greeting plays. This clears
-            stale Bluetooth connections and audio routing issues.
+            Switches to power-cycle (OFF → delay → ON) to reset speakers or
+            audio chains before the greeting plays. Clears stale Bluetooth
+            connections and audio routing issues. Leave empty to skip the
+            power-cycle step entirely.
+          default: []
           selector:
-            target:
-              entity:
-                domain: switch
+            entity:
+              domain: switch
+              multiple: true
 
         reset_switch_delay:
           name: Reset delay
@@ -188,13 +210,27 @@ trigger_variables:
   cooldown_seconds: !input cooldown_seconds
 
 variables:
-  person_entity: !input person_entity
-  person_name: "{{ state_attr(person_entity, 'friendly_name') | default('someone') }}"
+  person_entities_list: !input person_entities
+  person_names_raw: !input person_names
+  reset_switches_list: !input reset_switches
+  person_name: >-
+    {% set custom = person_names_raw | string | trim %}
+    {% if custom != '' %}
+      {{ custom.split('\n') | map('trim') | reject('equalto', '') | join(' and ') }}
+    {% elif person_entities_list | length > 0 %}
+      {% set ns = namespace(names=[]) %}
+      {% for p in person_entities_list %}
+        {% set ns.names = ns.names + [state_attr(p, 'friendly_name') | default('someone')] %}
+      {% endfor %}
+      {{ ns.names | join(' and ') }}
+    {% else %}
+      someone
+    {% endif %}
 
 triggers:
   - alias: "Person arrives home — GPS state changes to home"
     trigger: state
-    entity_id: !input person_entity
+    entity_id: !input person_entities
     from: not_home
     to: home
 
@@ -222,16 +258,25 @@ actions:
     then:
       - stop: "Entrance sensor timed out — nobody showed up. Aborting."
 
-  - alias: "Reset speakers — power-cycle OFF to clear stale connections"
-    action: switch.turn_off
-    target: !input reset_switches
+  - alias: "Reset speakers — power-cycle to clear stale connections (optional, skipped if no switches configured)"
+    choose:
+      - alias: "Reset switches are configured"
+        conditions:
+          - condition: template
+            value_template: "{{ reset_switches_list | length > 0 }}"
+        sequence:
+          - alias: "Reset speakers — power-cycle OFF to clear stale connections"
+            action: switch.turn_off
+            target:
+              entity_id: "{{ reset_switches_list }}"
 
-  - alias: "Wait for speaker hardware to fully power down"
-    delay: !input reset_switch_delay
+          - alias: "Wait for speaker hardware to fully power down"
+            delay: !input reset_switch_delay
 
-  - alias: "Reset speakers — power-cycle back ON"
-    action: switch.turn_on
-    target: !input reset_switches
+          - alias: "Reset speakers — power-cycle back ON"
+            action: switch.turn_on
+            target:
+              entity_id: "{{ reset_switches_list }}"
 
   - alias: "Activate temporary switches for arrival flow"
     action: switch.turn_on
