@@ -1,6 +1,6 @@
 # Voice — Play bedtime audiobook (Music Assistant)
 
-<!-- Header image pending — generate with AP-15 gate when ready -->
+![Voice — Play bedtime audiobook](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_play_bedtime_audiobook.jpeg)
 
 LLM tool wrapper that plays an audiobook (or other media type) via Music Assistant on a designated player at a configurable volume. The LLM passes the title, player, and optional volume at runtime via script fields, while blueprint inputs lock in sensible defaults at instantiation time.
 
