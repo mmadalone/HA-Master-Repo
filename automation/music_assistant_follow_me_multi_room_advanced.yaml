@@ -13,6 +13,13 @@ blueprint:
 
     ### Recent changes
 
+    - **v9:** Added source-occupied gate — when enabled, the automation
+      will not transfer music away from a room that still has presence.
+      This prevents "stealing" music from another person who is still
+      listening in their room. Combined with the existing
+      protect-target-playback gate, this provides natural multi-person
+      awareness without requiring per-person tracking.
+
     - **v8:** Style guide compliance — local header image, min_version
       bump to 2024.10.0, trigger alias, box-style dividers, trimmed
       changelog.
@@ -193,6 +200,19 @@ blueprint:
             If enabled, the automation skips follow-me when the target player is
             already actively playing something (playing/buffering). This prevents
             hijacking an existing session in the room you move into.
+          default: true
+          selector:
+            boolean: {}
+
+        skip_if_source_occupied:
+          name: Skip transfer if source room is still occupied
+          description: >
+            If enabled, the automation will not transfer music away from a room
+            that still has presence. This prevents "stealing" music from another
+            person who is still listening in that room. Music only follows when
+            the source room becomes empty. Combined with "Skip transfer if target
+            is already playing", this provides natural multi-person coexistence —
+            independent listening sessions are never hijacked.
           default: true
           selector:
             boolean: {}
@@ -423,6 +443,7 @@ variables:
   follow_paused_music_flag: !input follow_paused_music
   min_music_duration_value: !input min_music_duration_seconds
   protect_target_playback_flag: !input protect_target_playback
+  skip_if_source_occupied_flag: !input skip_if_source_occupied
   treat_unknown_duration_as_music_flag: !input treat_unknown_duration_as_music
   voice_assistant_guard_entity: !input voice_assistant_guard
   silence_other_players_flag: !input silence_other_players
@@ -626,6 +647,20 @@ actions:
         true
       {% else %}
         {{ music_source_player not in excluded_source_players_list }}
+      {% endif %}
+
+  - alias: "Gate — source room still occupied, don't steal music from another person (optional)"
+    condition: template
+    value_template: >
+      {% if not skip_if_source_occupied_flag %}
+        true
+      {% else %}
+        {% set src_idx = source_index | int(-1) %}
+        {% if src_idx == -1 %}
+          true
+        {% else %}
+          {{ states(presence_list[src_idx]) != 'on' }}
+        {% endif %}
       {% endif %}
 
   - alias: "Gate — priority anchor prevents downgrade while source zone active (optional)"
