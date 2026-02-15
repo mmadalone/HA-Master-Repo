@@ -1,6 +1,9 @@
 blueprint:
-  name: "Goodnight Negotiator (Hybrid) v8.6.9"
+  name: "Goodnight Negotiator (Hybrid) v8.7.0"
   description: >
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/goodnight_negotiator_hybrid-header.jpeg)
+
+
     Hybrid bedtime script with optional staged confirmations (TV/devices + lights/devices
     + Bedtime audio).
     Stage 3 supports: confirm, ask what to play, Music Assistant search (by category),
@@ -65,6 +68,8 @@ blueprint:
     - Stage 3 uses an LLM to return a strict JSON payload (media_id/media_type/etc.) and then calls
       `music_assistant.play_media` directly (no `music_assistant.search`).
     - Provide your Music Assistant config_entry_id (see Developer Tools or the MA URL).
+  author: madalone
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/goodnight_negotiator_hybrid.yaml
   domain: script
   input:
     core_routing:
@@ -955,6 +960,7 @@ sequence:
             value_template: "{{ helpers_enabled and (h_lock_boolean | trim) != '' }}"
         sequence:
           - action: input_boolean.turn_on
+            alias: "Preflight: activate lock helper"
             continue_on_error: true
             data:
               entity_id: "{{ h_lock_boolean }}"
@@ -965,6 +971,7 @@ sequence:
             value_template: "{{ helpers_enabled and (h_last_run_epoch | trim) != '' }}"
         sequence:
           - action: input_number.set_value
+            alias: "Preflight: record run epoch to helper"
             continue_on_error: true
             data:
               entity_id: "{{ h_last_run_epoch }}"
@@ -979,6 +986,7 @@ sequence:
             value_template: "{{ open_mode == 'fixed_text' and (open_fixed | trim) != '' }}"
         sequence:
           - action: assist_satellite.announce
+            alias: "Opening: announce line via satellite"
             continue_on_error: true
             data:
               entity_id: "{{ sat }}"
@@ -989,6 +997,7 @@ sequence:
                     value_template: "{{ helpers_enabled and (h_last_opening | trim) != '' }}"
                 sequence:
                   - action: input_text.set_value
+                    alias: "Opening: save last opening line to helper"
                     continue_on_error: true
                     data:
                       entity_id: "{{ h_last_opening }}"
@@ -999,6 +1008,7 @@ sequence:
                     value_template: "{{ helpers_enabled and (h_last_reply | trim) != '' }}"
                 sequence:
                   - action: input_text.set_value
+                    alias: "Opening: save last reply to helper"
                     continue_on_error: true
                     data:
                       entity_id: "{{ h_last_reply }}"
@@ -1008,6 +1018,7 @@ sequence:
             value_template: "{{ open_mode == 'llm_generated' }}"
         sequence:
           - action: conversation.process
+            alias: "Opening: generate line via LLM"
             continue_on_error: true
             data:
               agent_id: "{{ agent_id }}"
@@ -1017,6 +1028,7 @@ sequence:
                 {{ context_block }}
             response_variable: open_llm
           - action: assist_satellite.announce
+            alias: "Opening: announce line via satellite"
             continue_on_error: true
             data:
               entity_id: "{{ sat }}"
@@ -1027,6 +1039,7 @@ sequence:
                     value_template: "{{ helpers_enabled and (h_last_opening | trim) != '' }}"
                 sequence:
                   - action: input_text.set_value
+                    alias: "Opening: save last opening line to helper"
                     continue_on_error: true
                     data:
                       entity_id: "{{ h_last_opening }}"
@@ -1037,6 +1050,7 @@ sequence:
                     value_template: "{{ helpers_enabled and (h_last_reply | trim) != '' }}"
                 sequence:
                   - action: input_text.set_value
+                    alias: "Opening: save last reply to helper"
                     continue_on_error: true
                     data:
                       entity_id: "{{ h_last_reply }}"
@@ -1064,6 +1078,7 @@ sequence:
                     value_template: "{{ s1_allow == 'unknown' }}"
                 sequence:
                   - action: conversation.process
+                    alias: "Stage 1: ask user via LLM"
                     continue_on_error: true
                     data:
                       agent_id: "{{ agent_id }}"
@@ -1083,6 +1098,7 @@ sequence:
                         {% elif (q | regex_search('\\b(should i|do you want|want me to|shall i|can i)\\b')) and (q | regex_search('\\b(turn off|switch off|shut off|power off)\\b')) %}permission
                         {% else %}unknown{% endif %}
                   - action: assist_satellite.ask_question
+                    alias: "Stage 1: ask TV permission via satellite"
                     continue_on_error: true
                     data:
                       entity_id: "{{ sat }}"
@@ -1103,6 +1119,7 @@ sequence:
                         - variables:
                             s1_q_retries_left: "{{ (s1_q_retries_left | int(0)) - 1 }}"
                         - action: assist_satellite.ask_question
+                          alias: "Stage 1: retry TV permission (unclear response)"
                           continue_on_error: true
                           data:
                             entity_id: "{{ sat }}"
@@ -1131,12 +1148,14 @@ sequence:
                             value_template: "{{ s1_q_kind == 'state' and s1_allow == 'no' and not script_aborted }}"
                         sequence:
                           - action: conversation.process
+                            alias: "Stage 3: process via LLM"
                             continue_on_error: true
                             data:
                               agent_id: "{{ agent_id }}"
                               text: "acknowledge briefly that it's already off. one short sentence."
                             response_variable: s1_state_no_resp
                           - action: assist_satellite.announce
+                            alias: "Stage 3: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1153,6 +1172,7 @@ sequence:
                               s1p_q_text: "do you want me to switch off {{ s1_name }}?"
                               s1p_retries_left: "{{ qa_unclear_retries | int(0) }}"
                           - action: assist_satellite.ask_question
+                            alias: "Stage 1: ask TV switch-off confirmation via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1173,6 +1193,7 @@ sequence:
                                 - variables:
                                     s1p_retries_left: "{{ (s1p_retries_left | int(0)) - 1 }}"
                                 - action: assist_satellite.ask_question
+                                  alias: "Stage 1: retry TV switch-off confirmation (unclear response)"
                                   continue_on_error: true
                                   data:
                                     entity_id: "{{ sat }}"
@@ -1210,6 +1231,7 @@ sequence:
                             value_template: "{{ s1_fallback == 'do_it_anyway' and (p_unclear_do | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
+                            alias: "Stage 3: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1219,12 +1241,14 @@ sequence:
                             value_template: "{{ s1_fallback != 'do_it_anyway' and (p_unclear_skip | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
+                            alias: "Stage 3: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
                               message: "{{ p_unclear_skip }}"
                     default:
                       - action: conversation.process
+                        alias: "Stage 3: process via LLM"
                         continue_on_error: true
                         data:
                           agent_id: "{{ agent_id }}"
@@ -1236,6 +1260,7 @@ sequence:
                             {% endif %}
                         response_variable: unclear_resp
                       - action: assist_satellite.announce
+                        alias: "Stage 3: announce via satellite"
                         continue_on_error: true
                         data:
                           entity_id: "{{ sat }}"
@@ -1255,18 +1280,21 @@ sequence:
                             value_template: "{{ (p_cancel | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
+                            alias: "Stage 3: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
                               message: "{{ p_cancel }}"
                     default:
                       - action: conversation.process
+                        alias: "Stage 3: process via LLM"
                         continue_on_error: true
                         data:
                           agent_id: "{{ agent_id }}"
                           text: "say briefly that you're cancelling the bedtime routine. one short sentence."
                         response_variable: cancel_resp
                       - action: assist_satellite.announce
+                        alias: "Stage 3: announce via satellite"
                         continue_on_error: true
                         data:
                           entity_id: "{{ sat }}"
@@ -1280,12 +1308,14 @@ sequence:
                     value_template: "{{ s1_allow == 'no' and not script_aborted }}"
                 sequence:
                   - action: conversation.process
+                    alias: "Stage 3: process via LLM"
                     continue_on_error: true
                     data:
                       agent_id: "{{ agent_id }}"
                       text: "acknowledge briefly that you'll leave the tv on. say you'll continue with lights only and skip bedtime audio. one short sentence."
                     response_variable: s1_no_resp
                   - action: assist_satellite.announce
+                    alias: "Stage 3: announce via satellite"
                     continue_on_error: true
                     data:
                       entity_id: "{{ sat }}"
@@ -1303,6 +1333,7 @@ sequence:
                       for_each: "{{ s1_scripts }}"
                       sequence:
                         - action: script.turn_on
+                          alias: "Execute script"
                           continue_on_error: true
                           data:
                             entity_id: "{{ repeat.item }}"
@@ -1318,18 +1349,21 @@ sequence:
                                     value_template: "{{ (p_confirm | trim) != '' }}"
                                 sequence:
                                   - action: assist_satellite.announce
+                                    alias: "Stage 3: announce via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
                                       message: "{{ p_confirm }}"
                             default:
                               - action: conversation.process
+                                alias: "Stage 3: process via LLM"
                                 continue_on_error: true
                                 data:
                                   agent_id: "{{ agent_id }}"
                                   text: "say a very brief confirmation that you turned off {{ s1_name }}. one or two words max."
                                 response_variable: confirm_resp
                               - action: assist_satellite.announce
+                                alias: "Stage 3: announce via satellite"
                                 continue_on_error: true
                                 data:
                                   entity_id: "{{ sat }}"
@@ -1368,6 +1402,7 @@ sequence:
                     value_template: "{{ s2_allow == 'unknown' }}"
                 sequence:
                   - action: conversation.process
+                    alias: "Stage 2: ask user via LLM"
                     continue_on_error: true
                     data:
                       agent_id: "{{ agent_id }}"
@@ -1380,6 +1415,7 @@ sequence:
                       s2_q_text: "{{ s2_q.response.speech.plain.speech | default('turn off ' ~ s2_name ~ '?') }}"
                       s2_q_retries_left: "{{ qa_unclear_retries | int(0) }}"
                   - action: assist_satellite.ask_question
+                    alias: "Stage 2: ask permission via satellite"
                     continue_on_error: true
                     data:
                       entity_id: "{{ sat }}"
@@ -1400,6 +1436,7 @@ sequence:
                         - variables:
                             s2_q_retries_left: "{{ (s2_q_retries_left | int(0)) - 1 }}"
                         - action: assist_satellite.ask_question
+                          alias: "Stage 2: retry permission (unclear response)"
                           continue_on_error: true
                           data:
                             entity_id: "{{ sat }}"
@@ -1431,6 +1468,7 @@ sequence:
                             value_template: "{{ s2_fallback == 'do_it_anyway' and (p_unclear_do | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
+                            alias: "Stage 2: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1440,12 +1478,14 @@ sequence:
                             value_template: "{{ s2_fallback != 'do_it_anyway' and (p_unclear_skip | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
+                            alias: "Stage 2: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
                               message: "{{ p_unclear_skip }}"
                     default:
                       - action: conversation.process
+                        alias: "Stage 2: ask user via LLM"
                         continue_on_error: true
                         data:
                           agent_id: "{{ agent_id }}"
@@ -1457,6 +1497,7 @@ sequence:
                             {% endif %}
                         response_variable: unclear_resp2
                       - action: assist_satellite.announce
+                        alias: "Stage 2: announce via satellite"
                         continue_on_error: true
                         data:
                           entity_id: "{{ sat }}"
@@ -1476,18 +1517,21 @@ sequence:
                             value_template: "{{ (p_cancel | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
+                            alias: "Stage 2: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
                               message: "{{ p_cancel }}"
                     default:
                       - action: conversation.process
+                        alias: "Stage 2: ask user via LLM"
                         continue_on_error: true
                         data:
                           agent_id: "{{ agent_id }}"
                           text: "say briefly that you're cancelling the bedtime routine. one short sentence."
                         response_variable: cancel_resp2
                       - action: assist_satellite.announce
+                        alias: "Stage 2: announce via satellite"
                         continue_on_error: true
                         data:
                           entity_id: "{{ sat }}"
@@ -1500,6 +1544,7 @@ sequence:
                     value_template: "{{ s2_allow == 'yes' and not script_aborted }}"
                 sequence:
                   - action: homeassistant.turn_off
+                    alias: "Stage 2: turn off targets"
                     continue_on_error: true
                     target: !input stage2_targets
                   # confirm completion
@@ -1514,18 +1559,21 @@ sequence:
                                     value_template: "{{ (p_confirm | trim) != '' }}"
                                 sequence:
                                   - action: assist_satellite.announce
+                                    alias: "Stage 2: announce via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
                                       message: "{{ p_confirm }}"
                             default:
                               - action: conversation.process
+                                alias: "Stage 2: ask user via LLM"
                                 continue_on_error: true
                                 data:
                                   agent_id: "{{ agent_id }}"
                                   text: "say a very brief confirmation that you turned off {{ s2_name }}. one or two words max."
                                 response_variable: confirm_resp2
                               - action: assist_satellite.announce
+                                alias: "Stage 2: announce via satellite"
                                 continue_on_error: true
                                 data:
                                   entity_id: "{{ sat }}"
@@ -1563,18 +1611,21 @@ sequence:
                             value_template: "{{ (p_ma_error | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
+                            alias: "Stage 3: announce via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
                               message: "{{ p_ma_error }}"
                     default:
                       - action: conversation.process
+                        alias: "Stage 3: process via LLM"
                         continue_on_error: true
                         data:
                           agent_id: "{{ agent_id }}"
                           text: "say briefly that Music Assistant config is missing so you can't play audio. one sentence."
                         response_variable: ma_err_resp
                       - action: assist_satellite.announce
+                        alias: "Stage 3: announce via satellite"
                         continue_on_error: true
                         data:
                           entity_id: "{{ sat }}"
@@ -1617,6 +1668,7 @@ sequence:
                             value_template: "{{ s3_is_playing and s3_if_playing == 'stop_and_ask' and not s3_bail_keep }}"
                         sequence:
                           - action: media_player.clear_playlist
+                            alias: "Stage 3: clear player queue"
                             continue_on_error: true
                             data:
                               entity_id: "{{ s3_player }}"
@@ -1628,6 +1680,7 @@ sequence:
                             value_template: "{{ s3_is_playing and s3_if_playing == 'ask_to_replace' and s3_need_confirm and not s3_bail_keep }}"
                         sequence:
                           - action: conversation.process
+                            alias: "Stage 3: process via LLM"
                             continue_on_error: true
                             data:
                               agent_id: "{{ agent_id }}"
@@ -1640,6 +1693,7 @@ sequence:
                               s3_swq_text: "{{ s3_swq.response.speech.plain.speech | default('replace what is playing?') }}"
                               s3_swq_retries_left: "{{ qa_unclear_retries | int(0) }}"
                           - action: assist_satellite.ask_question
+                            alias: "Stage 3: ask replace current playback via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1660,6 +1714,7 @@ sequence:
                                 - variables:
                                     s3_swq_retries_left: "{{ (s3_swq_retries_left | int(0)) - 1 }}"
                                 - action: assist_satellite.ask_question
+                                  alias: "Stage 3: retry replace playback (unclear response)"
                                   continue_on_error: true
                                   data:
                                     entity_id: "{{ sat }}"
@@ -1691,6 +1746,7 @@ sequence:
                                             value_template: "{{ s3_fallback == 'safe_default' and (p_unclear_do | trim) != '' }}"
                                         sequence:
                                           - action: assist_satellite.announce
+                                            alias: "Stage 3: announce via satellite"
                                             continue_on_error: true
                                             data:
                                               entity_id: "{{ sat }}"
@@ -1700,12 +1756,14 @@ sequence:
                                             value_template: "{{ s3_fallback != 'safe_default' and (p_unclear_skip | trim) != '' }}"
                                         sequence:
                                           - action: assist_satellite.announce
+                                            alias: "Stage 3: announce via satellite"
                                             continue_on_error: true
                                             data:
                                               entity_id: "{{ sat }}"
                                               message: "{{ p_unclear_skip }}"
                                     default:
                                       - action: conversation.process
+                                        alias: "Stage 3: process via LLM"
                                         continue_on_error: true
                                         data:
                                           agent_id: "{{ agent_id }}"
@@ -1717,6 +1775,7 @@ sequence:
                                             {% endif %}
                                         response_variable: unclear_resp3
                                       - action: assist_satellite.announce
+                                        alias: "Stage 3: announce via satellite"
                                         continue_on_error: true
                                         data:
                                           entity_id: "{{ sat }}"
@@ -1736,18 +1795,21 @@ sequence:
                                     value_template: "{{ (p_cancel | trim) != '' }}"
                                 sequence:
                                   - action: assist_satellite.announce
+                                    alias: "Stage 3: announce via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
                                       message: "{{ p_cancel }}"
                             default:
                               - action: conversation.process
+                                alias: "Stage 3: process via LLM"
                                 continue_on_error: true
                                 data:
                                   agent_id: "{{ agent_id }}"
                                   text: "say briefly that you're cancelling. one short sentence."
                                 response_variable: cancel_resp3
                               - action: assist_satellite.announce
+                                alias: "Stage 3: announce via satellite"
                                 continue_on_error: true
                                 data:
                                   entity_id: "{{ sat }}"
@@ -1774,6 +1836,7 @@ sequence:
                               s3_main_text: "{{ s3_main_q }}"
                               s3_main_retries_left: "{{ qa_unclear_retries | int(0) }}"
                           - action: assist_satellite.ask_question
+                            alias: "Stage 3: ask want bedtime audio via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1794,6 +1857,7 @@ sequence:
                                 - variables:
                                     s3_main_retries_left: "{{ (s3_main_retries_left | int(0)) - 1 }}"
                                 - action: assist_satellite.ask_question
+                                  alias: "Stage 3: retry bedtime audio question (unclear response)"
                                   continue_on_error: true
                                   data:
                                     entity_id: "{{ sat }}"
@@ -1825,6 +1889,7 @@ sequence:
                                             value_template: "{{ s3_fallback == 'safe_default' and (p_unclear_do | trim) != '' }}"
                                         sequence:
                                           - action: assist_satellite.announce
+                                            alias: "Stage 3: announce via satellite"
                                             continue_on_error: true
                                             data:
                                               entity_id: "{{ sat }}"
@@ -1834,12 +1899,14 @@ sequence:
                                             value_template: "{{ s3_fallback != 'safe_default' and (p_unclear_skip | trim) != '' }}"
                                         sequence:
                                           - action: assist_satellite.announce
+                                            alias: "Stage 3: announce via satellite"
                                             continue_on_error: true
                                             data:
                                               entity_id: "{{ sat }}"
                                               message: "{{ p_unclear_skip }}"
                                     default:
                                       - action: conversation.process
+                                        alias: "Stage 3: process via LLM"
                                         continue_on_error: true
                                         data:
                                           agent_id: "{{ agent_id }}"
@@ -1851,6 +1918,7 @@ sequence:
                                             {% endif %}
                                         response_variable: unclear_resp4
                                       - action: assist_satellite.announce
+                                        alias: "Stage 3: announce via satellite"
                                         continue_on_error: true
                                         data:
                                           entity_id: "{{ sat }}"
@@ -1870,18 +1938,21 @@ sequence:
                                     value_template: "{{ (p_cancel | trim) != '' }}"
                                 sequence:
                                   - action: assist_satellite.announce
+                                    alias: "Stage 3: announce via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
                                       message: "{{ p_cancel }}"
                             default:
                               - action: conversation.process
+                                alias: "Stage 3: process via LLM"
                                 continue_on_error: true
                                 data:
                                   agent_id: "{{ agent_id }}"
                                   text: "say briefly that you're cancelling. one short sentence."
                                 response_variable: cancel_resp4
                               - action: assist_satellite.announce
+                                alias: "Stage 3: announce via satellite"
                                 continue_on_error: true
                                 data:
                                   entity_id: "{{ sat }}"
@@ -1920,6 +1991,7 @@ sequence:
                                 {% elif cat == 'radio' %}okay, which radio station should I put on?
                                 {% else %}okay, what should I put on?{% endif %}
                           - action: assist_satellite.ask_question
+                            alias: "Stage 3: ask what to play via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1944,18 +2016,21 @@ sequence:
                                     value_template: "{{ (p_cancel | trim) != '' }}"
                                 sequence:
                                   - action: assist_satellite.announce
+                                    alias: "Stage 3: announce via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
                                       message: "{{ p_cancel }}"
                             default:
                               - action: conversation.process
+                                alias: "Stage 3: process via LLM"
                                 continue_on_error: true
                                 data:
                                   agent_id: "{{ agent_id }}"
                                   text: "say briefly that you're cancelling. one short sentence."
                                 response_variable: cancel_resp5
                               - action: assist_satellite.announce
+                                alias: "Stage 3: announce via satellite"
                                 continue_on_error: true
                                 data:
                                   entity_id: "{{ sat }}"
@@ -1973,18 +2048,21 @@ sequence:
                                     value_template: "{{ (p_unclear_skip | trim) != '' }}"
                                 sequence:
                                   - action: assist_satellite.announce
+                                    alias: "Stage 3: announce via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
                                       message: "{{ p_unclear_skip }}"
                             default:
                               - action: conversation.process
+                                alias: "Stage 3: process via LLM"
                                 continue_on_error: true
                                 data:
                                   agent_id: "{{ agent_id }}"
                                   text: "say briefly that you didn't hear anything so you're skipping bedtime audio. one short sentence."
                                 response_variable: empty_resp
                               - action: assist_satellite.announce
+                                alias: "Stage 3: announce via satellite"
                                 continue_on_error: true
                                 data:
                                   entity_id: "{{ sat }}"
@@ -2011,6 +2089,7 @@ sequence:
 
                           # llm -> json -> play_media (no Music Assistant search)
                           - action: conversation.process
+                            alias: "Stage 3: process via LLM"
                             continue_on_error: true
                             data:
                               agent_id: "{{ agent_id }}"
@@ -2049,18 +2128,21 @@ sequence:
                                             value_template: "{{ (p_playing | trim) != '' }}"
                                         sequence:
                                           - action: assist_satellite.announce
+                                            alias: "Stage 3: announce via satellite"
                                             continue_on_error: true
                                             data:
                                               entity_id: "{{ sat }}"
                                               message: "{{ p_playing }}"
                                     default:
                                       - action: conversation.process
+                                        alias: "Stage 3: process via LLM"
                                         continue_on_error: true
                                         data:
                                           agent_id: "{{ agent_id }}"
                                           text: "say one short sentence confirming you will start bedtime audio now."
                                         response_variable: playing_resp
                                       - action: assist_satellite.announce
+                                        alias: "Stage 3: announce via satellite"
                                         continue_on_error: true
                                         data:
                                           entity_id: "{{ sat }}"
@@ -2073,6 +2155,7 @@ sequence:
                                             value_template: "{{ s3_queue_behavior == 'clear_then_replace' }}"
                                         sequence:
                                           - action: media_player.clear_playlist
+                                            alias: "Stage 3: clear player queue"
                                             continue_on_error: true
                                             data:
                                               entity_id: "{{ s3_player }}"
@@ -2089,6 +2172,7 @@ sequence:
                                             value_template: "{{ not llm_media_id_is_uri and llm_media_type_raw != '' and s3_resolve_query != '' }}"
                                         sequence:
                                           - action: music_assistant.search
+                                            alias: "Stage 3: search Music Assistant library"
                                             continue_on_error: true
                                             data:
                                               name: "{{ s3_resolve_query }}"
@@ -2120,6 +2204,7 @@ sequence:
                                             value_template: "{{ (s3_delegate_script_entity_id | default('', true) | string | trim) != '' }}"
                                         sequence:
                                           - action: script.turn_on
+                                            alias: "Stage 3: execute delegate playback script"
                                             continue_on_error: true
                                             target:
                                               entity_id: "{{ s3_delegate_script_entity_id }}"
@@ -2133,6 +2218,7 @@ sequence:
                                                 query: "{{ user_query_raw | default('', true) | string | trim }}"
                                     default:
                                       - action: music_assistant.play_media
+                                        alias: "Stage 3: play media via Music Assistant"
                                         continue_on_error: true
                                         data: >
                                           {{
@@ -2153,18 +2239,21 @@ sequence:
                                         value_template: "{{ (p_ma_error | trim) != '' }}"
                                     sequence:
                                       - action: assist_satellite.announce
+                                        alias: "Stage 3: announce via satellite"
                                         continue_on_error: true
                                         data:
                                           entity_id: "{{ sat }}"
                                           message: "{{ p_ma_error }}"
                                 default:
                                   - action: conversation.process
+                                    alias: "Stage 3: process via LLM"
                                     continue_on_error: true
                                     data:
                                       agent_id: "{{ agent_id }}"
                                       text: "say briefly that you couldn't find anything to play. one short sentence."
                                     response_variable: s3_notfound
                                   - action: assist_satellite.announce
+                                    alias: "Stage 3: announce via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
@@ -2181,6 +2270,7 @@ sequence:
             value_template: "{{ not script_aborted and close_mode == 'fixed_text' and (close_fixed | trim) != '' }}"
         sequence:
           - action: assist_satellite.announce
+            alias: "Closing: announce goodnight via satellite"
             continue_on_error: true
             data:
               entity_id: "{{ sat }}"
@@ -2190,6 +2280,7 @@ sequence:
             value_template: "{{ not script_aborted and close_mode == 'llm_generated' }}"
         sequence:
           - action: conversation.process
+            alias: "Closing: generate goodnight via LLM"
             continue_on_error: true
             data:
               agent_id: "{{ agent_id }}"
@@ -2199,6 +2290,7 @@ sequence:
                 {{ context_block }}
             response_variable: close_llm
           - action: assist_satellite.announce
+            alias: "Closing: announce goodnight via satellite"
             continue_on_error: true
             data:
               entity_id: "{{ sat }}"
@@ -2213,6 +2305,7 @@ sequence:
             value_template: "{{ helpers_enabled and (h_lock_boolean | trim) != '' }}"
         sequence:
           - action: input_boolean.turn_off
+            alias: "Cleanup: release lock helper"
             continue_on_error: true
             data:
               entity_id: "{{ h_lock_boolean }}"
