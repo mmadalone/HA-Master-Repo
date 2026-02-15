@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.14 — 2026-02-14** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.15 — 2026-02-15** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -105,7 +105,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**15 top-level sections · 128 subsections · 42 anti-patterns (38 AP codes + 4 sub-items) · 8 security checks · 10 files**
+**15 top-level sections · 128 subsections · 43 anti-patterns (39 AP codes + 4 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -304,6 +304,12 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.15 — 2026-02-15
+- **AP-42 added** — Blueprint schema key whitelist. Catches `min_version:` or `icon:` placed directly under `blueprint:` instead of nested correctly (under `homeassistant:` for `min_version`, not valid at all for `icon`). Severity: ❌ ERROR. Triggered by an actual AI-generated bug where bare `min_version: 2024.10.0` under `blueprint:` caused `extra keys not allowed` at import.
+- **§3.1 updated** — Added explicit valid `blueprint:` top-level key whitelist: `name`, `author`, `description`, `domain`, `source_url`, `homeassistant`, `input`. Documents common mistakes and correct nesting for `min_version` and `icon`.
+- AP count: 42 → 43 (39 AP codes + 4 sub-items).
+- Build log: `_build_logs/2026-02-15_ap42_blueprint_schema_keys_build_log.md`
 
 ### v3.14 — 2026-02-14
 - **§11.8.2 added** — Mandatory log pairs for sanity checks and audit commands. Every `sanity check`, `run audit`, `check <ID>`, `check versions`, `check secrets`, `check vibe readiness`, and `run maintenance` now requires a progress + report log pair in `_build_logs/` BEFORE the first check runs. Unconditional — zero findings still gets logged.

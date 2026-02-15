@@ -38,6 +38,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-22 | ⚠️ | `min_version:` missing when using Labs/experimental features | §10 #22 |
 | AP-23 | ⚠️ | `mode: restart` without idempotent first actions or cleanup failsafe | §5.12 |
 | AP-24 | ⚠️ | `entity: domain: conversation` selector for agent inputs | §3.3 |
+| AP-42 | ❌ | `min_version:` or `icon:` placed directly under `blueprint:` instead of nested under `homeassistant:` (for `min_version`) or omitted entirely (for `icon:`, which is not valid in the blueprint schema). Any key under `blueprint:` not in the whitelist: `name`, `author`, `description`, `domain`, `source_url`, `homeassistant`, `input`. | §3.1 |
 
 #### ESPHome
 
@@ -72,7 +73,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 
 **Severity key:** ❌ ERROR = must fix before presenting · ⚠️ WARNING = fix unless user explicitly accepts · ℹ️ INFO = flag to user, fix if trivial
 
-**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-41 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
+**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-42 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
 
 *Rules #14 (verify integration docs) and #28-29 (ESPHome debug sensors, config archiving) require architectural judgment and cannot be mechanically scanned. Everything else is in the tables above.*
 
@@ -130,7 +131,7 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 
 ---
 
-### General (1–24)
+### General (1–24, 42)
 
 1. **Never bake large LLM system prompts into blueprints.** Use a dedicated conversation agent.
 2. **Never hardcode entity IDs in blueprint actions or prompts.** Use inputs with defaults, or variables derived from inputs.
@@ -156,6 +157,7 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 22. **Never use Labs/experimental features in shared blueprints** without setting `min_version` and documenting the dependency.
 23. **Never assume `restart` mode cleans up after the interrupted run.** Design early steps to be idempotent or add a failsafe.
 24. **Never use `entity: domain: conversation` selector for conversation agent inputs.** It only shows built-in HA agents, hiding Extended OpenAI Conversation and other third-party agents. Always use the `conversation_agent:` selector (see §3.3).
+42. **Never place keys directly under `blueprint:` that don't belong there.** The only valid top-level keys under `blueprint:` are: `name`, `author`, `description`, `domain`, `source_url`, `homeassistant`, `input`. Putting `min_version:` bare under `blueprint:` instead of nested under `homeassistant:` triggers `extra keys not allowed`. Putting `icon:` there fails the same way — `icon:` isn't valid anywhere in the blueprint schema (only on instances). If you're about to add a key to the `blueprint:` block, check the §3.1 whitelist first.
 
 ### ESPHome (25–29)
 

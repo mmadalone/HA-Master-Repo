@@ -1330,16 +1330,16 @@ actions:
                     {% if audiobook_mode == 'curated' %}
                       Ask if they want a bedtime audiobook. Offer ONLY these choices: {{ curated_list }}.
                       If they decline, say okay. If they pick one, use the voice_play_bedtime_audiobook tool
-                      with exactly the title they chose. If they want none, use the voice_skip_audiobook tool.
+                      with exactly the title they chose. If they want none, just acknowledge and move on.
                     {% elif audiobook_mode == 'freeform' %}
                       Ask if they want a bedtime audiobook. Let them request anything — a title, author, or genre.
                       Use the voice_play_bedtime_audiobook tool with whatever they ask for.
-                      If they decline, use the voice_skip_audiobook tool.
+                      If they decline, just acknowledge and move on.
                     {% else %}
                       Ask if they want a bedtime audiobook. Offer these favorites: {{ curated_list }}.
                       But also accept any other request — if they want something not on the list, that's fine.
                       Use the voice_play_bedtime_audiobook tool with their choice.
-                      If they decline, use the voice_skip_audiobook tool.
+                      If they decline, just acknowledge and move on.
                     {% endif %}
 
               - alias: "Pause before audiobook — let satellite fully close the previous conversation"

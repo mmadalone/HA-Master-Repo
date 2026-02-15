@@ -39,6 +39,14 @@ blueprint:
 - `min_version:` — **Required** when using features from a specific HA version. Always verify which version introduced the features you use.
 - `icon:` — **NOT valid** in the `blueprint:` schema block. HA will reject it with `extra keys not allowed @ data['blueprint']['icon']`. Icons are only available on **instances** created from blueprints, not the blueprint definition itself. See also §4.1.
 
+**Valid `blueprint:` top-level keys (whitelist — AP-42):**
+
+Only these keys are permitted directly under `blueprint:`. Anything else triggers `extra keys not allowed`:
+
+`name` · `author` · `description` · `domain` · `source_url` · `homeassistant` · `input`
+
+Common mistakes: `min_version:` and `icon:` placed directly under `blueprint:` instead of in their correct locations. `min_version` belongs **nested under `homeassistant:`** (not bare under `blueprint:`). `icon` is **not valid anywhere** in the blueprint schema — only on instances. If you catch yourself adding a key not on this list, stop and verify against HA's blueprint schema docs.
+
 > 📋 **QA Check VER-2:** Blueprint examples must include `min_version` when using modern syntax. See `09_qa_audit_checklist.md`.
 
 **Key `min_version` thresholds:**
