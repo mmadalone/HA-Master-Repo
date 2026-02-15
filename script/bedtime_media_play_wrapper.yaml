@@ -48,6 +48,19 @@ blueprint:
             - replace
             - add
 
+    volume:
+      name: volume
+      description: >
+        playback volume (0.0 to 1.0). if set, volume is applied before playback starts.
+        leave empty to keep the player's current volume.
+      default: []
+      selector:
+        number:
+          min: 0.0
+          max: 1.0
+          step: 0.05
+          mode: slider
+
     shuffle:
       name: shuffle
       description: set shuffle on the target player after starting playback.
@@ -64,6 +77,7 @@ sequence:
       _media_type: "{{ (!input media_type) | string | trim }}"
       _media_id: "{{ (!input media_id) | string | trim }}"
       _enqueue: "{{ (!input enqueue) | string | trim }}"
+      _volume: "{{ (!input volume) | default([]) }}"
       _shuffle: "{{ (!input shuffle) | default(false) }}"
 
       action_data: >
@@ -79,6 +93,17 @@ sequence:
         {{
           dict(entity_id=_player)
         }}
+
+  - alias: set playback volume (optional)
+    if:
+      - condition: template
+        value_template: "{{ _volume not in [[], none, ''] }}"
+    then:
+      - alias: apply volume level
+        action: media_player.volume_set
+        data:
+          volume_level: "{{ _volume | float(0.35) }}"
+        target: "{{ target_data }}"
 
   - alias: play media via music assistant (forced target player)
     action: music_assistant.play_media
