@@ -30,5 +30,6 @@
 - `HEADER_IMG/bedtime_media_play_wrapper-header.jpeg` — created (take 3)
 
 ## Outstanding
-- [ ] README generation (bedtime_media_play_wrapper-readme.md) — deferred, offer to user
-- [ ] Git commit pending
+- [x] README generation — bedtime_media_play_wrapper-readme.md written to readme/script/
+- [x] Git commit: b4f6e648
+- All items complete. Build closed.

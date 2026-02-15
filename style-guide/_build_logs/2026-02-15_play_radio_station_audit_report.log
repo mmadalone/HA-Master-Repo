@@ -1,0 +1,11 @@
+[SESSION] 2026-02-15 | type: audit | scope: play_radio_station.yaml | status: complete
+[FINDING] no-AP | ❌ ERROR | play_radio_station.yaml | File in blueprints/script/madalone/ but structured as standalone script — not a blueprint
+[FINDING] AP-11 | ⚠️ WARNING | play_radio_station.yaml L71 | condition: template step missing alias:
+[FINDING] AP-11 | ⚠️ WARNING | play_radio_station.yaml L75 | music_assistant.play_media action step missing alias:
+[FINDING] AP-15 | ⚠️ WARNING | play_radio_station.yaml | No header image in description
+[FINDING] no-AP | ⚠️ WARNING | play_radio_station.yaml | Missing icon: field (§4.1)
+[FINDING] no-AP | ℹ️ INFO | play_radio_station.yaml | No changelog in description (§4.3)
+[FINDING] no-AP | ℹ️ INFO | play_radio_station.yaml | No README (§11.14)
+[FINDING] AP-31 | ℹ️ INFO | play_radio_station.yaml L81 | enqueue: "replace" hardcoded
+[SUMMARY] 5 checks executed | 1 PASS | 4 FAIL (8 findings: 1 ERROR, 4 WARNING, 3 INFO) | 0 SKIP
+[RESOLUTION] File deleted by user — fully superseded by alexa_presence_radio.yaml. All findings moot.

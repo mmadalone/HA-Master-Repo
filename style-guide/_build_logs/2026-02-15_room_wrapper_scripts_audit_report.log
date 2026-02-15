@@ -1,0 +1,7 @@
+[SESSION] 2026-02-15 | type: audit | scope: room_wrapper_scripts.yaml | status: complete
+[FINDING] no-AP | ❌ ERROR | room_wrapper_scripts.yaml | ALL 6 scripts call script.play_radio_station — which was just deleted. Every script in this file is broken with a dead dependency.
+[FINDING] no-AP | ❌ ERROR | room_wrapper_scripts.yaml | File in blueprints/script/madalone/ but structured as standalone scripts — not a blueprint. HA cannot import this as a blueprint.
+[FINDING] AP-11 | ⚠️ WARNING | room_wrapper_scripts.yaml L21,30,40,49,59,68 | All 6 action steps missing alias:
+[FINDING] no-AP | ℹ️ INFO | room_wrapper_scripts.yaml | No README (§11.14)
+[SUMMARY] 5 checks executed | 2 PASS | 3 FAIL (4 findings: 2 ERROR, 1 WARNING, 1 INFO) | 0 SKIP
+[RESOLUTION] Recommend deletion — all scripts depend on deleted play_radio_station.yaml, entire use case superseded by alexa_presence_radio.yaml

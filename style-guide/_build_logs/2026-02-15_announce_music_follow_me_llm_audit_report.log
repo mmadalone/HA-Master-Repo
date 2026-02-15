@@ -1,0 +1,6 @@
+[SESSION] 2026-02-15 | type: audit | scope: announce_music_follow_me_llm.yaml | status: complete
+[FINDING] AP-22 | ⚠️ WARNING | announce_music_follow_me_llm.yaml L22 | min_version: "2024.6.0" too low — blueprint uses action: syntax (introduced 2024.8.0). Should be min_version: "2024.8.0"
+[FINDING] no-AP | ℹ️ INFO | announce_music_follow_me_llm.yaml | No === comment dividers above input sections (§3.2 style convention)
+[FINDING] no-AP | ℹ️ INFO | announce_music_follow_me_llm.yaml | No README at readme/script/announce_music_follow_me_llm-readme.md (§11.14)
+[SUMMARY] 7 checks executed | 5 PASS | 2 FAIL (3 findings: 0 ERROR, 1 WARNING, 2 INFO) | 0 SKIP
+[ACTION] Findings ready for user review. Fixes require BUILD-mode escalation with build log.

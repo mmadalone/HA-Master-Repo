@@ -20,7 +20,7 @@ blueprint:
 
   domain: script
   homeassistant:
-    min_version: "2024.6.0"
+    min_version: "2024.8.0"
 
   input:
     tts_voice_settings:
