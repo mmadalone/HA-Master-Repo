@@ -71,7 +71,7 @@ All agents run through [Extended OpenAI Conversation](https://github.com/jekalmi
 
 | Agent | Role |
 |-------|------|
-| Rick - Extended - Verbose - Music | Music control with exposed Music Assistant tool scripts — play, stop, skip, volume, search |
+| Rick - Extended - Verbose - Music | Music control with exposed Music Assistant tool scripts — play, stop, skip, volume, search, opinions.. |
 
 **Scenario agents** — called by blueprints via `conversation.process`, not directly by wake words:
 
