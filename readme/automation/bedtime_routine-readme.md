@@ -11,11 +11,13 @@ All modes: stops the TV (three-method shutdown stack), kills lights (except livi
 ## How It Works
 
 ```
-Trigger: scheduled time / manual input_boolean
+Trigger: scheduled time / manual input_boolean / weekend scheduled time
                 │
                 ▼
 ┌─────────────────────────────────┐
-│ Auto-reset manual trigger        │
+│ Day-of-week gate                 │──── Day not selected → silent skip
+│ Weekend override routing         │──── Blocked / profile / same
+│ Auto-reset manual trigger        │     (manual triggers bypass all gates)
 │ Presence gate (ANY/ALL sensors)  │──── Nobody home → abort + cleanup
 │ Initialize countdown helper      │
 │ Activate temporary switches      │
@@ -117,7 +119,10 @@ This blueprint shares the same bedtime infrastructure as `bedtime_routine_plus.y
 - **Final goodnight contextual TTS** — Optional pre-lamp-off announcement with sensor context (preset mode)
 - **Speaker power-cycle reset** — Smart plug reset clears stale audio connections
 - **ElevenLabs voice profile** — Optional `voice_profile` in TTS options (DRY pattern)
-- **Dual trigger** — Scheduled time and/or manual `input_boolean` (auto-resets on use)
+- **Day-of-week gate** — `run_days` multi-select restricts which days the scheduled trigger fires (manual bypass)
+- **Weekend overrides** — Three modes: same as weekdays, disabled on weekends, or separate weekend profile with its own schedule
+- **Cross-midnight attribution** — A 1 AM trigger correctly counts as the previous night's day (e.g., Sunday 01:00 = Saturday night)
+- **Dual trigger** — Scheduled time, weekend scheduled time, and/or manual `input_boolean` (auto-resets on use)
 - **Response type guard** — Prevents LLM error messages from being spoken as TTS
 - **Logbook entries** — Key decisions logged (presence gate failure, bathroom timeout)
 
@@ -223,6 +228,15 @@ This blueprint shares the same bedtime infrastructure as `bedtime_routine_plus.y
 | **Final goodnight prompt** | (default) | Prompt — sensor states auto-injected |
 | **Goodnight sensors** | (empty) | Can differ from settling-in sensors |
 
+### ⑧ Weekend Overrides
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| **Run on these days** | All days | Multi-select day-of-week gate — manual triggers bypass |
+| **Weekend behavior** | same_as_weekdays | same_as_weekdays / disabled_on_weekends / use_weekend_profile |
+| **Weekend days** | sat, sun | Which days count as "weekend" — uses cross-midnight attribution |
+| **Weekend scheduled bedtime** | (empty) | Separate time trigger for weekend profile — leave empty to disable |
+
 ## Comparison with Kodi Variant
 
 | Feature | Audiobook (this) | Kodi Plus |
@@ -237,7 +251,8 @@ This blueprint shares the same bedtime infrastructure as `bedtime_routine_plus.y
 | Content type auto-detect | No | Yes (CHANNEL crash fix) |
 | Settling-in TTS | Preset mode only | Both modes |
 | Final goodnight TTS | Preset mode only | Both modes |
-| Shared infrastructure | Presence gate, speaker reset, countdown negotiation, bathroom guard, temporary switches |
+| Weekend overrides | Yes (v4.2.0) | Yes (v5.3.0) |
+| Shared infrastructure | Presence gate, speaker reset, countdown negotiation, bathroom guard, temporary switches, day-of-week gate |
 
 ## Technical Notes
 
@@ -253,9 +268,12 @@ This blueprint shares the same bedtime infrastructure as `bedtime_routine_plus.y
 - The `extra_system_prompt` on satellite conversations provides the agent with player entity, media type, and volume — enabling the agent to use exposed tool scripts correctly.
 - Bathroom guard has three paths: occupied → wait + grace, recently cleared → wait remaining grace, long-cleared → proceed immediately.
 - The countdown helper is reset to default on cleanup, ready for the next run.
+- The day-of-week gate uses `effective_day_key` with cross-midnight attribution: if the scheduled time is before noon, the effective day rolls back one (e.g., triggering at 01:00 Sunday evaluates against Saturday's run_days entry). This matches user intent for late-night bedtimes.
+- Weekend routing uses a three-branch condition: `weekend_blocked` silently skips, `weekend_profile_active` routes to the weekend trigger only, and the default branch routes to the weekday trigger. Manual triggers (`trigger.id == 'manual'`) bypass all day/weekend gates unconditionally.
 
 ## Changelog
 
+- **v4.2.0:** Weekend overrides — `run_days` day-of-week gate, optional weekend profile with separate bedtime schedule, cross-midnight day attribution via `effective_day_key`. Manual triggers bypass all gates. Full port from `bedtime_routine_plus.yaml` weekend logic.
 - **v4.1.1:** Fixed LLM error messages spoken as TTS — added `response_type` guard
 - **v4.1.0:** Optional presence sensor gate — skip routine if nobody home (configurable ANY/ALL, min duration, manual trigger bypass)
 - **v4.0.1:** Clarified name/description — this is the Audiobook/MA variant

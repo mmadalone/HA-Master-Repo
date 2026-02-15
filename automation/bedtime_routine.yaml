@@ -18,6 +18,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v4.2.0:** Weekend overrides — run_days day-of-week gate, optional
+    weekend profile with separate bedtime schedule, cross-midnight day
+    attribution via effective_day_key. Manual triggers bypass all gates.
+    Full port from bedtime_routine_plus.yaml weekend logic.
+
     - **v4.1.1:** Fixed LLM error messages spoken as TTS — added response_type guard
 
     - **v4.1.0:** Optional presence sensor gate — skip routine if nobody home
@@ -100,6 +105,40 @@ blueprint:
           default: false
           selector:
             boolean: {}
+
+        run_days:
+          name: Run on these days
+          description: >
+            Days of the week the scheduled trigger is allowed to fire. If
+            today is not selected, the scheduled trigger is silently skipped.
+            Manual triggers bypass this gate — you can always trigger
+            bedtime by hand regardless of day.
+          default:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+            - sat
+            - sun
+          selector:
+            select:
+              options:
+                - label: "Monday"
+                  value: mon
+                - label: "Tuesday"
+                  value: tue
+                - label: "Wednesday"
+                  value: wed
+                - label: "Thursday"
+                  value: thu
+                - label: "Friday"
+                  value: fri
+                - label: "Saturday"
+                  value: sat
+                - label: "Sunday"
+                  value: sun
+              multiple: true
 
     # ===========================================================================
     # ② DEVICES
@@ -579,6 +618,72 @@ blueprint:
             entity:
               multiple: true
 
+    # ===========================================================================
+    # ⑧ WEEKEND OVERRIDES
+    # ===========================================================================
+    weekend_overrides:
+      name: "⑧ Weekend overrides"
+      icon: mdi:weather-sunny
+      description: >
+        Optional weekend-specific schedule. Only applies when Weekend
+        behavior is set to "use_weekend_profile".
+      collapsed: true
+      input:
+        weekend_mode:
+          name: Weekend behavior
+          description: >
+            Choose what happens on "weekend" days (as defined below).
+          default: same_as_weekdays
+          selector:
+            select:
+              options:
+                - label: "Same as weekdays"
+                  value: same_as_weekdays
+                - label: "Disabled on weekends"
+                  value: disabled_on_weekends
+                - label: "Use weekend profile"
+                  value: use_weekend_profile
+
+        weekend_days:
+          name: Weekend days
+          description: >
+            Which days count as "weekend" for the setting above. Uses
+            cross-midnight attribution — if your weekend bedtime fires
+            at 01:00 Sunday, that counts as Saturday night. Select the
+            calendar days your weekend nights START on.
+          default:
+            - sat
+            - sun
+          selector:
+            select:
+              options:
+                - label: "Monday"
+                  value: mon
+                - label: "Tuesday"
+                  value: tue
+                - label: "Wednesday"
+                  value: wed
+                - label: "Thursday"
+                  value: thu
+                - label: "Friday"
+                  value: fri
+                - label: "Saturday"
+                  value: sat
+                - label: "Sunday"
+                  value: sun
+              multiple: true
+
+        weekend_scheduled_time:
+          name: Weekend scheduled bedtime
+          description: >
+            Separate bedtime trigger for weekend days when using the
+            weekend profile. Can differ from the weekday schedule —
+            e.g. 01:00 for late weekend nights. Leave empty to disable
+            the weekend time trigger.
+          default:
+          selector:
+            time: {}
+
 # ═══════════════════════════════════════════════════════════════════════
 # Variables
 # ═══════════════════════════════════════════════════════════════════════
@@ -623,6 +728,42 @@ variables:
         {{ ns.results | select('eq', true) | list | length > 0 }}
       {% endif %}
     {% endif %}
+
+  # --- Day-of-week + weekend gate ---
+  run_days: !input run_days
+  weekend_mode: !input weekend_mode
+  weekend_days: !input weekend_days
+  weekend_scheduled_time_val: !input weekend_scheduled_time
+
+  today_key: >-
+    {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
+    {{ days[now().weekday()] }}
+
+  trigger_scheduled_time: >-
+    {% if trigger.id | default('') == 'scheduled_weekend' %}
+      {{ weekend_scheduled_time_val | default('01:00:00') }}
+    {% else %}
+      {{ scheduled_time_val | default('23:00:00') }}
+    {% endif %}
+
+  effective_day_key: >-
+    {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
+    {% set sched_ts = today_at(trigger_scheduled_time) %}
+    {% set noon = today_at('12:00:00') %}
+    {% if as_timestamp(sched_ts) < as_timestamp(noon) %}
+      {{ days[(now().weekday() - 1) % 7] }}
+    {% else %}
+      {{ days[now().weekday()] }}
+    {% endif %}
+
+  is_weekend: >-
+    {{ effective_day_key in (weekend_days | default([])) }}
+
+  weekend_profile_active: >-
+    {{ is_weekend and (weekend_mode | default('same_as_weekdays')) == 'use_weekend_profile' }}
+
+  weekend_blocked: >-
+    {{ is_weekend and (weekend_mode | default('same_as_weekdays')) == 'disabled_on_weekends' }}
 
   # --- Device inputs ---
   tv_entity: !input tv_entity
@@ -687,7 +828,26 @@ triggers:
     to: "on"
     id: manual
 
-conditions: []
+  - alias: "Weekend scheduled bedtime trigger"
+    trigger: time
+    at: !input weekend_scheduled_time
+    id: scheduled_weekend
+
+conditions:
+  - condition: template
+    alias: "Allowed on this day (manual trigger bypasses)"
+    value_template: >
+      {% if trigger.id | default('') == 'manual' %}
+        true
+      {% elif weekend_blocked %}
+        false
+      {% elif trigger.id | default('') == 'scheduled_weekend' and not weekend_profile_active %}
+        false
+      {% elif trigger.id | default('') == 'scheduled' and weekend_profile_active %}
+        false
+      {% else %}
+        {{ effective_day_key in (run_days | default([])) }}
+      {% endif %}
 
 # ═══════════════════════════════════════════════════════════════════════
 # Actions
