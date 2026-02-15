@@ -1191,7 +1191,11 @@ actions:
     response_variable: bedtime_response
     data:
       agent_id: "{{ conversation_agent }}"
-      text: "{{ bedtime_prompt_tpl }}"
+      text: >-
+        {{ bedtime_prompt_tpl }}
+        {% if not enable_negotiation or is_preset_mode %}
+        IMPORTANT: Do NOT ask if the user wants more time. Countdown is fixed at {{ default_countdown }} minutes — just announce bedtime.
+        {% endif %}
 
   - alias: "Extract bedtime announcement with defensive fallback"
     variables:
