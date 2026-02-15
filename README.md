@@ -407,7 +407,7 @@ If you recognize your work here and I haven't credited you, please reach out and
 
 ## How It's Built
 
-This entire configuration is **vibe coded** — built through conversational AI sessions with Claude 4.6 running inside a Claude Project with custom instructions, persistent memory, and a full MCP toolchain (see [Development Toolchain](#development-toolchain) above). Claude reads and writes files directly on the HA config via SMB mount, commits changes through git MCP, and validates configurations against the Home Assistant instance in real time.
+This entire configuration is **vibe coded** — built through conversational AI sessions with Claude 4.7 running inside a Claude Project with custom instructions, persistent memory, and a full MCP toolchain (see [Development Toolchain](#development-toolchain) above). Claude reads and writes files directly on the HA config via SMB mount, commits changes through git MCP, and validates configurations against the Home Assistant instance in real time.
 
 The style guide (the *Rules of Acquisition*) exists specifically to keep AI-generated YAML consistent, safe, and debuggable across sessions. The QA audit checklist (`09_qa_audit_checklist.md`) runs automatically during generation and can be triggered manually with commands like `run audit` or `check secrets`. Every file edit — no matter how small — generates a build log for crash recovery.
 
