@@ -15,6 +15,7 @@ Trigger: scheduled time / manual input_boolean
                 │
                 ▼
 ┌─────────────────────────────────┐
+│ Day-of-week gate (run_days)      │──── Wrong day → abort (manual bypasses)
 │ Auto-reset manual trigger        │
 │ Presence gate (ANY/ALL sensors)  │──── Nobody home → abort + cleanup
 │ Initialize countdown helper      │
@@ -127,6 +128,10 @@ Results are assembled into a structured catalog string with genre filtering appl
 
 Before switching content, the blueprint checks if bedtime content is already playing on Kodi. Three detection methods: title contains match string, content ID matches preset, or playing state AND title match. If bedtime content is detected, the blueprint skips content switching — just lowers volume and proceeds. Prevents the annoying case where you've already started your rain sounds playlist and the automation tries to restart it.
 
+### Day-of-Week Gate
+
+The `run_days` input lets you restrict which days of the week the scheduled trigger fires. All seven days are selected by default, so existing instances are unaffected. Manual triggers bypass the gate entirely — if you explicitly toggled the boolean or yelled at Alexa, the routine runs regardless of what day it is. The condition uses a simple `today_key` derived from `now().weekday()` rather than the cross-midnight `effective_day_key` from `proactive_llm_sensors.yaml`, because bedtime fires at a single point in time rather than across a time window.
+
 ### Presence Sensor Gate
 
 Optional gate that checks occupancy/presence/motion sensors before running the routine. Supports ANY (default) or ALL mode with configurable minimum duration. Manual triggers bypass the gate entirely — if you explicitly triggered bedtime, you're clearly home. Scheduled triggers check the gate. Failed gate aborts with cleanup.
@@ -162,6 +167,7 @@ v5.1.1 added `response_type` checking on all LLM response extraction. If the con
 - **TV sleep timer** — Delayed power-off via CEC or custom script after routine completes
 - **Speaker power-cycle reset** — Smart plug reset clears stale audio connections
 - **ElevenLabs voice profile** — Optional `voice_profile` in TTS options (DRY pattern across all speak calls)
+- **Day-of-week gate** — Restrict scheduled triggers to selected days; manual triggers always bypass
 - **Dual trigger** — Scheduled time and/or manual `input_boolean` (auto-resets on use)
 - **Content type auto-detection** — Prevents CHANNEL crash on URI/path content IDs
 - **Response type guard** — Prevents LLM error messages from being spoken as TTS
@@ -202,6 +208,7 @@ v5.1.1 added `response_type` checking on all LLM response extraction. If the con
 | **Presence sensors** | (empty) | Occupancy/presence/motion sensors for gate — empty disables gate |
 | **Minimum presence duration** | 0 min | Consecutive minutes sensor must report occupied |
 | **Require ALL sensors** | false | ALL vs ANY mode for presence gate |
+| **Run on these days** | All 7 days | Day-of-week gate for scheduled trigger — manual bypasses |
 
 ### ② Devices
 
@@ -323,12 +330,15 @@ v5.1.1 added `response_type` checking on all LLM response extraction. If the con
 - In-progress TV shows bypass genre exclusion — you shouldn't stop watching a show mid-season because it has a thriller episode.
 - The voice profile is passed via `options.voice_profile` in `tts.speak` — DRY pattern with `choose` blocks selecting profile vs. default TTS.
 - Media players to stop use pause-then-stop fallback: `media_player.media_pause` first, `media_player.media_stop` as fallback for players where pause fails.
+- The day-of-week condition checks `trigger.id` to bypass for manual triggers. Uses `now().weekday()` mapped to `['mon','tue','wed','thu','fri','sat','sun']` — same pattern as `proactive_llm_sensors.yaml` but without cross-midnight day attribution (not needed for single-fire-time triggers).
 - The manual trigger boolean is auto-reset as the very first action — before any condition can abort — ensuring it's always cleaned up.
 - Bathroom guard has three paths: occupied → wait + grace, recently cleared → wait remaining grace, long-cleared → proceed immediately.
 - The TV sleep timer fires after the entire routine completes (lamp off + cleanup done), meaning total delay = countdown + bathroom guard + sleep timer minutes.
 
 ## Changelog
 
+- **v5.3.0:** Weekday active logic — `run_days` input gates scheduled triggers by day of week. Manual triggers bypass the gate. Ported from `proactive_llm_sensors.yaml`.
+- **v5.2.0:** Sleepy TV — added PVR channel detection method using REST sensor. New input: PVR channel sensor entity. Genres now optional when PVR detection active.
 - **v5.1.2:** Fixed Kodi CHANNEL crash — auto-detect content type from URI pattern
 - **v5.1.1:** Fixed LLM error messages spoken as TTS — added `response_type` guard
 - **v5.1.0:** Optional presence sensor gate — skip routine if nobody home (configurable ANY/ALL, min duration, manual trigger bypass)
