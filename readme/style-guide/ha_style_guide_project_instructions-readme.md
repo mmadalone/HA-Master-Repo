@@ -8,9 +8,9 @@ The style guide governs AI-assisted development of Home Assistant blueprints, au
 
 ## What's Inside
 
-The master index defines three **operational modes** — BUILD, TROUBLESHOOT, and AUDIT — each with its own loading rules, enforcement gates, and token budgets. A task-specific routing table maps every common operation (new blueprint, debug automation, review existing code, QA check) to the exact files and sections the AI should load. The full table of contents catalogues all 15 top-level sections, 128 subsections, 42 anti-patterns, and 8 security checks across the guide.
+The master index defines three **operational modes** — BUILD, TROUBLESHOOT, and AUDIT — each with its own loading rules, enforcement gates, and token budgets. A task-specific routing table maps every common operation (new blueprint, debug automation, review existing code, QA check) to the exact files and sections the AI should load. The full table of contents catalogues all 15 top-level sections, 128 subsections, 43 anti-patterns, and 8 security checks across the guide.
 
-The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.14. Each entry references the build log that produced it, creating a complete audit trail.
+The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.16. Each entry references the build log that produced it, creating a complete audit trail.
 
 ## When to Load
 
@@ -24,7 +24,7 @@ This file's §1 routing table is loaded at the start of every session to determi
 
 ## Key Concepts
 
-**Operational modes** dictate everything. BUILD mode enforces the full ceremony — git versioning, build logs, header image gates, anti-pattern scans. TROUBLESHOOT mode strips that down to just "find and fix the problem." AUDIT mode is read-only with mandatory structured reporting. Mode escalation is one-way: TROUBLESHOOT can escalate to BUILD, but never the reverse.
+**Operational modes** dictate everything. BUILD mode enforces the full ceremony — git versioning, build logs, header image gates (with dynamic premise selection via `IMG_PREMISES`), anti-pattern scans. TROUBLESHOOT mode strips that down to just "find and fix the problem." AUDIT mode is read-only with mandatory structured reporting. Mode escalation is one-way: TROUBLESHOOT can escalate to BUILD, but never the reverse.
 
 **Token budget ceiling** is ~15K per task. The routing table exists specifically to stay under this limit while ensuring no critical rule is missed. Cross-domain tasks load pattern docs sequentially, not simultaneously.
 

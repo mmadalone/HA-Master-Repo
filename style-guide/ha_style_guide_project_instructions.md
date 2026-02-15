@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.15 — 2026-02-15** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.16 — 2026-02-15** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -36,7 +36,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 
 > **🚨 LOG GATES (AP-39):** (a) **BUILD mode:** Every file edit requires a build log in `_build_logs/` **BEFORE the first write**. Compact or full format per §11.8. (b) **AUDIT mode:** Every `sanity check` or audit command (§15.2) requires a log pair (progress + report) per §11.8.2 **BEFORE the first check runs** — unconditional, even with zero findings. (c) **Escalation:** When check findings are approved for fixing, create a build log before the first edit. These are hard gates — not "I'll do it after."
 
-> **🚨 HEADER IMAGE GATE (AP-15) — BUILD mode only:** When building a new blueprint/script OR reviewing one that has no `![` image in its description **or whose referenced image file does not exist on disk** (at `HEADER_IMG` — see Project Instructions for resolved path): **ask the user** about the header image, generate it, present it, and **wait for explicit approval or decline**. Do NOT write any YAML until you get a clear answer. If the user ignores the question, **insist** — repeat the ask. No exceptions. See §11.1 step 4 for defaults (1K, 16:9, Rick & Morty style). Allowed image formats: `.jpeg`, `.jpg`, `.png`, `.webp`.
+> **🚨 HEADER IMAGE GATE (AP-15) — BUILD mode only:** When building a new blueprint/script OR reviewing one that has no `![` image in its description **or whose referenced image file does not exist on disk** (at `HEADER_IMG` — see Project Instructions for resolved path): **ask the user** about the header image, generate it, present it, and **wait for explicit approval or decline**. Do NOT write any YAML until you get a clear answer. If the user ignores the question, **insist** — repeat the ask. No exceptions. See §11.1 step 4 for defaults (1K, 16:9, premise from `IMG_PREMISES`). Allowed image formats: `.jpeg`, `.jpg`, `.png`, `.webp`.
 
 **Mode-specific loading:**
 
@@ -304,6 +304,11 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.16 — 2026-02-15
+- **§11.1 step 4 updated** — Replaced hardcoded "Rick & Morty (Adult Swim cartoon)" image style with dynamic `IMG_PREMISES` selection. AI reads a semicolon-delimited list of episode premise descriptions from Project Instructions, presents numbered options, and waits for user pick before generating. Falls back to generic prompt if `IMG_PREMISES` is missing/empty. Single-entry lists still require confirmation.
+- **Parenthetical references updated** — All "(1K, 16:9, Rick & Morty style)" parentheticals replaced with "(1K, 16:9, premise from `IMG_PREMISES`)" in: master index HEADER IMAGE GATE callout, AP-15 rule #15 prose (§10), and §3.1 blueprint header.
+- Build log: `_build_logs/2026-02-15_img_premises_dynamic_selection_build_log.md`
 
 ### v3.15 — 2026-02-15
 - **AP-42 added** — Blueprint schema key whitelist. Catches `min_version:` or `icon:` placed directly under `blueprint:` instead of nested correctly (under `homeassistant:` for `min_version`, not valid at all for `icon`). Severity: ❌ ERROR. Triggered by an actual AI-generated bug where bare `min_version: 2024.10.0` under `blueprint:` caused `extra keys not allowed` at import.

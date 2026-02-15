@@ -7,7 +7,7 @@ Sections 3 and 4 — Blueprint YAML structure, inputs, variables, templates, and
 ## 3. BLUEPRINT STRUCTURE & YAML FORMATTING
 
 ### 3.1 Blueprint header and description image
-Every blueprint must include a header image in its `description:` field. See §11.1 step 4 for image generation specs (1K, 16:9, Rick & Morty style). Allowed formats: `.jpeg`, `.jpg`, `.png`, `.webp`. Always ask the user for an image — never skip this step.
+Every blueprint must include a header image in its `description:` field. See §11.1 step 4 for image generation specs (1K, 16:9, premise from `IMG_PREMISES`). Allowed formats: `.jpeg`, `.jpg`, `.png`, `.webp`. Always ask the user for an image — never skip this step.
 
 Every blueprint must include:
 ```yaml
