@@ -2,7 +2,7 @@
 
 ![Music Assistant Follow Me](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/music_assistant_follow_me_multi_room_advanced-header.jpeg)
 
-A presence-driven follow-me automation for Music Assistant queues across multiple zones. When you walk into a room, your music follows — transferring the active queue to the speaker in your new location with priority ordering, anti-flicker protection, playback guards, optional TTS announcements, and transfer error recovery.
+A presence-driven follow-me automation for Music Assistant queues across multiple zones. When you walk into a room, your music follows — transferring the active queue to the speaker in your new location with priority ordering, anti-flicker protection, playback guards, multi-person awareness, optional TTS announcements, and transfer error recovery.
 
 ## How It Works
 
@@ -34,6 +34,7 @@ Presence sensor ON (after min hold time)
 │  • Target ≠ source                  │
 │  • Source in allowed list           │
 │  • Source not in excluded list       │
+│  • Source room not still occupied    │
 │  • Priority anchor allows move      │
 │  • Target not already playing       │
 └──────────────┬─────────────────────┘
@@ -73,6 +74,7 @@ Presence sensor ON (after min hold time)
 - **TTS duration filter** — Ignores playback shorter than a configurable threshold (default 20s), preventing short TTS clips from being treated as music sessions. Streams with unknown duration can optionally be included.
 - **Paused music following** — Optionally transfers paused sessions too, keeping them paused on the target player for manual resume.
 - **Target playback protection** — Skips transfer if the target player is already playing, preventing session hijacking.
+- **Source-occupied gate** — Optionally blocks transfers when the source room still has presence, preventing music from being "stolen" from another listener. Combined with target playback protection, this provides natural multi-person coexistence without per-person tracking.
 - **Source whitelists and blacklists** — Restrict which players can act as transfer sources. Useful for excluding TV players or limiting follow-me to specific speakers.
 - **Exclusive room mode** — Optionally stops all non-target players after a successful transfer, ensuring only one room plays at a time.
 - **Pre and post-transfer announcements** — Call external scripts before and/or after the transfer, passing target, source, and TTS speaker as variables. Scripts can use LLM agents for dynamic announcements.
@@ -139,6 +141,7 @@ The four lists must be in the same order. Index 0 in the presence list correspon
 | **Min media duration** | 20s | Ignore playback shorter than this (filters TTS) |
 | **Treat unknown duration as music** | On | Count duration-0 streams as music |
 | **Protect target playback** | On | Skip transfer if target is already playing |
+| **Skip if source occupied** | On | Block transfer when source room still has presence |
 | **Allowed source players** | — | Whitelist of eligible source players |
 | **Excluded source players** | — | Blacklist of players that must never be sources |
 | **Silence other players** | Off | Stop all non-target players after transfer |
