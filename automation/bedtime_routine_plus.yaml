@@ -23,6 +23,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.3.0:** Weekday active logic — run_days input gates scheduled
+    triggers by day of week. Manual triggers bypass the gate. Ported from
+    proactive_llm_sensors.yaml.
+
     - **v5.2.0:** Sleepy TV — added PVR channel detection method using REST sensor.
     New input: PVR channel sensor entity. Genres now optional when PVR detection active.
 
@@ -108,6 +112,40 @@ blueprint:
           default: false
           selector:
             boolean: {}
+
+        run_days:
+          name: Run on these days
+          description: >
+            Days of the week the scheduled trigger is allowed to fire. If
+            today is not selected, the scheduled trigger is silently skipped.
+            Manual triggers bypass this gate — you can always trigger
+            bedtime by hand regardless of day.
+          default:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+            - sat
+            - sun
+          selector:
+            select:
+              options:
+                - label: "Monday"
+                  value: mon
+                - label: "Tuesday"
+                  value: tue
+                - label: "Wednesday"
+                  value: wed
+                - label: "Thursday"
+                  value: thu
+                - label: "Friday"
+                  value: fri
+                - label: "Saturday"
+                  value: sat
+                - label: "Sunday"
+                  value: sun
+              multiple: true
 
     # ===========================================================================
     # ② DEVICES
@@ -810,6 +848,12 @@ variables:
       {% endif %}
     {% endif %}
 
+  # --- Day-of-week gate ---
+  run_days: !input run_days
+  today_key: >-
+    {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
+    {{ days[now().weekday()] }}
+
   # --- Device inputs ---
   tv_entity: !input tv_entity
   tv_off_script: !input tv_off_script
@@ -936,7 +980,15 @@ triggers:
     to: "on"
     id: manual
 
-conditions: []
+conditions:
+  - condition: template
+    alias: "Allowed on this day (manual trigger bypasses)"
+    value_template: >
+      {% if trigger.id | default('') == 'manual' %}
+        true
+      {% else %}
+        {{ today_key in (run_days | default([])) }}
+      {% endif %}
 
 # ═══════════════════════════════════════════════════════════════════════
 # Actions
