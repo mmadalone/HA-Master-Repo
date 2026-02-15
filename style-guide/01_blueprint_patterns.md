@@ -108,6 +108,7 @@ input:
     name: "③ AI conversation"
     icon: mdi:robot
     description: Conversation agent and satellite settings.
+    collapsed: true
     input:
       conversation_agent:
         name: Conversation agent
@@ -120,6 +121,7 @@ input:
     name: "④ Cleanup & timing"
     icon: mdi:broom
     description: Post-flow cleanup and cooldown settings.
+    collapsed: true
     input:
       post_conversation_delay:
         name: Post-conversation delay
@@ -139,7 +141,9 @@ input:
 - Each section gets an appropriate `mdi:` icon
 - Each section gets a short `description` explaining what it configures
 - Inputs within a section are ordered logically (most important first)
-- If a blueprint only has 3-4 inputs total, sections are optional but still preferred
+- **No exceptions.** Every blueprint uses collapsible sections regardless of input count. Even a 2-input blueprint gets a section wrapper — library-wide consistency is worth more than saving three lines of YAML.
+- **Default collapse state (MANDATORY):** Sections ① and ② remain expanded by default (omit the `collapsed:` key — HA defaults to expanded). Section ③ and all subsequent sections MUST include `collapsed: true`. Rationale: primary configuration (triggers, core entities) should be immediately visible; advanced and optional settings stay tucked away until the user needs them.
+- The `collapsed:` key is part of the collapsible input sections feature introduced in HA 2024.6.0. Any blueprint using `collapsed: true` inherits the `min_version: 2024.6.0` requirement (see §3.1 threshold table)
 
 ### 3.3 Input definitions
 - Every input MUST have `name` and `description`.

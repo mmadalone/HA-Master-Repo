@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.16 — 2026-02-15** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.17 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -304,6 +304,10 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.17 — 2026-02-16
+- **§3.2 hardened** — Collapsible input sections: removed "optional for 3-4 inputs" exception. All blueprints use collapsible sections, no exceptions. Added MANDATORY `collapsed: true` rule for section ③ and beyond (①–② remain expanded). YAML example updated with `collapsed: true` on ③ and ④. Cross-referenced `min_version: 2024.6.0` requirement.
+- Build log: `_build_logs/2026-02-16_s3.2_collapsible_sections_hardening_build_log.md`
 
 ### v3.16 — 2026-02-15
 - **§11.1 step 4 updated** — Replaced hardcoded "Rick & Morty (Adult Swim cartoon)" image style with dynamic `IMG_PREMISES` selection. AI reads a semicolon-delimited list of episode premise descriptions from Project Instructions, presents numbered options, and waits for user pick before generating. Falls back to generic prompt if `IMG_PREMISES` is missing/empty. Single-entry lists still require confirmation.
