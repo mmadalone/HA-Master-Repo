@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.21 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.22 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~110K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -93,12 +93,12 @@ The section numbers are preserved across files for cross-referencing.
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.0K | Agent prompt structure, separation from blueprints, naming conventions |
 | [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.1K | Device config structure, packages, secrets, wake words, naming |
 | [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.1K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
-| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~19.6K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), audit resilience (§11.15), crash recovery |
+| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~20.4K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), audit resilience (§11.15), crash recovery |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.9K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
 | [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~12.7K | QA audit checks, trigger rules, cross-reference index, audit tiers (§15.4), and user commands for guide maintenance |
 
-*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9). Total across all files: ~110K.*
+*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9). Total across all files: ~111K.*
 
 > **Note on section numbering:** Section numbers are preserved from the original unified guide and are non-sequential across files. This is intentional — it allows stable cross-references (e.g., "see §5.1") regardless of how files are reorganized.
 
@@ -248,7 +248,7 @@ The section numbers are preserved across files for cross-referencing.
   - §11.12 — Post-generation validation — trust but verify
   - §11.13 — Large file editing (1000+ lines) — surgical read/edit/verify workflow (AP-40)
   - §11.14 — README generation workflow (MANDATORY for blueprints and scripts)
-  - §11.15 — Audit resilience — sectional chunking & checkpointing (§11.15.1 four stages, §11.15.2 audit checkpointing)
+  - §11.15 — Audit resilience — sectional chunking & checkpointing (§11.15.1 four stages, §11.15.2 audit checkpointing with per-check granularity, §11.15.3 pre-flight token budget estimation, §11.15.4 stage splitting protocol)
 
 ### [Troubleshooting & Debugging](07_troubleshooting.md)
   - §13.1 — Automation traces — your first stop
@@ -306,6 +306,18 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.22 — 2026-02-16
+- **§11.15 — Audit resilience v2: four crash mitigation enhancements.** Addresses recurring mid-audit crashes during full style guide deep-pass audits.
+  - **§11.15.2 enhanced** — Per-check granularity. `[CHECK]` result lines now nest under `[STAGE]` markers, written immediately as each check completes. Recovery protocol updated to resume from last completed check within a stage (was: re-run entire stage). Crash now loses at most one check's work, not an entire stage.
+  - **§11.15.3 added** — Pre-flight token budget estimation. Mandatory sizing step before deep-pass Stage 1: measures target file tokens + style guide section load + overhead, compares against capacity. Logs `[ESTIMATE]` line with `adequate` / `TIGHT` / `INSUFFICIENT` status. Catches overload before it crashes.
+  - **§11.15.4 added** — Stage splitting protocol. Sub-stage decomposition (`2a`, `2b`, etc.) for stages flagged as `TIGHT` or `INSUFFICIENT`. Suggested split points table for all four stages. Sub-stages follow same checkpoint lifecycle as full stages.
+  - **§11.8 Decisions format enhanced** — Now captures rejected alternatives with rationale (e.g., `rejected room-assist — too slow for cross-midnight transitions`). Prevents recovery sessions from re-proposing dismissed approaches.
+  - **§11.8.2 report log enhanced** — Added `[INTERPRETATION]` line format for judgment calls where severity was ambiguous or context-dependent. Survives crashes, prevents second-guessing of careful analysis.
+- **Dropped proposals:** Heuristic guardrails (redundant with §11.15.3 estimation) and turn-based checkpoint trigger (redundant with §11.15.2 per-check logging).
+- **Doc table updated** — `06_anti_patterns_and_workflow.md` ~19.6K → ~20.4K. Total ~110K → ~111K.
+- **TOC updated** — §11.15 parenthetical expanded with §11.15.3 and §11.15.4.
+- Build log: `_build_logs/2026-02-16_audit_resilience_v2_build_log.md`
 
 ### v3.21 — 2026-02-16
 - **AP-43 + `## Edit Log` section added — log-after-work enforcement.** Added `## Edit Log` section to the §11.8 build log schema template (between Files Modified and Current State) with per-edit timestamped lines. Added AP-43 (⚠️ WARNING) to the scan table flagging build logs not updated between consecutive edits ("stale log" anti-pattern). Added Rule #43 in Development Environment numbered rules. Updated §11.0 log-after-work invariant to reference the Edit Log section. Addresses the failure mode observed during v3.20 where 7 edits landed without a single log update.

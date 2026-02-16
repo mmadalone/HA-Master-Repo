@@ -388,10 +388,13 @@ Rick persona, MA integration for lullaby playback, and snooze support via mobile
 notification actions.
 
 ## Decisions
-<!-- One line per decision. Format: topic: choice (rationale if non-obvious) -->
-- Presence detection: priority-ordered FP2 sensors, fallback to workshop
+<!-- One line per decision. Format: topic: choice (rejected alternative — reason)
+     The rejected alternative matters — without it, a recovery session may re-propose
+     the exact approach that was already discussed and dismissed. For straightforward
+     choices where no alternatives were considered, the parenthetical is optional. -->
+- Presence detection: priority-ordered FP2 sensors, fallback to workshop (rejected room-assist — too slow for cross-midnight transitions)
 - Mode: restart (new trigger replaces in-progress)
-- TTS engine: ElevenLabs via tts.speak, post-TTS delay 5s
+- TTS engine: ElevenLabs via tts.speak, post-TTS delay 5s (rejected Google Cloud TTS — latency too high for conversational flow)
 - Agent: Rick - Extended - Bedtime (separate prompt file)
 
 ## Planned Work
@@ -607,12 +610,16 @@ Status markers:
 [SESSION] YYYY-MM-DD | type: sanity | scope: style guide v3.14 | status: complete
 [FINDING] VER-1 | ⚠️ WARNING | 04_esphome_patterns.md | Dual wake word version claim unverified
 [FINDING] ARCH-4 | ⚠️ WARNING | master index | Section count stale (14→15)
+[INTERPRETATION] CQ-7 on 05_music_assistant_patterns.md:L142 — arguably guarded by the if block on L138; marked WARNING not ERROR, user should verify intent
+[INTERPRETATION] ARCH-6 on master index — token estimates within 10% drift, borderline for AIR-6 threshold; flagged INFO not WARNING
 [SUMMARY] 8 checks executed | 6 PASS | 2 FAIL (4 findings) | 0 SKIP
 [ACTION] Findings ready for user review. Fixes require BUILD-mode escalation with build log.
 ```
 
 Finding format: `[FINDING] CHECK-ID | severity | file | description`
 - Uses `[FINDING]` to distinguish QA check results from anti-pattern scan `[ISSUE]` entries (§11.8.1).
+
+**Interpretation notes** (`[INTERPRETATION]`): Record judgment calls where the auditor had to decide between severities, where a finding was borderline, or where context made a check ambiguous. These survive crashes and prevent recovery sessions from second-guessing findings that already required careful analysis. Not every finding needs an interpretation note — only the non-obvious ones where a cold-start session might reasonably reach a different conclusion.
 
 **The escalation chain:**
 When check findings are approved for fixing, that's a BUILD-mode escalation. The escalation creates a build log (§11.8) BEFORE the first edit. The build log's `Decisions` section references the report log by filename. This creates a complete paper trail: progress → report → build log → git commit.
@@ -890,23 +897,37 @@ Focus: Are integration-specific patterns complete? Are maintenance items current
 
 Every deep-pass audit writes a checkpoint file that tracks per-stage progress. This is the crash recovery artifact — if the session dies between stages, the next session reads the checkpoint, skips completed stages, and resumes at the next one.
 
-**Checkpoint format** — extends the §11.8.2 progress log with stage markers:
+**Checkpoint format** — extends the §11.8.2 progress log with stage markers and per-check results:
 
 ```
 [SESSION] YYYY-MM-DD | type: deep-pass audit | scope: <description>
 [STAGE] 1 — Security & Versions | STATUS: COMPLETE | findings: 2
-[STAGE] 2 — Code Quality & Performance | STATUS: COMPLETE | findings: 5
-[STAGE] 3 — AI-Readability & Architecture | STATUS: IN_PROGRESS | findings: 1
+  [CHECK] SEC-1 | PASS | 0 findings
+  [CHECK] SEC-2 | PASS | 0 findings
+  [CHECK] SEC-3 | FAIL | 1 finding
+  [CHECK] VER-1 | FAIL | 1 finding
+  [CHECK] VER-2 | PASS | 0 findings
+  [CHECK] VER-3 | PASS | 0 findings
+[STAGE] 2 — Code Quality & Performance | STATUS: IN_PROGRESS | findings: 3
+  [CHECK] CQ-1 | PASS | 0 findings
+  [CHECK] CQ-2 | PASS | 0 findings
+  [CHECK] CQ-3 | FAIL | 2 findings
+  [CHECK] CQ-4 | PASS | 0 findings
+  [CHECK] CQ-5 | FAIL | 1 finding
+  [CHECK] CQ-6 | IN_PROGRESS
+[STAGE] 3 — AI-Readability & Architecture | STATUS: PENDING
 [STAGE] 4 — Integration, Zones & Maintenance | STATUS: PENDING
 ```
 
+**Per-check result lines** nest under their parent `[STAGE]` marker. Each `[CHECK]` line records the check ID, result (`PASS`, `FAIL`, `IN_PROGRESS`, `SKIP`), and finding count. Write each `[CHECK]` line to the progress log *immediately* after completing that check — not after the full stage finishes. This is the per-check granularity that makes mid-stage crash recovery possible.
+
 Stage status markers:
 - `COMPLETE` — all checks in the stage executed, findings logged. Safe to skip on resume.
-- `IN_PROGRESS` — stage started but not finished. **This is the crash point.** On resume, re-run this entire stage from the top — partial stages can't be trusted.
+- `IN_PROGRESS` — stage started but not finished. **This is the crash point.** On resume, read the `[CHECK]` lines to find the last completed check, then resume from the next check in the roster — don't re-run checks that already have results.
 - `PENDING` — not yet started.
 - `SKIP` — intentionally skipped with reason (e.g., `SKIP: no blueprint files in scope`).
 
-**The `IN_PROGRESS` → `COMPLETE` transition is critical.** Write `IN_PROGRESS` *before* starting a stage. Update to `COMPLETE` only *after* all findings from that stage are logged in the report. If the session dies between those two states, the resume session knows exactly which stage was interrupted.
+**The `IN_PROGRESS` → `COMPLETE` transition is critical.** Write `IN_PROGRESS` *before* starting a stage. Write each `[CHECK]` result as it completes. Update the stage to `COMPLETE` only *after* every check in the roster has a result line. If the session dies mid-stage, the resume session reads the `[CHECK]` lines to know exactly where to pick up — no wasted re-work on checks that already passed.
 
 **Checkpoint file naming:** Same as §11.8.2 progress logs — `YYYY-MM-DD_<scope>_audit_progress.log`. The stage markers are additions to the existing format, not a replacement.
 
@@ -921,11 +942,13 @@ Stage status markers:
 
 1. Read the checkpoint file's `[STAGE]` entries.
 2. Skip all `COMPLETE` stages — their findings are already in the report.
-3. Find the `IN_PROGRESS` stage — re-run it from the top.
-4. Continue with `PENDING` stages in order.
-5. Load only the style guide sections listed for the current stage (§11.15.1).
+3. Find the `IN_PROGRESS` stage. Read its `[CHECK]` lines to identify the last completed check.
+4. Resume from the next check in that stage's roster (§11.15.1). Do not re-run checks that already have `PASS` or `FAIL` results — their findings are already in the report log.
+5. If no `[CHECK]` lines exist under the `IN_PROGRESS` stage (crash happened before the first check completed), re-run the entire stage from the top.
+6. Continue with `PENDING` stages in order.
+7. Load only the style guide sections listed for the current stage (§11.15.1).
 
-This means a crash mid-audit loses at most one stage's worth of work — not the entire audit.
+This means a crash mid-stage loses at most one check's worth of work — not the entire stage, and certainly not the entire audit.
 
 **Relationship to existing logging:**
 - §11.8.1 (audit logs) defines the structured markdown format for multi-file blueprint sweeps. Still valid for that use case.
@@ -935,3 +958,68 @@ This means a crash mid-audit loses at most one stage's worth of work — not the
 All three mechanisms interlock: tiers decide *how much* work. Chunking decides *how* to split the work. Checkpointing decides *how to survive* if it goes sideways.
 
 **Cross-references:** §15.4 (audit tiers — tier selection rules), §11.8.1 (audit log format), §11.8.2 (log pair requirements), §1.9 (token budget — why loading everything at once is a problem).
+
+#### 11.15.3 Pre-flight token budget estimation
+
+Before committing to an audit strategy, run a sizing step to catch overload before it happens. This slots between tier selection (§15.4) and Stage 1 kickoff — one turn of estimation saves multiple crashed sessions.
+
+**Procedure:**
+
+1. **Measure the target.** Count lines in the target file(s). Estimate tokens using the rough heuristic: 1 line ≈ 10–15 tokens for markdown, 8–12 for YAML. For files already measured in §1.9, use those values directly.
+2. **Sum the style guide load.** For each stage in §11.15.1, add the token cost of the style guide sections it loads. Use the per-file token table in §1.9.
+3. **Add overhead.** Budget ~2K tokens for accumulated findings (grows with finding count — re-estimate after heavy stages). Budget ~3K for conversation history and tool call overhead.
+4. **Compare against capacity.** If the estimated total for any single stage exceeds ~60% of comfortable working context (~25K tokens out of ~40K usable), that stage needs splitting (§11.15.4).
+
+**Log the estimate** in the progress file before Stage 1 begins:
+
+```
+[ESTIMATE] target: ~18K tokens (06_anti_patterns_and_workflow.md, 698 lines) | heaviest stage: S2 (~12K guide + ~18K target) | headroom: TIGHT — consider splitting S2
+```
+
+or:
+
+```
+[ESTIMATE] target: ~6K tokens (bedtime_routine.yaml, 280 lines) | heaviest stage: S2 (~12K guide + ~6K target) | headroom: adequate
+```
+
+**Estimation status values:**
+- `adequate` — all stages fit comfortably. Proceed normally.
+- `TIGHT` — one or more stages are borderline. Proceed with caution; if findings accumulate rapidly, consider flushing to disk mid-stage and splitting on the next stage.
+- `INSUFFICIENT` — one or more stages clearly exceed capacity. Mandatory stage splitting (§11.15.4) before proceeding. Log which stage(s) need splitting and the proposed sub-stage breakdown.
+
+**When the target IS the style guide:** Full-guide audits are the highest-risk case because the target files alone total ~110K tokens. For these audits, never load a target file and its style guide reference sections simultaneously. Instead, load the target file section-by-section using line-range reads (§11.13) and compare against the relevant style guide section. This is slower but survivable.
+
+**This step is mandatory for deep-pass audits (§15.4) and recommended for any audit spanning more than 3 files.** Quick-pass audits on single files can skip it — they're small enough to eyeball.
+
+#### 11.15.4 Stage splitting protocol (sub-stage decomposition)
+
+When pre-flight estimation (§11.15.3) flags a stage as `TIGHT` or `INSUFFICIENT`, or when a stage is clearly too heavy for the target scope, split it into sub-stages. This is not a routine step — it's an escape valve for cases where the standard four-stage structure doesn't fit.
+
+**Sub-stage naming:** Any stage can decompose into sub-stages labeled with letter suffixes: `2a`, `2b`, etc. Each sub-stage gets its own `[STAGE]` marker in the checkpoint:
+
+```
+[STAGE] 2a — Code Quality (CQ-1 through CQ-5) | STATUS: COMPLETE | findings: 2
+[STAGE] 2b — Code Quality (CQ-6 through CQ-10) + PERF-1 | STATUS: IN_PROGRESS | findings: 1
+```
+
+Sub-stages follow the same lifecycle as full stages: `PENDING` → `IN_PROGRESS` → `COMPLETE`, with per-check `[CHECK]` lines (§11.15.2) nested under each. The `IN_PROGRESS` → `COMPLETE` transition and recovery rules apply identically.
+
+**Constraint: sub-stages within a parent stage execute sequentially and cannot be reordered.** Later checks may depend on context or findings from earlier ones (e.g., CQ-7 template safety findings inform CQ-9 availability check analysis). Reordering risks missed dependencies.
+
+**Suggested split points by stage:**
+
+| Stage | Natural seam | Sub-stage A | Sub-stage B | Notes |
+|-------|-------------|-------------|-------------|-------|
+| **S1** | After SEC checks | SEC-1, SEC-2, SEC-3 | VER-1, VER-2, VER-3 | Rarely needs splitting — S1 is lightweight |
+| **S2** | After CQ-5 | CQ-1 through CQ-5 (structure + syntax) | CQ-6 through CQ-10 + PERF-1 (templates + performance) | Most common split — S2 is the heaviest stage |
+| **S3** | After AIR checks | AIR-1 through AIR-7 | ARCH-1 through ARCH-6 | Split when the master index is large enough to warrant separate loading |
+| **S4** | By integration domain | INT checks for loaded domain(s) | ZONE + MAINT + BP checks | Split when multiple integration docs are in scope simultaneously |
+
+These are *suggested* seams, not mandatory split points. If the estimation shows a different boundary makes more sense for a specific target, split there instead. The only rule is: each sub-stage must load a coherent subset of style guide sections, and the check roster must be contiguous within the stage's original ordering.
+
+**When to split vs. when to proceed with caution:**
+- `INSUFFICIENT` → mandatory split before proceeding. Log the sub-stage breakdown in the progress file.
+- `TIGHT` → proceed, but monitor. If findings accumulate rapidly (10+ findings in a single stage), flush findings to the report log and consider splitting the *next* heavy stage preemptively.
+- `adequate` → no split needed. Don't over-engineer.
+
+**Cross-references:** §11.15.1 (stage definitions — check rosters and guide section mappings), §11.15.2 (checkpoint format — sub-stages use the same markers), §11.15.3 (pre-flight estimation — triggers splitting decisions), §1.9 (token budget — capacity constraints that motivate splitting).

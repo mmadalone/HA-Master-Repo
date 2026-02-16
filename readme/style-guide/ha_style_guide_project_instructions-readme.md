@@ -10,7 +10,7 @@ The style guide governs AI-assisted development of Home Assistant blueprints, au
 
 The master index defines three **operational modes** — BUILD, TROUBLESHOOT, and AUDIT — each with its own loading rules, enforcement gates, and token budgets. A task-specific routing table maps every common operation (new blueprint, debug automation, review existing code, QA check) to the exact files and sections the AI should load. The full table of contents catalogues all 15 top-level sections, 128 subsections, 43 anti-patterns, and 8 security checks across the guide.
 
-The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.19. Each entry references the build log that produced it, creating a complete audit trail.
+The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.21. Each entry references the build log that produced it, creating a complete audit trail.
 
 ## When to Load
 
@@ -28,7 +28,7 @@ This file's §1 routing table is loaded at the start of every session to determi
 
 **Token budget ceiling** is ~15K per task. The routing table exists specifically to stay under this limit while ensuring no critical rule is missed. Cross-domain tasks load pattern docs sequentially, not simultaneously.
 
-**Log gates** (AP-39) are enforced at three points: BUILD-mode file edits, AUDIT-mode check commands, and BUILD escalation from audit findings. All are hard gates — the log must exist before the first write or check, and must be updated after every step (the log-before-work and log-after-work invariants).
+**Log gates** (AP-39) are enforced at three points: BUILD-mode file edits, AUDIT-mode check commands, and BUILD escalation from audit findings. All are hard gates — the log must exist before the first write or check, using the full build log schema (no compact alternative), and must be updated after every step via the `## Edit Log` section (the log-before-work and log-after-work invariants). AP-43 flags stale logs that weren't updated between consecutive edits.
 
 ## Related Files
 
