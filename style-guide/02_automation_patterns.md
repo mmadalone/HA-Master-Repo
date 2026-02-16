@@ -121,6 +121,8 @@ These two are NOT interchangeable. The difference matters when refactoring:
 
 > 📋 **QA Check AIR-1:** Replace vague guidance ("use good judgment") with concrete thresholds and ranges. See `09_qa_audit_checklist.md`.
 
+> 📋 **QA Check CQ-7:** Every Jinja2 template must handle missing/unavailable entities — guard `states()` with `| default()` and check for `unavailable`/`unknown`. See `09_qa_audit_checklist.md`.
+
 ### 5.2 Error handling — non-critical action failures
 For actions that might fail but shouldn't kill the entire automation (notifications to flaky services, TTS to a speaker that might be offline, API calls to external services), use `continue_on_error: true`:
 
@@ -258,6 +260,8 @@ actions:
 - Use `choose` (not `if/then/elif`) when routing between 3+ trigger paths — it's more readable in traces.
 - Multiple trigger IDs can match the same `choose` branch using a list: `id: [motion_cleared, scheduled_off]`.
 
+> 📋 **QA Check PERF-1:** Flag `platform: state` without `entity_id:` and `time_pattern` with intervals under 5 seconds — both cause unnecessary event bus load. See `09_qa_audit_checklist.md`.
+
 ### 5.7 Order of operations
 When an automation involves both waiting for conditions and preparing devices:
 1. Wait for the triggering condition first (e.g., sensor detection)
@@ -352,6 +356,8 @@ target_labels:
 ```
 
 **Best practice:** When building automations that control "a group of devices", default to area or label targeting over entity lists. Add new devices to the appropriate area/label in HA — the automation picks them up automatically with zero config changes.
+
+> 📋 **QA Check CQ-9:** Actions targeting entities from blueprint inputs or network-dependent services must include availability guards before use. See `09_qa_audit_checklist.md`.
 
 **`expand()` for template-based area/label operations:**
 
@@ -494,3 +500,5 @@ Test procedure:
 4. ✅ PASS: End state is identical to step 2. No extra side effects.
 5. ❌ FAIL: Something changed — find the non-idempotent action and guard it.
 ```
+
+> 📋 **QA Check CQ-8:** Flag any use of `toggle`, `increment`, or `decrement` without explicit justification — automations must be safe to fire twice in rapid succession. See `09_qa_audit_checklist.md`.

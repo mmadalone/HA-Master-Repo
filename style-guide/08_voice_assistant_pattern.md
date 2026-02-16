@@ -458,6 +458,8 @@ active_target: >-
 
 Mode is `parallel` with `max_exceeded: silent` — multiple commands can arrive in quick succession.
 
+> 📋 **QA Check CQ-10:** Multi-step flows (LLM → TTS → speaker, presence → music → volume duck) should include observability hooks on failure paths. See `09_qa_audit_checklist.md`.
+
 ---
 
 ### 14.6 Layer 5 — Tool scripts (thin wrappers)
@@ -554,6 +556,8 @@ Alexa can't call MA services directly. The bridge pattern:
 | `assist_satellite.announce` | One-shot to Voice PE satellites | Auto-ducks (satellite enters "responding" state) | No |
 | `assist_satellite.start_conversation` | Interactive multi-turn dialog | Auto-ducks via pipeline | Yes |
 | `assist_satellite.ask_question` | Structured Q&A with sentence matching | Auto-ducks via pipeline | Yes (structured answers + slot extraction) |
+
+> 📋 **QA Check CQ-7:** TTS message templates and conversation response extraction must guard against `unavailable`/`unknown`/`None` — use `| default()` and multi-level `is defined` checks. See `09_qa_audit_checklist.md`.
 
 ### `ask_question` — Full Capabilities (HA 2025.7+)
 

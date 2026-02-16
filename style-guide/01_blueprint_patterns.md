@@ -49,6 +49,8 @@ Common mistakes: `min_version:` and `icon:` placed directly under `blueprint:` i
 
 > 📋 **QA Check VER-2:** Blueprint examples must include `min_version` when using modern syntax. See `09_qa_audit_checklist.md`.
 
+> 📋 **QA Check BP-1:** Every blueprint must have complete metadata — name, description, domain, min_version, and input name/description fields. See `09_qa_audit_checklist.md`.
+
 **Key `min_version` thresholds:**
 
 | Version | Feature introduced |
@@ -248,6 +250,10 @@ light_target:
 
 - **Never hardcode entity IDs in the action section.** If an action references an entity, it must come from an `!input` reference or a variable derived from one.
 
+> 📋 **QA Check [SEC-3]:** Blueprint inputs with `text` or `template` selectors that flow into Jinja templates must be constrained and validated. See `09_qa_audit_checklist.md`.
+
+> 📋 **QA Check BP-2:** Every input must use the most appropriate selector type — don't use `text:` where `entity:`, `select:`, `number:`, or `time:` would constrain input. See `09_qa_audit_checklist.md`.
+
 ### 3.4 Variables block
 Declare a top-level `variables:` block immediately after `condition:` to resolve `!input` references into template-usable variables:
 
@@ -435,6 +441,8 @@ The decision matrix: **optional inputs / runtime state** → use `| default(fall
 - In `wait_for_trigger` templates, guard against the entity not existing at all.
 - List operations (`[0]`, `| first`, `| last`) MUST guard against empty lists.
 - Variables used in `repeat` loops that need current state MUST be re-read inside the loop (see §3.4 caveat) or use native conditions that HA re-evaluates each iteration.
+
+> 📋 **QA Check BP-3:** Mentally instantiate every blueprint with edge-case inputs (all defaults, empty lists, min/max values, unavailable entities) and verify it doesn't break. See `09_qa_audit_checklist.md`.
 
 ### 3.7 YAML formatting
 - 2-space indentation throughout.

@@ -79,6 +79,10 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 
 > 📋 **QA Check AIR-4:** Every anti-pattern ❌ example must show the fix alongside the bad example. See `09_qa_audit_checklist.md`.
 
+> 📋 **QA Check AIR-7:** After editing anti-patterns, verify guidance doesn't contradict recommended patterns in other files. See `09_qa_audit_checklist.md`.
+
+> 📋 **QA Check PERF-1:** AP-04 and trigger-related anti-patterns should cross-check against resource-aware trigger rules — unfiltered `state` triggers and aggressive `time_pattern` intervals waste event bus resources. See `09_qa_audit_checklist.md`.
+
 ### 10.5 Security review checklist (AI self-check before presenting code)
 
 This extends the scan tables above. Before presenting generated code to the user, verify each item. This is not optional — AI doesn't naturally think about security, and HA configs run on the user's home network controlling physical devices.

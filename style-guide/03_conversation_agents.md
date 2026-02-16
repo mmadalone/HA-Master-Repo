@@ -45,6 +45,8 @@ extra_system_prompt: >-
   response_variable: agent_response
 ```
 
+> 📋 **QA Check CQ-10:** Multi-step flows involving LLM calls, TTS, or Music Assistant should include observability hooks (logbook/notification on failure paths). See `09_qa_audit_checklist.md`.
+
 2. **`assist_satellite.start_conversation`** (HA 2025.4+) — the preferred action for **proactive voice conversations** on Voice PE satellites. This wakes the satellite, speaks a TTS prompt, and listens for a reply — all routed through the satellite's assigned pipeline and conversation agent.
 
 ```yaml

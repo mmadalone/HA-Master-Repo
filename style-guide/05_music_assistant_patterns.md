@@ -51,6 +51,8 @@ ma_players:
       multiple: true
 ```
 
+> 📋 **QA Check CQ-9:** Actions targeting media players from blueprint inputs must include availability guards (`state != unavailable`) before use. See `09_qa_audit_checklist.md`.
+
 > **ESPHome player reliability caveat:** MA players backed by ESPHome devices (including Voice Preview Edition satellites) can exhibit playback reliability issues — dropped streams, delayed responses to play/pause commands, and occasional failure to resume after TTS interruption. These issues stem from the ESPHome media player component's limited buffering and network handling compared to native targets like Sonos, Chromecast, or DLNA receivers. For critical automations (alarms, announcements), build in retry logic or verify playback state after issuing commands. For music-follow-me patterns (§7.6), prefer non-ESPHome targets when available.
 
 ### 7.2 `music_assistant.play_media` — not `media_player.play_media`
