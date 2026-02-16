@@ -1027,3 +1027,79 @@ grep -n 'time_pattern' *.md *.yaml -A3 | grep -E 'seconds:.*(/1"|/1$|\*)'
 # CQ-10: Find multi-step flows without logging (rough — look for conversation.process or tts without logbook)
 grep -l 'conversation.process\|tts.speak\|music_assistant' *.md *.yaml | xargs grep -L 'logbook.log\|persistent_notification'
 ```
+
+---
+
+## 15.4 — Audit Tiers
+
+Not every audit needs the full proctological exam. Loading all checks, all style guide sections, and the full target file in one pass is how audits crash mid-run — context load exceeds capacity and the AI starts dropping checks, forgetting earlier findings, or hallucinating passes on things it never actually verified.
+
+Two tiers. Pick one based on the situation.
+
+### Quick-Pass Tier
+
+**Purpose:** Catch the stuff that actually breaks things. Template safety, naming violations, broken references, security holes, stale token counts. Fast, cheap, high-impact.
+
+**When to use:**
+- Routine reviews of a single file
+- Post-edit sanity checks (not the formal `sanity check` command — that has its own check set)
+- Quick sweeps when the user says "give it a once-over"
+- Default tier when the user says "audit this" without specifying depth
+
+**Check roster (10 checks):**
+
+| Check ID | Category | What it catches |
+|----------|----------|-----------------|
+| SEC-1 | Security | Inline secrets — hardcoded API keys, tokens, passwords |
+| SEC-3 | Security | Template injection via blueprint inputs |
+| CQ-5 | Code Quality | Invalid YAML examples — syntax errors, invented domains |
+| CQ-6 | Code Quality | Legacy syntax in examples (`service:` instead of `action:`, etc.) |
+| CQ-7 | Code Quality | Unguarded Jinja templates — missing `| default()`, no availability checks |
+| VER-1 | Version | Unverified version claims (skip web verification — flag unverifiable claims only) |
+| VER-3 | Version | Deprecation entries missing version/removal/migration info |
+| ARCH-4 | Architecture | Broken cross-references — dangling §X.X, missing AP-codes, dead file refs |
+| PERF-1 | Performance | Resource-hungry triggers — unfiltered state triggers, aggressive time patterns |
+| AIR-6 | AI-Readability | Token count drift — estimates off by >15% from measured values |
+
+**Context budget:** ~5–7K tokens of style guide. Load §10 scan table + §10.5 security checklist + the target file. No need for full pattern docs.
+
+**Expected duration:** Single file: 1 turn. Multi-file: 1 turn per file, sequential.
+
+### Deep-Pass Tier
+
+**Purpose:** Full battery. Every check in §15.1, no shortcuts. This is the pre-publish review, the quarterly maintenance sweep, the "I haven't looked at this in a month and need to know it's solid" pass.
+
+**When to use:**
+- User explicitly says "deep audit", "full audit", or "deep-pass"
+- Pre-publish reviews before syncing to git
+- Quarterly maintenance sweeps (MAINT-1 through MAINT-5)
+- After major HA version upgrades
+- After significant style guide restructuring
+
+**Check roster:** All checks in §15.1 — SEC-1 through SEC-3, VER-1 through VER-3, AIR-1 through AIR-7, CQ-1 through CQ-10, ARCH-1 through ARCH-6, INT-1 through INT-4, ZONE-1 through ZONE-2, MAINT-1 through MAINT-5, BP-1 through BP-3, PERF-1. No exclusions.
+
+**Context budget:** ~12–15K tokens of style guide, loaded in stages per §11.15 (sectional chunking). Never load all at once.
+
+**MANDATORY: Deep-pass audits MUST use sectional chunking (§11.15).** Running all checks in a single pass is what causes crashes. Each stage loads only the style guide sections relevant to that stage's checks, executes those checks, writes results to the audit checkpoint, then unloads before the next stage. See §11.15 for the stage definitions and execution protocol.
+
+**Expected duration:** Single file: 3–4 turns (one per stage). Full guide sweep: 4–8 turns depending on finding density.
+
+### Tier Selection Rules
+
+| Situation | Tier | Rationale |
+|-----------|------|-----------|
+| `run audit` (no qualifier) | Deep-pass | The user asked for a full audit — give them one |
+| `run audit on <file>` | Quick-pass | Single-file scope suggests a targeted check |
+| `run audit on <file> deep` | Deep-pass | User explicitly requested depth |
+| `sanity check` | Neither — uses its own check set (§15.2) | Sanity check is a defined command with a fixed roster |
+| `check <CHECK-ID>` | Neither — runs one specific check | Single-check commands bypass tier selection |
+| "Review this" / "look at this" | Quick-pass | Casual language → lightweight response |
+| "Full review" / "thorough review" | Deep-pass | Explicit depth request |
+| Post-edit verification (§11.1 step 6) | Quick-pass | Just checking the work, not auditing the universe |
+| MAINT-x sweep | Deep-pass (MAINT checks only) | Maintenance sweeps are inherently comprehensive |
+
+**Escalation:** A quick-pass that uncovers 3+ ERROR-severity findings automatically suggests escalation to deep-pass: *"I found 3 errors on quick-pass — want me to run a deep-pass to make sure there isn't more hiding underneath?"* The user decides.
+
+**Log requirements:** Both tiers follow the same AP-39 log pair mandate (§11.8.2). Quick-pass gets a log pair. Deep-pass gets a log pair. No exceptions.
+
+**Cross-references:** §11.15 (sectional chunking — how deep-pass stages are executed), §11.8.2 (log pair requirements), §15.2 (command table — tier selection per command).

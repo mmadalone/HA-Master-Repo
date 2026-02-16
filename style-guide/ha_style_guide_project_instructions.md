@@ -1,8 +1,8 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.17 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.19 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
 
-> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~93K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
+> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~110K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
 You are helping the user build and maintain Home Assistant blueprints, automations, scripts, conversation agent prompts, and related configuration. You have direct filesystem access to their HA config via SMB mount.
 
@@ -20,7 +20,7 @@ Every task falls into one of three modes. The mode determines which style guide 
 |------|----------------|------------|-----------------|-------------|
 | **🔨 BUILD** | "create", "build", "add X to Y", "implement", "write", "new blueprint/script/automation" | Core Philosophy (§1) + relevant pattern doc(s) + Anti-Patterns & Workflow (§10, §11) | Everything — git versioning, build log gate (AP-39, every edit), header image gate (AP-15), pre-flight, anti-pattern scan, security checklist | ~15K |
 | **🔧 TROUBLESHOOT** | "why isn't", "debug", "broken", "not working", "fix this", "error", "trace shows" | Troubleshooting (§13) + relevant domain pattern doc (optional, on demand) | Git versioning (if files are edited). Skip build logs, image gate, compliance sweep, anti-pattern scan | ~6–8K |
-| **🔍 AUDIT** | "review", "check", "audit", "scan", "sanity check", "compliance", "violations" | Anti-Patterns §10 (scan tables + security checklist §10.5) + §11.2 (review workflow) | Security checklist (S1–S8), structured issue reporting. **Mandatory log pairs** (§11.8.2) for every check command — unconditional, even with zero findings. No file edits — report only. Fixes require BUILD escalation. | ~5–7K |
+| **🔍 AUDIT** | "review", "check", "audit", "scan", "sanity check", "compliance", "violations" | Anti-Patterns §10 (scan tables + security checklist §10.5) + §11.2 (review workflow) + §15.4 (audit tiers) | Security checklist (S1–S8), structured issue reporting. **Mandatory log pairs** (§11.8.2) for every check command — unconditional, even with zero findings. No file edits — report only. Fixes require BUILD escalation. **Tier selection:** quick-pass (default) or deep-pass (§15.4). Deep-pass uses sectional chunking (§11.15). | ~5–7K (quick) · ~12–15K (deep, staged) |
 
 **Mode escalation — TROUBLESHOOT → BUILD:**
 When a troubleshooting session requires editing YAML to fix the issue, escalate to BUILD mode *before writing the first line*. On escalation:
@@ -44,7 +44,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 |------|-------------|---------------|
 | **🔨 BUILD** | `00_core_philosophy.md` (§1) + §2.3 (pre-flight checklist) | Relevant pattern doc + `06_anti_patterns_and_workflow.md` (§10, §11.1 or §11.3) |
 | **🔧 TROUBLESHOOT** | `07_troubleshooting.md` | Relevant domain pattern doc (optional, load §-level sections on demand) |
-| **🔍 AUDIT** | `06_anti_patterns_and_workflow.md` (§10 scan tables, §10.5 security, §11.2) | §1.11 (severity taxonomy) from Core Philosophy |
+| **🔍 AUDIT** | `06_anti_patterns_and_workflow.md` (§10 scan tables, §10.5 security, §11.2, §11.15) | §1.11 (severity taxonomy) from Core Philosophy, §15.4 (audit tiers) from QA Checklist |
 
 **Task-specific routing (BUILD mode):**
 
@@ -75,6 +75,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 | Review/improve existing code | `06_anti_patterns_and_workflow.md` (§10, §10.5, §11.2) + relevant pattern doc for context |
 | Multi-file compliance sweep | `06_anti_patterns_and_workflow.md` (§10, §10.5, §11.2, §11.8.1) |
 | QA check commands (`sanity check`, `run audit`, `check <ID>`, `check versions`, etc.) | `09_qa_audit_checklist.md` (§15) + `06_anti_patterns_and_workflow.md` (§11.8.2 log pairs) |
+| Deep-pass audit (full battery, staged) | `09_qa_audit_checklist.md` (§15.4 tier selection) + `06_anti_patterns_and_workflow.md` (§11.15 chunking + checkpointing) — then load per-stage sections per §11.15.1 |
 
 > **Cross-domain tasks** (e.g., "blueprint that uses MA with voice control"): load each relevant pattern doc. When in doubt, load the anti-patterns file — it catches the most common AI mistakes.
 
@@ -87,17 +88,17 @@ The section numbers are preserved across files for cross-referencing.
 | Doc | Sections | ~Tokens | Covers |
 |-----|----------|---------|--------|
 | [Core Philosophy](00_core_philosophy.md) | §1, §2, §9, §12 | ~12.0K (§1 alone: ~8.8K) | Design principles, git versioning workflow, naming conventions, communication style |
-| [Blueprint Patterns](01_blueprint_patterns.md) | §3, §4 | ~6.8K | Blueprint YAML structure, inputs, variables, templates, script standards |
+| [Blueprint Patterns](01_blueprint_patterns.md) | §3, §4 | ~7.2K | Blueprint YAML structure, inputs, variables, templates, script standards |
 | [Automation Patterns](02_automation_patterns.md) | §5 | ~6.2K | Error handling, modes, timeouts, triggers, GPS bounce, helpers, area/label targeting |
-| [Conversation Agents](03_conversation_agents.md) | §8 | ~8.3K | Agent prompt structure, separation from blueprints, naming conventions |
-| [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.0K | Device config structure, packages, secrets, wake words, naming |
-| [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.5K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
-| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~18.5K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), crash recovery (build + audit) |
+| [Conversation Agents](03_conversation_agents.md) | §8 | ~8.0K | Agent prompt structure, separation from blueprints, naming conventions |
+| [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.1K | Device config structure, packages, secrets, wake words, naming |
+| [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.1K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
+| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~19.6K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), audit resilience (§11.15), crash recovery |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.9K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
-| [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~6K | QA audit checks, trigger rules, cross-reference index, and user commands for guide maintenance |
+| [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~12.7K | QA audit checks, trigger rules, cross-reference index, audit tiers (§15.4), and user commands for guide maintenance |
 
-*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9).*
+*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9). Total across all files: ~110K.*
 
 > **Note on section numbering:** Section numbers are preserved from the original unified guide and are non-sequential across files. This is intentional — it allows stable cross-references (e.g., "see §5.1") regardless of how files are reorganized.
 
@@ -105,7 +106,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**15 top-level sections · 128 subsections · 43 anti-patterns (39 AP codes + 4 sub-items) · 8 security checks · 10 files**
+**15 top-level sections · 132 subsections · 43 anti-patterns (39 AP codes + 4 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -246,10 +247,10 @@ The section numbers are preserved across files for cross-referencing.
   - §11.11 — Prompt templates — starter prompts for common tasks
   - §11.12 — Post-generation validation — trust but verify
   - §11.13 — Large file editing (1000+ lines) — surgical read/edit/verify workflow (AP-40)
+  - §11.14 — README generation workflow (MANDATORY for blueprints and scripts)
+  - §11.15 — Audit resilience — sectional chunking & checkpointing (§11.15.1 four stages, §11.15.2 audit checkpointing)
 
 ### [Troubleshooting & Debugging](07_troubleshooting.md)
-
-- **§13** — Troubleshooting & Debugging
   - §13.1 — Automation traces — your first stop
   - §13.2 — Quick tests from the automation editor
   - §13.3 — Developer Tools patterns
@@ -285,6 +286,7 @@ The section numbers are preserved across files for cross-referencing.
   - §15.1 — Check definitions (SEC, VER, AIR, CQ, ARCH, ZONE, INT, MAINT categories)
   - §15.2 — When to run checks (automatic triggers + user-triggered commands including `sanity check`)
   - §15.3 — Cross-reference index (which checks apply to which guide sections)
+  - §15.4 — Audit tiers (quick-pass / deep-pass, tier selection rules, escalation)
 
 ---
 
@@ -304,6 +306,18 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.19 — 2026-02-16
+- **§11.0 — Log invariants broadened and renamed** — Log-before-edit → **log-before-work**, log-after-edit → **log-after-work**. Both now MANDATORY for BUILD and AUDIT modes (previously BUILD-only). Before-work covers build logs, AUDIT log pairs (§11.8.2), and deep-pass checkpoint files (§11.15.2). After-work requires updating the relevant log after every file write (BUILD) or check/stage completion (AUDIT) before proceeding. Sequence: log → work → update log → next work. Closes the gap where the after-invariant was only implied across scattered subsections and audits had no explicit update-after-each-step rule.
+- Build log: `_build_logs/2026-02-16_log_after_edit_invariant_build_log.md`
+
+### v3.18 — 2026-02-16
+- **§15.4 added** — Audit tiers: quick-pass (10 high-impact checks, single-turn) and deep-pass (full battery, sectional chunking). Tier selection rules, escalation from quick to deep on 3+ ERRORs, log pair requirements per tier.
+- **§11.15 added** — Audit resilience: sectional chunking & checkpointing. Four-stage deep-pass execution (Security & Versions → Code Quality & Performance → AI-Readability & Architecture → Integration, Zones & Maintenance). Per-stage style guide loading, `[STAGE]` checkpoint markers with `IN_PROGRESS`/`COMPLETE`/`PENDING`/`SKIP` states, crash recovery protocol.
+- **AUDIT mode row updated** — Token budget split: ~5–7K (quick-pass) / ~12–15K (deep-pass, staged). References §15.4 for tier selection and §11.15 for chunking.
+- **Doc table updated** — Token estimates refreshed: `06_anti_patterns_and_workflow.md` ~16.0K → ~19.6K, `09_qa_audit_checklist.md` ~6K → ~12.7K. Total ~101K → ~110K.
+- **TOC updated** — Added §11.15 (with subsections §11.15.1, §11.15.2) and §15.4 entries.
+- Build log: `_build_logs/2026-02-16_audit_resilience_recovery_build_log.md` (recovery of crashed session `2026-02-16_audit_resilience_framework_build_log.md`)
 
 ### v3.17 — 2026-02-16
 - **§3.2 hardened** — Collapsible input sections: removed "optional for 3-4 inputs" exception. All blueprints use collapsible sections, no exceptions. Added MANDATORY `collapsed: true` rule for section ③ and beyond (①–② remain expanded). YAML example updated with `collapsed: true` on ③ and ④. Cross-referenced `min_version: 2024.6.0` requirement.

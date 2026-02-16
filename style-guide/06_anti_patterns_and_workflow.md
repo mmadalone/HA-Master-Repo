@@ -227,7 +227,9 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 
 The proactive check catches crashes the user *forgot* to mention. The reactive check handles crashes the user *explicitly reports*. Together, they ensure no interrupted work is silently lost or overwritten.
 
-**Log-before-edit invariant (MANDATORY — BUILD mode only):** Every BUILD-mode file edit requires a log in `_build_logs/` before the first write to any target file. No threshold, no minimum change count — one fix or fifty, the log comes first. Simple edits use the compact log format (§11.8); multi-chunk builds, crash recovery, and multi-file scopes use the full build log schema. Scanning, analyzing, planning, and reporting findings in-chat do not count as edits — but the moment you write to the target file, the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
+**Log-before-work invariant (MANDATORY — BUILD and AUDIT modes):** Every BUILD-mode file edit requires a build log in `_build_logs/` before the first write to any target file. No threshold, no minimum change count — one fix or fifty, the log comes first. Simple edits use the compact log format (§11.8); multi-chunk builds, crash recovery, and multi-file scopes use the full build log schema. Every AUDIT-mode command requires its log pair (§11.8.2) before the first check runs, and deep-pass audits require the checkpoint file (§11.15.2) with the first stage marked `IN_PROGRESS` before that stage begins. Scanning, analyzing, and planning do not count as work — but the moment a target file is written (BUILD) or a check is executed (AUDIT), the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
+
+**Log-after-work invariant (MANDATORY — BUILD and AUDIT modes):** After every write to a target file (BUILD) or completion of a check/stage (AUDIT), update the relevant log BEFORE proceeding to the next step. For BUILD: update the build log’s status, files modified, and completed chunks/tasks. For AUDIT: update the progress log with each check result, and for deep-pass audits update the stage marker from `IN_PROGRESS` to `COMPLETE` in the checkpoint (§11.15.2). No batching, no “I’ll update the log when I’m done.” The log reflects reality at all times — if the session crashes, the log tells the recovery session exactly what landed and what didn’t. The sequence is: log → work → update log → next work. Every cycle, no exceptions. A build log that says “none yet” while three files have been modified, or a progress log missing results from completed checks, is not a log — it’s a fiction.
 
 **`_build_logs/` location (MANDATORY):** Build and audit logs are ALWAYS created in `PROJECT_DIR/_build_logs/`, never in `HA_CONFIG` or any other directory. `HA_CONFIG` is for Home Assistant configuration — not development artifacts. If you catch yourself writing a log to the SMB mount path, you're targeting the wrong filesystem. This applies regardless of whether the files being edited live in `PROJECT_DIR` or `HA_CONFIG`.
 
@@ -815,3 +817,111 @@ See repository for license details.
 - Setup instructions for integrations themselves (link to official docs instead).
 
 **Existing README cleanup:** Some existing READMEs don't follow the `-readme.md` naming convention (e.g., `wake-up-guard.md` without the `-readme` suffix, agent prompt files mixed into the readme directory). These should be normalized during audits. Agent prompt files (`*_agent_prompt_*.md`) are separate deliverables — they may coexist in the readme directory but are not READMEs.
+
+### 11.15 Audit resilience — sectional chunking & checkpointing
+
+Audits crash for one reason: holding the full style guide, the full target file, and an expanding battery of checks in context simultaneously. The solution is the same one that fixes build crashes (§11.5) — break the work into stages, write results to disk between stages, and recover from the checkpoint if something goes sideways.
+
+This section defines how deep-pass audits (§15.4) are executed. Quick-pass audits are small enough to run in a single turn and don't need this machinery.
+
+#### 11.15.1 Sectional chunking — four stages
+
+A deep-pass audit splits into four stages. Each stage loads only the style guide sections relevant to its checks, executes those checks, writes results to the audit checkpoint log, and then proceeds to the next stage. The AI does not need to hold all style guide content simultaneously.
+
+**Stage 1 — Security & Versions**
+
+| Checks | Style guide sections to load |
+|--------|------------------------------|
+| SEC-1, SEC-2, SEC-3 | §10.5 (security checklist), §1.6 (secrets), §3.6 (template safety) |
+| VER-1, VER-2, VER-3 | §3.1 (blueprint metadata), §11.3 (migration table) |
+
+Focus: Are secrets exposed? Are version claims accurate? Are deprecation entries complete? This stage may require web search for VER-1 verification — budget 1–2 searches per unverified claim.
+
+**Stage 2 — Code Quality & Performance**
+
+| Checks | Style guide sections to load |
+|--------|------------------------------|
+| CQ-1 through CQ-10 | §3 (blueprint patterns), §5.1 (timeouts), §5.12 (idempotency) |
+| PERF-1 | §5 (automation patterns — trigger best practices) |
+
+Focus: Do YAML examples parse? Do templates have safety guards? Are actions aliased? Are triggers efficient? This is the heaviest stage — budget 1–2 turns if the target file is large.
+
+**Stage 3 — AI-Readability & Architecture**
+
+| Checks | Style guide sections to load |
+|--------|------------------------------|
+| AIR-1 through AIR-7 | §1.8 (complexity budget), §1.9 (token budget) |
+| ARCH-1 through ARCH-6 | Master index (routing tables, TOC) |
+
+Focus: Is guidance concrete enough for AI consumption? Do cross-references resolve? Are all sections routable? Are token estimates accurate? ARCH-4 and ARCH-5 require scanning the master index — load it here, not in earlier stages.
+
+**Stage 4 — Integration, Zones, Maintenance & Blueprints**
+
+| Checks | Style guide sections to load |
+|--------|------------------------------|
+| INT-1 through INT-4 | §8 (conversation agents), §6 (ESPHome), §7 (MA), §14 (voice) — load only the one(s) relevant to the target |
+| ZONE-1, ZONE-2 | §5.5 (GPS bounce), §5.11 (purpose triggers) |
+| MAINT-1 through MAINT-5 | No extra style guide — these are web search tasks |
+| BP-1 through BP-3 | §3 (blueprint structure), target blueprint file |
+
+Focus: Are integration-specific patterns complete? Are maintenance items current? Do blueprints pass instantiation safety? This stage is the most variable — skip INT checks for files that don't involve those integrations.
+
+**Stage execution protocol:**
+1. Announce the stage: *"Stage 2 — Code Quality & Performance. Loading §3, §5.1, §5.12."*
+2. Load only the listed style guide sections.
+3. Execute each check in the stage's roster fully (§15.2 execution standard — no spot-checking).
+4. Write all findings to the audit checkpoint log (§11.15.2) before proceeding to the next stage.
+5. If a stage produces zero findings, still log it as `PASS` in the checkpoint.
+6. Move to the next stage. Do not carry previous stage's style guide content forward — let it compress naturally.
+
+**Stage skipping:** If the scope makes a stage irrelevant (e.g., auditing a single style guide markdown file doesn't need BP-1 through BP-3), skip the stage and mark it `[SKIP] reason: out of scope` in the checkpoint. Never run checks that can't possibly apply.
+
+#### 11.15.2 Audit checkpointing
+
+Every deep-pass audit writes a checkpoint file that tracks per-stage progress. This is the crash recovery artifact — if the session dies between stages, the next session reads the checkpoint, skips completed stages, and resumes at the next one.
+
+**Checkpoint format** — extends the §11.8.2 progress log with stage markers:
+
+```
+[SESSION] YYYY-MM-DD | type: deep-pass audit | scope: <description>
+[STAGE] 1 — Security & Versions | STATUS: COMPLETE | findings: 2
+[STAGE] 2 — Code Quality & Performance | STATUS: COMPLETE | findings: 5
+[STAGE] 3 — AI-Readability & Architecture | STATUS: IN_PROGRESS | findings: 1
+[STAGE] 4 — Integration, Zones & Maintenance | STATUS: PENDING
+```
+
+Stage status markers:
+- `COMPLETE` — all checks in the stage executed, findings logged. Safe to skip on resume.
+- `IN_PROGRESS` — stage started but not finished. **This is the crash point.** On resume, re-run this entire stage from the top — partial stages can't be trusted.
+- `PENDING` — not yet started.
+- `SKIP` — intentionally skipped with reason (e.g., `SKIP: no blueprint files in scope`).
+
+**The `IN_PROGRESS` → `COMPLETE` transition is critical.** Write `IN_PROGRESS` *before* starting a stage. Update to `COMPLETE` only *after* all findings from that stage are logged in the report. If the session dies between those two states, the resume session knows exactly which stage was interrupted.
+
+**Checkpoint file naming:** Same as §11.8.2 progress logs — `YYYY-MM-DD_<scope>_audit_progress.log`. The stage markers are additions to the existing format, not a replacement.
+
+**Report file:** Findings from all stages accumulate in a single report log (`YYYY-MM-DD_<scope>_audit_report.log`), same as §11.8.2. Each finding is tagged with its stage number for traceability:
+
+```
+[FINDING] S2 | CQ-7 | ⚠️ WARNING | 05_music_assistant_patterns.md:L142 | Unguarded states() call in duck/restore example
+[FINDING] S3 | ARCH-4 | ❌ ERROR | master index | §14.11 reference — section does not exist in 08_voice_assistant_pattern.md
+```
+
+**Recovery protocol — when starting a new session after a crash:**
+
+1. Read the checkpoint file's `[STAGE]` entries.
+2. Skip all `COMPLETE` stages — their findings are already in the report.
+3. Find the `IN_PROGRESS` stage — re-run it from the top.
+4. Continue with `PENDING` stages in order.
+5. Load only the style guide sections listed for the current stage (§11.15.1).
+
+This means a crash mid-audit loses at most one stage's worth of work — not the entire audit.
+
+**Relationship to existing logging:**
+- §11.8.1 (audit logs) defines the structured markdown format for multi-file blueprint sweeps. Still valid for that use case.
+- §11.8.2 (log pairs) defines the progress + report pair. Sectional chunking extends the progress log with `[STAGE]` markers.
+- §15.4 (audit tiers) defines when to use sectional chunking (deep-pass only).
+
+All three mechanisms interlock: tiers decide *how much* work. Chunking decides *how* to split the work. Checkpointing decides *how to survive* if it goes sideways.
+
+**Cross-references:** §15.4 (audit tiers — tier selection rules), §11.8.1 (audit log format), §11.8.2 (log pair requirements), §1.9 (token budget — why loading everything at once is a problem).
