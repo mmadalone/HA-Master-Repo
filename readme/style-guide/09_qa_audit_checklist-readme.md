@@ -4,7 +4,7 @@
 
 The quality assurance ledger. This file defines every QA check that can be run against the style guide and its governed codebase — what each check examines, when it triggers automatically, how the user can trigger it manually, and which sections of the guide each check validates. It's the self-referential layer: the guide checking itself.
 
-One section — §15 — with three subsections: check definitions, trigger rules, and the cross-reference index.
+One section — §15 — with four subsections: check definitions, trigger rules, the cross-reference index, and audit tiers.
 
 ## What's Inside
 
@@ -25,6 +25,8 @@ Each check has a unique ID (e.g., SEC-1, VER-3, CQ-6, ARCH-5), a description of 
 
 **§15.3 — Cross-Reference Index** maps each check to the guide sections it validates, creating a bidirectional reference: from check to section and from section to applicable checks.
 
+**§15.4 — Audit Tiers** defines two execution tiers: **quick-pass** (10 high-impact checks in a single turn, ~5–7K token budget) and **deep-pass** (full battery using sectional chunking from §11.15, ~12–15K staged). Quick-pass is the default for routine audits. Deep-pass fires on explicit request or when quick-pass escalates (3+ ERRORs trigger a deep-pass suggestion). Each tier has its own check roster, token budget, and log pair requirements.
+
 ## When to Load
 
 Primary file for AUDIT mode. Load when running any QA check command.
@@ -33,7 +35,7 @@ Primary file for AUDIT mode. Load when running any QA check command.
 |------|-------------|
 | BUILD | Not loaded by default. Referenced if a build triggers automatic checks. |
 | TROUBLESHOOT | Not loaded by default |
-| AUDIT | Always — paired with §10/§11.2 from Anti-Patterns & Workflow |
+| AUDIT | Always — paired with §10/§11.2 from Anti-Patterns & Workflow. §15.4 determines quick-pass vs deep-pass tier. |
 
 ## Key Concepts
 
@@ -47,11 +49,13 @@ Primary file for AUDIT mode. Load when running any QA check command.
 
 **Routing reachability** (ARCH-5) — validates that every style guide file and every operational mode command appears in at least one routing table entry. Unreachable files are dead weight; unreachable commands are features the AI doesn't know how to trigger.
 
+**Audit tiers** (§15.4) — not every audit needs the full battery. Quick-pass runs 10 checks in a single turn for routine reviews. Deep-pass runs everything using sectional chunking (§11.15) to avoid context overload. The tier system is what prevents audits from crashing on the ~110K token guide — the problem that motivated the audit resilience framework.
+
 ## Related Files
 
 | File | Relationship |
 |------|-------------|
-| `06_anti_patterns_and_workflow.md` | §10 anti-patterns and §10.5 security checks are validated by QA checks; §11.8.2 defines the log pair requirement |
+| `06_anti_patterns_and_workflow.md` | §10 anti-patterns and §10.5 security checks are validated by QA checks; §11.8.2 defines log pair requirements; §11.15 provides audit resilience (sectional chunking for deep-pass) |
 | `00_core_philosophy.md` | §1.11 (severity taxonomy) governs how QA findings are classified |
 | `ha_style_guide_project_instructions.md` | Master index routing table maps `sanity check` and audit commands to this file |
 | All style guide files | Every file has `📋 QA Check` callouts linking to relevant checks |

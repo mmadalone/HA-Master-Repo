@@ -8,7 +8,7 @@ Four sections live here: §1 (Core Philosophy) establishes the design principles
 
 ## What's Inside
 
-**§1 — Core Philosophy** is the beating heart of the guide. Thirteen subsections covering modular design (§1.1), separation of concerns (§1.2), the "never remove features" rule (§1.3), HA best practices with a native conditions substitution table (§1.4), entity_id-over-device_id (§1.5), secrets management (§1.6), uncertainty signals (§1.7), complexity budgets with quantified limits (§1.8), token budget management with per-file costs and drop rules (§1.9), the reasoning-first directive (§1.10), violation severity taxonomy (§1.11), directive precedence when MANDATORYs conflict (§1.12), MCP tool routing tables organized by operation type (§1.13), and session discipline rules (§1.14).
+**§1 — Core Philosophy** is the beating heart of the guide. Fourteen subsections covering modular design (§1.1), separation of concerns (§1.2), the "never remove features" rule (§1.3), HA best practices with a native conditions substitution table (§1.4), entity_id-over-device_id (§1.5), secrets management (§1.6), uncertainty signals (§1.7), complexity budgets with quantified limits (§1.8), token budget management with per-file costs and drop rules (§1.9), the reasoning-first directive (§1.10), violation severity taxonomy (§1.11), directive precedence when MANDATORYs conflict (§1.12), MCP tool routing tables organized by operation type (§1.13), and session discipline rules (§1.14).
 
 **§2 — Git Versioning** defines the mandatory pre-flight checklist, the checkpoint → edit → commit workflow, atomic multi-file edit rules, crash recovery via git, and scope boundaries between HA config git and the style guide repo.
 

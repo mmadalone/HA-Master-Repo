@@ -4,13 +4,13 @@
 
 The central routing hub for the entire Home Assistant Style Guide system. This file doesn't contain coding rules itself — it tells the AI *which* rules to load, *when* to load them, and *how much* context budget to spend. Think of it as the Grand Nagus's ledger: every section of the Rules of Acquisition is catalogued here, cross-referenced, and budgeted down to the token.
 
-The style guide governs AI-assisted development of Home Assistant blueprints, automations, scripts, conversation agents, ESPHome devices, and Music Assistant integrations. At ~93K tokens across 10 files, it's far too large to load in full — the master index ensures only the relevant sections enter context for any given task.
+The style guide governs AI-assisted development of Home Assistant blueprints, automations, scripts, conversation agents, ESPHome devices, and Music Assistant integrations. At ~110K tokens across 10 files, it's far too large to load in full — the master index ensures only the relevant sections enter context for any given task.
 
 ## What's Inside
 
 The master index defines three **operational modes** — BUILD, TROUBLESHOOT, and AUDIT — each with its own loading rules, enforcement gates, and token budgets. A task-specific routing table maps every common operation (new blueprint, debug automation, review existing code, QA check) to the exact files and sections the AI should load. The full table of contents catalogues all 15 top-level sections, 128 subsections, 43 anti-patterns, and 8 security checks across the guide.
 
-The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.16. Each entry references the build log that produced it, creating a complete audit trail.
+The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.19. Each entry references the build log that produced it, creating a complete audit trail.
 
 ## When to Load
 
@@ -28,7 +28,7 @@ This file's §1 routing table is loaded at the start of every session to determi
 
 **Token budget ceiling** is ~15K per task. The routing table exists specifically to stay under this limit while ensuring no critical rule is missed. Cross-domain tasks load pattern docs sequentially, not simultaneously.
 
-**Log gates** (AP-39) are enforced at three points: BUILD-mode file edits, AUDIT-mode check commands, and BUILD escalation from audit findings. All are hard gates — the log must exist before the first write or check.
+**Log gates** (AP-39) are enforced at three points: BUILD-mode file edits, AUDIT-mode check commands, and BUILD escalation from audit findings. All are hard gates — the log must exist before the first write or check, and must be updated after every step (the log-before-work and log-after-work invariants).
 
 ## Related Files
 
