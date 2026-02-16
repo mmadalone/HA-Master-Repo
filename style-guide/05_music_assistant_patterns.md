@@ -6,7 +6,9 @@ Section 7 — MA players, play_media, TTS duck/restore, volume sync, voice bridg
 
 ## 7. MUSIC ASSISTANT PATTERNS
 
-> **Compatibility:** Patterns in this section are verified against **Music Assistant 2.x**. MA has undergone significant API changes between major versions — `enqueue` modes, `radio_mode` behavior, and service parameters may differ in older or future versions. When upgrading MA, re-verify these patterns against the current MA docs.
+> **Compatibility:** Patterns in this section are verified against **Music Assistant 2.7** (December 2025). MA has undergone significant API changes between major versions — `enqueue` modes, `radio_mode` behavior, and service parameters may differ in older or future versions. When upgrading MA, re-verify these patterns against the current MA docs.
+>
+> **MA 2.7 notable changes:** User management with per-user music providers and speaker permissions (may affect which players are visible per profile). Sendspin protocol for synchronized multi-room streaming (see §7.10). AirPlay 2 as a full player provider with multi-room sync. Remote streaming via WebRTC/Nabu Casa. Smart crossfade (BPM-aware track transitions). Scrobbling support (LastFM, ListenBrainz, Subsonic). DSP presets for per-player audio configuration. Spotify Connect and AirPlay as external audio sources — MA can receive streams and redistribute to all players.
 
 Music Assistant (MA) is the primary music integration. It runs as a separate server and exposes its own `media_player` entities and services. These patterns cover targeting, queue management, TTS interruption/resume, and multi-room coordination.
 
@@ -54,6 +56,8 @@ ma_players:
 > 📋 **QA Check CQ-9:** Actions targeting media players from blueprint inputs must include availability guards (`state != unavailable`) before use. See `09_qa_audit_checklist.md`.
 
 > **ESPHome player reliability caveat:** MA players backed by ESPHome devices (including Voice Preview Edition satellites) can exhibit playback reliability issues — dropped streams, delayed responses to play/pause commands, and occasional failure to resume after TTS interruption. These issues stem from the ESPHome media player component's limited buffering and network handling compared to native targets like Sonos, Chromecast, or DLNA receivers. For critical automations (alarms, announcements), build in retry logic or verify playback state after issuing commands. For music-follow-me patterns (§7.6), prefer non-ESPHome targets when available.
+
+> **Player provider landscape (MA 2.7+):** MA supports a wide range of player providers: Alexa (via Alexa Media Player), Sonos, Chromecast/Google Cast, DLNA, ESPHome, Snapcast, SLIMPROTO, and — as of 2.7 — AirPlay 2 and Sendspin. AirPlay 2 speakers (including HomePods) now appear as full MA player providers with multi-room sync support, though behavior varies by device — check MA docs for limitations. Sendspin is an open-source protocol by the Open Home Foundation for synchronized multi-room streaming with metadata (album art, visualizations). It works on Voice PE satellites (beta firmware), web browsers, Google Cast devices (experimental), and custom ESPHome hardware. For automations, Sendspin players are targeted the same way as any other MA player — no special service calls needed. When using Sendspin on Cast devices, a separate player entity (`PlayerName (Sendspin)`) appears alongside the standard Cast player — use the Sendspin entity for cross-protocol sync groups.
 
 ### 7.2 `music_assistant.play_media` — not `media_player.play_media`
 Always use the MA-specific play action. The generic `media_player.play_media` lacks MA features and may not resolve media correctly.
@@ -206,7 +210,7 @@ Use a shared `input_boolean` (e.g., `input_boolean.voice_pe_ducking`) as a coord
 # Volume sync blueprint checks this before syncing
 - condition: template
   alias: "Voice PE ducking not active"
-  value_template: "{{ states(ducking_flag_entity) != 'on' }}"
+  value_template: "{{ states(ducking_flag_entity) | default('off') != 'on' }}"
 ```
 
 **Volume save → duck → TTS → restore pattern:**
@@ -425,7 +429,7 @@ variables:
   detected_index: >
     {% set ns = namespace(idx=-1) %}
     {% for sensor in presence_list %}
-      {% if ns.idx == -1 and states(sensor) == 'on' %}
+      {% if ns.idx == -1 and states(sensor) | default('off') == 'on' %}
         {% set ns.idx = loop.index0 %}
       {% endif %}
     {% endfor %}
@@ -572,13 +576,15 @@ script:
       - choose:
           - conditions: "{{ shuffle | default(false) }}"
             sequence:
-              - action: media_player.shuffle_set
+              - alias: "Enable shuffle before playback"
+                action: media_player.shuffle_set
                 target:
                   entity_id: "{{ target_player }}"
                 data:
                   shuffle: true
       # 3. Play via MA service
-      - action: music_assistant.play_media
+      - alias: "Play requested media via MA"
+        action: music_assistant.play_media
         target:
           entity_id: "{{ target_player }}"
         data:
@@ -670,7 +676,8 @@ script:
           area:
     sequence:
       # 1. Search MA library + providers
-      - action: music_assistant.search
+      - alias: "Search MA for matching media"
+        action: music_assistant.search
         data:
           name: "{{ query }}"
           media_type: "{{ media_type | default('') }}"
@@ -690,7 +697,8 @@ script:
       - choose:
           - conditions: "{{ best_match is not none }}"
             sequence:
-              - action: music_assistant.play_media
+              - alias: "Play best search result"
+                action: music_assistant.play_media
                 target:
                   entity_id: "{{ target_player }}"
                 data:
@@ -814,6 +822,8 @@ The centralized automation handles all commands, validation, and optional persis
 
 ### 7.10 MA + TTS coexistence on Voice PE speakers
 Voice PE satellites use their MA player for both music playback and TTS output. This creates an inherent conflict: TTS interrupts music, and both compete for the same audio output. Understanding which method to use in which scenario is critical.
+
+> **Sendspin on Voice PE (MA 2.7+, beta firmware):** Voice PE satellites can now receive audio via the Sendspin protocol, which provides synchronized multi-room playback with metadata (album art, track info). When using Sendspin, the same TTS coexistence patterns below still apply — the satellite's `assist_satellite` entity still handles ducking, and `tts.speak` still targets the satellite's `media_player`. Sendspin does not change how TTS interacts with the speaker; it changes how *music* gets there. The decision matrix below remains valid regardless of whether music arrives via the standard MA player provider or via Sendspin.
 
 **Decision matrix — choosing the right TTS method for Voice PE:**
 
@@ -1004,7 +1014,7 @@ variables:
   detected_index: >-
     {% set ns = namespace(idx=-1) %}
     {% for sensor in presence_list %}
-      {% if ns.idx == -1 and states(sensor) == 'on' %}
+      {% if ns.idx == -1 and states(sensor) | default('off') == 'on' %}
         {% set ns.idx = loop.index0 %}
       {% endif %}
     {% endfor %}

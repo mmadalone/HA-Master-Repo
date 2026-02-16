@@ -148,25 +148,25 @@ This style guide is ~110K tokens across 10 files (plus master index). **Never lo
 |------|-------------|-------|--------------------|
 | **T0 — Always (BUILD mode)** | Every BUILD task, no exceptions | `00_core_philosophy.md` (§1 only, skip §2/§9/§12 unless editing those) | ~8.8K (§1 alone) |
 | **T1 — Task-specific** | When the routing table (master index) maps to it | The ONE pattern doc for the task at hand | 6.0–11.8K (see table below) |
-| **T2 — Review/edit** | Only when reviewing or editing existing code | `06_anti_patterns_and_workflow.md` (§10 scan table + relevant §11 workflow) | ~20.4K full, ~4.9K (scan table + one §11 section) |
+| **T2 — Review/edit** | Only when reviewing or editing existing code | `06_anti_patterns_and_workflow.md` (§10 scan table + relevant §11 workflow) | ~22.4K full, ~4.9K (scan table + one §11 section) |
 | **T3 — Reference only** | Only when explicitly needed | `07_troubleshooting.md`, `08_voice_assistant_pattern.md` | ~6.9K / ~11.8K |
 
-**Per-file token costs (measured Feb 2026 — re-measure after any structural changes to files):**
+**Per-file token costs (re-measured 2026-02-16 — re-measure after any structural changes to files):**
 
 | File | Full size | Typical load (skip irrelevant sections) |
 |------|-----------|-----------------------------------------|
 | Master index | ~4.6K | ~2K (routing table only) |
 | `00_core_philosophy.md` | ~12.0K | ~8.8K (§1 only, drop §2/§9/§12) |
-| `01_blueprint_patterns.md` | ~6.8K | ~6.8K (usually need all of it) |
+| `01_blueprint_patterns.md` | ~7.2K | ~7.2K (usually need all of it) |
 | `02_automation_patterns.md` | ~6.2K | ~3.7K (§5.1 + §5.4 for most tasks) |
 | `03_conversation_agents.md` | ~8.3K | ~5.3K (§8.1–8.4 for most tasks) |
-| `04_esphome_patterns.md` | ~6.0K | ~6.0K (load fully for ESPHome tasks) |
-| `05_music_assistant_patterns.md` | ~11.5K | ~6.3K (duck/restore + play_media + voice bridge sections) |
-| `06_anti_patterns_and_workflow.md` | ~20.4K | ~4.9K (scan table + one workflow section) |
+| `04_esphome_patterns.md` | ~6.3K | ~6.3K (load fully for ESPHome tasks) |
+| `05_music_assistant_patterns.md` | ~11.8K | ~6.3K (duck/restore + play_media + voice bridge sections) |
+| `06_anti_patterns_and_workflow.md` | ~22.4K | ~4.9K (scan table + one workflow section) |
 | `07_troubleshooting.md` | ~6.9K | ~3.0K (load specific §13.X on demand) |
 | `08_voice_assistant_pattern.md` | ~11.8K | ~5.3K (relevant layers only) |
 | `09_qa_audit_checklist.md` | ~12.7K | ~6.4K (check definitions only, skip grep appendix) |
-| **Total if everything loaded** | **~111K** | **Never do this** |
+| **Total if everything loaded** | **~110K** | **Never do this** |
 
 **Budget ceiling:** Aim to keep total loaded style guide content under ~15K tokens for any single task. That leaves room for the user's actual content, tool outputs, and conversation history. If a cross-domain task pushes past ~15K, apply drop rules below.
 

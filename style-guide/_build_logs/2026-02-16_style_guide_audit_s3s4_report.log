@@ -1,0 +1,62 @@
+[SESSION] 2026-02-16 | type: deep-pass audit (stages 3-4) | scope: full style guide v3.22 (10 files) | status: COMPLETE
+[RECOVERY] continues from 2026-02-16_style_guide_deep_audit_s1s2 — stages 1-2 COMPLETE (6 findings banked)
+
+=== STAGE 3 — AI-Readability & Architecture ===
+
+[FINDING] S3 | AIR-6 | ⚠️ WARNING | 00_core_philosophy.md §1.9 | Master index token claim is ~4.6K but measured ~8.9K (93% drift). This exceeds the 15% threshold by a massive margin. The per-file table also shows ~4.6K for "Master index" — the file `ha_style_guide_project_instructions.md` is 35.71KB which is ~8.9K tokens. This means the routing table understates the master index cost by nearly half, causing the AI to underestimate context usage whenever it loads the full index.
+[INTERPRETATION] AIR-6 on master index — the per-content-file estimates are accurate (all within 7.4%), but the master index itself was likely measured before major expansions (routing tables, audit tiers, resilience framework). Previous audit flagged 06 at 9.8% drift; this is far worse. Marked WARNING not ERROR because the impact is token budget miscalculation (loads too much) rather than runtime failure.
+
+[FINDING] S3 | AIR-6 | ℹ️ INFO | 00_core_philosophy.md §1.9 | 06_anti_patterns_and_workflow.md claims ~20.4K, measured ~21.9K (7.4% drift). Under 15% threshold but increasing from the 9.8% noted in the s1s2 audit (that was against an older version). Trending toward threshold.
+
+=== STAGE 4 — Integration, Zones & Maintenance ===
+
+[FINDING] S4 | INT-1 | ℹ️ INFO | 03_conversation_agents.md §8.3.3 | MCP section documents HA 2025.2+ introduction but omits the 2025.9+ native support improvement noted in VER-1 verification table. All 6 sub-items (dispatcher skeleton, MCP docs, confirm-then-execute, naming rationale, token budget, multi-agent coordination) are present and thorough. The missing 2025.9 version note is a completeness nit, not a functional gap.
+[INTERPRETATION] INT-1 — PASS. The file is remarkably complete. The 2025.9 omission should be fixed next time the file is edited, but it doesn't affect any user's ability to implement the patterns.
+
+[FINDING] S4 | MAINT-3 | ⚠️ WARNING | 05_music_assistant_patterns.md | Music Assistant 2.7 (Dec 2025) introduced major features not documented in the guide: (1) Sendspin streaming/sync protocol for multi-room audio (replaces/supplements existing sync approaches), (2) AirPlay 2 speaker support as player provider, (3) user management and authentication system with per-user music provider assignment, (4) remote music streaming via web app, (5) smart crossfade/fading, (6) lyrics support, (7) built-in browser player. The guide's MA patterns predate 2.7 and don't reference any of these. Most impactful for blueprint development: Sendspin protocol changes how multi-room sync works, and AirPlay 2 adds a new player provider type.
+[INTERPRETATION] MAINT-3 on MA — WARNING. The guide's existing MA patterns (play_media, enqueue modes, duck/restore, follow-me) remain valid, but the Sendspin protocol and AirPlay 2 support represent new integration surface area. User management is more of an admin feature than a blueprint concern. Recommend a focused update to §7 when MA patterns are next edited.
+
+[FINDING] S4 | MAINT-3 | ℹ️ INFO | 04_esphome_patterns.md | ESPHome 2025.12 introduced API action responses (bidirectional communication — devices can return JSON data to HA), conditional package inclusion, and HUB75 LED matrix support. ESPHome 2026.1 completed the ESP-IDF default migration (now default for all ESP32 variants), removed API password authentication (already flagged by VER-1 in S1), removed OTA MD5 support, and added HMAC-SHA256 component. Guide §6 documents the API password deprecation but not the API action responses feature, which enables new automation patterns (querying device config, reading sensor values on-demand as structured data).
+[INTERPRETATION] MAINT-3 on ESPHome — INFO. API action responses are a new ESPHome capability but niche for this user's Voice PE / blueprint-centric workflow. Conditional package inclusion is useful but the guide already covers packages. ESP-IDF default is a platform concern, not a blueprint pattern. Document when ESPHome patterns are next updated.
+
+[FINDING] S4 | MAINT-3 | ℹ️ INFO | 02_automation_patterns.md, 03_conversation_agents.md, 08_voice_assistant_pattern.md | HA 2025.12-2026.2 introduced several features partially or fully undocumented: (1) Purpose-specific triggers and conditions continue expanding (already documented with Labs caveat in §5.11 — adequate). (2) HA 2025.12 added AI conversation insights/debug interface — not in guide but useful for troubleshooting. (3) HA 2026.1 added `choose` selector for blueprints — new selector type not in BP-2 selector table. (4) HA 2025.8 introduced AI Tasks as a new AI integration capability — not documented but may be useful for blueprint-adjacent workflows. (5) HA 2025.12 added ESPHome API action response support on the HA side.
+[INTERPRETATION] MAINT-3 on HA — INFO. The most actionable items: (a) the `choose` selector should be added to BP-2's selector correctness table in the QA checklist, and (b) AI Tasks could be mentioned in §8 voice patterns or §3 conversation agents as an emerging capability. The conversation debug interface is a troubleshooting tool, not a pattern — mention in §13 when updated.
+
+[FINDING] S4 | MAINT-3 | ℹ️ INFO | 09_qa_audit_checklist.md | BP-2 selector correctness table (§15.1) does not include the `choose` selector introduced in HA 2026.1. This selector allows blueprint users to select between different input types — a meta-selector. Should be added to the BP-2 table to prevent AI agents from using workaround patterns when the native selector exists.
+
+[FINDING] S4 | MAINT-4 | ℹ️ INFO | 04_esphome_patterns.md:L260,L484 | Two ESPHome documentation links use `.html` extension: `esphome.io/components/micro_wake_word.html` and `esphome.io/components/esphome.html#sub-devices`. ESPHome docs migrated to Hugo and now use extensionless URLs (e.g., `esphome.io/components/micro_wake_word/`). The `.html` versions currently redirect but may break in a future ESPHome docs update. All other external URLs (HA release notes, breaking changes, HA MCP server docs, MA GitHub releases, ElevenLabs HACS repo, MA voice-support blueprint, OpenAI tokenizer, HA TTS dev docs, HA blueprint selectors docs) resolve correctly.
+[INTERPRETATION] MAINT-4 — PASS with INFO. No broken links found. The ESPHome `.html` links should be updated to extensionless versions on next edit to future-proof them, but they work today.
+
+[FINDING] S4 | MAINT-5 | ℹ️ INFO | 05_music_assistant_patterns.md | The official Music Assistant voice-support blueprint repository (github.com/music-assistant/voice-support) has matured significantly since the guide's MA voice patterns were written. The repo now offers three options: (1) LLM Script blueprint (full LLM control), (2) LLM-Enhanced Local Assist blueprint (hybrid — local sentences + LLM fallback for MA), (3) Local Assist blueprint (no LLM needed). The guide references option 1 correctly in §7.9 but doesn't mention options 2 and 3 as alternatives. Community patterns around MA voice control now favor the official blueprints over custom implementations. No patterns the guide recommends have been superseded — the guide's architecture (search → select → play disambiguation, duck/restore, follow-me) remains aligned with community best practices.
+[INTERPRETATION] MAINT-5 — PASS. The guide's MA patterns are architecturally current. The official voice-support repo has expanded its offerings but the guide already points to it. Purpose-specific triggers (community enthusiasm is high) are properly caveated as Labs/experimental in §5.11. No community-standard patterns are missing or contradicted.
+
+[FINDING] S4 | BP-1 | ✅ PASS | 01_blueprint_patterns.md §3.1 | The guide's blueprint metadata documentation is complete and accurate. All required fields (name, description, domain, min_version, input name/description) are documented with correct nesting. The §3.1 whitelist (AP-42) correctly identifies the 7 valid top-level keys. The min_version cross-check table in both §3.1 and BP-1's check definition are consistent. The BP-1 check definition in the QA checklist accurately reflects the requirements in the guide.
+
+[FINDING] S4 | BP-2 | ✅ PASS | 01_blueprint_patterns.md §3.2, 09_qa_audit_checklist.md BP-2 | The guide's selector guidance covers all common cases: conversation_agent vs entity for agents, entity with domain filters, number with min/max, boolean, select with options, time, duration. The one gap is the `choose` selector (HA 2026.1) not being in BP-2's selector correctness table — this was already captured as a MAINT-3 INFO finding. The guide's rule about entity selectors MUST having filter clauses (from §3.2) is correctly reflected in BP-2.
+
+[FINDING] S4 | BP-3 | ✅ PASS | Style guide patterns | The edge cases BP-3 tests (optional inputs with no defaults, empty multi-select, entity unavailable, HA restart with unknown states) are all addressed by the guide's existing patterns: CQ-7 template safety (§3.6 — `| default()` on all `states()` calls), CQ-9 entity availability guards, BP-3's own check definition includes integration pointers back to CQ-7 and CQ-9. The guide's documentation of these safety patterns would produce blueprints that survive BP-3 edge case testing.
+
+=== STAGE 4 COMPLETE ===
+
+[SUMMARY] Stage 4: 14 checks | 13 PASS | 1 FAIL (MAINT-3) | 7 findings (1 WARNING, 6 INFO)
+
+=== FULL AUDIT SUMMARY ===
+
+[SUMMARY] Stage 1: 6 checks | 4 PASS | 2 FAIL | 2 findings (1 WARNING, 1 INFO)
+[SUMMARY] Stage 2: 11 checks | 8 PASS | 3 FAIL | 6 findings (2 WARNING, 2 INFO, 2 notes)
+[SUMMARY] Stage 3: 13 checks | 12 PASS | 1 FAIL | 2 findings (1 WARNING, 1 INFO)
+[SUMMARY] Stage 4: 14 checks | 13 PASS | 1 FAIL | 7 findings (1 WARNING, 6 INFO)
+
+[TOTAL] 44 checks | 37 PASS | 7 FAIL | 17 findings total
+  ⚠️ WARNING: 5 (VER-1 ESPHome API passwords, CQ-5 unguarded states(), CQ-1/CQ-7 missing aliases, ARCH-6 README gaps, MAINT-3 MA 2.7/ESPHome/HA new features)
+  ℹ️ INFO: 10+ (token drift, diagnostic snippet, legacy service in negative example, MA voice-support options, ESPHome .html links, choose selector, AI Tasks, conversation debug interface, ESPHome API action responses)
+  ❌ ERROR: 0
+
+[VERDICT] The style guide v3.22 is in strong shape. No ERROR-level findings. The 5 WARNINGs are all documentation completeness issues, not runtime safety problems. The most impactful items to address when next editing the relevant files:
+  1. MAINT-3: Add MA 2.7 feature notes to §7 (Sendspin, AirPlay 2)
+  2. CQ-5: Fix 4 unguarded states() calls in §7 and §8 examples
+  3. ARCH-6: 19 blueprints still need companion READMEs (42% gap)
+  4. AIR-6: Re-measure master index token claim (93% drift from actual)
+  5. CQ-1/CQ-7: Add aliases to multi-step pattern examples
+
+[STATUS] COMPLETE

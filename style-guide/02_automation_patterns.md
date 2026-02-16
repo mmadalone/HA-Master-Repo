@@ -448,7 +448,7 @@ triggers:
 - More readable — intent is clear from the trigger type.
 - Target-first workflow: pick an area, then HA suggests relevant triggers.
 
-**Current status (as of early 2026):** This is still a **Labs** feature — opt-in via Settings → System → Labs. It will likely become the standard pattern. When writing new automations, consider noting this as a future simplification opportunity in comments, but **don't use Labs features in production blueprints shared with others** unless `min_version` is set and the feature has graduated from Labs.
+**Current status (as of HA 2026.2, February 2026):** Purpose-specific triggers remain a **Labs** feature — opt-in via Settings → System → Labs. The domain coverage has expanded steadily: 2025.12 introduced the first batch (light, cover, lock, motion/occupancy, and numeric state semantic triggers), 2026.1 added button press, climate mode, and device_tracker triggers, and 2026.2 brought calendar event (start/end), person presence (arrives home/leaves), vacuum docking, and media player state triggers — plus the first **purpose-specific conditions** (checking entity states using the same semantic language). When writing new automations, consider noting this as a future simplification opportunity in comments, but **don't use Labs features in production blueprints shared with others** unless `min_version` is set and the feature has graduated from Labs.
 
 ### 5.12 Idempotency — every action safe to run twice
 

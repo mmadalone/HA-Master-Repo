@@ -481,14 +481,16 @@ sequence:
       - condition: template
         value_template: "{{ missing_or_disabled }}"
     then:
-      - action: persistent_notification.create
+      - alias: "Warn: active media automation misconfigured"
+        action: persistent_notification.create
         data:
           title: "Voice – Pause Active Media – Misconfiguration"
           message: >- ...
       - stop: "Active media automation not available"
 
   # Fire the command
-  - action: automation.trigger
+  - alias: "Trigger active media control automation"
+    action: automation.trigger
     target:
       entity_id: "{{ active_media_automation }}"
     data:
@@ -591,7 +593,8 @@ Key features:
 - choose:
     - conditions: "{{ answer.id == 'genre' }}"
       sequence:
-        - action: music_assistant.play_media
+        - alias: "Play genre playlist from voice request"
+          action: music_assistant.play_media
           data:
             media_id: "My {{ answer.slots.genre }} playlist"
             media_type: playlist
@@ -654,7 +657,7 @@ ElevenLabs is a cloud API — it can fail due to rate limits, API outages, netwo
   if:
     - condition: template
       value_template: >-
-        {{ states(player) not in ['playing', 'buffering'] }}
+        {{ states(player) | default('unavailable') not in ['playing', 'buffering'] }}
   then:
     - action: tts.speak
       target:

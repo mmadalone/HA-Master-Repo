@@ -52,6 +52,8 @@ wifi:
 
 **`min_version`** — configs SHOULD include `min_version` inside the `esphome:` block. This prevents compilation against older ESPHome versions that lack features your config depends on. Set it to the oldest version that supports all features used in the config. Particularly important for package-based devices where a package update may introduce newer syntax.
 
+> **Framework change (ESPHome 2026.1.0):** ESP-IDF is now the **default framework** for ESP32, ESP32-C3, ESP32-S2, and ESP32-S3 targets, replacing Arduino. This delivers up to 40% smaller binaries and faster compile times. Most configs need no changes — ESPHome handles the framework transparently. If you explicitly set `framework: type: arduino` in a config, it still works but you're opting out of the size/speed improvements. Only specify the framework explicitly if you depend on an Arduino-only library. Also new in 2026.1: automatic **WiFi roaming** (devices switch to stronger APs after connecting) — no config needed, it just works.
+
 **`area`** — since ESPHome 2023.11.0, the `area` field auto-assigns the device to an HA area on adoption, eliminating manual registry edits. Use the exact HA area name (e.g., `Workshop`, `Living Room`). If the area doesn't exist in HA, it will be created automatically. (Note: ESPHome 2025.7.0 introduced sub-devices with the `devices:` block and per-device `area:` — see §6.12. The top-level `area:` field predates that by nearly two years.)
 
 ### 6.2 Substitutions (MANDATORY)
@@ -172,6 +174,9 @@ sensor:
 ```
 
 ### 6.4 Secrets in ESPHome (MANDATORY)
+
+> ⚠️ **API password REMOVED (ESPHome 2026.1.0):** The `api: password:` option was deprecated in May 2022 and has been **fully removed** in ESPHome 2026.1.0. Configs that include `password:` under `api:` will **fail to build**. All API authentication must use `api: encryption: key:` with a base64 key generated via `openssl rand -base64 32`. If migrating old devices, remove the `password:` line, add an `encryption: key:`, and re-adopt the device in HA with the new key.
+
 ESPHome has its own `secrets.yaml` at `/config/esphome/secrets.yaml`, separate from HA's root `secrets.yaml`. Use `!secret` for ALL sensitive values:
 
 ```yaml

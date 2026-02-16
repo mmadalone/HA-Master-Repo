@@ -222,11 +222,13 @@ The RULES section tells the LLM to ask for confirmation, but the conversation mu
 - choose:
     - conditions: "{{ confirm_answer is defined and confirm_answer.id == 'confirm' }}"
       sequence:
-        - action: cover.close_cover
+        - alias: "Close the garage door (confirmed)"
+          action: cover.close_cover
           target:
             entity_id: cover.garage_door
   default:
-    - action: tts.speak
+    - alias: "Announce cancellation"
+      action: tts.speak
       data:
         message: "Cancelled. Garage door stays open."
 ```
@@ -428,7 +430,8 @@ script:
         selector:
           text:
     sequence:
-      - action: conversation.process
+      - alias: "Forward request to workshop specialist"
+        action: conversation.process
         data:
           agent_id: "conversation.rick_extended"   # Workshop specialist agent entity
           text: "{{ user_request }}"
