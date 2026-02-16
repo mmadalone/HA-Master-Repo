@@ -8,9 +8,9 @@ The style guide governs AI-assisted development of Home Assistant blueprints, au
 
 ## What's Inside
 
-The master index defines three **operational modes** — BUILD, TROUBLESHOOT, and AUDIT — each with its own loading rules, enforcement gates, and token budgets. A task-specific routing table maps every common operation (new blueprint, debug automation, review existing code, QA check) to the exact files and sections the AI should load. The full table of contents catalogues all 15 top-level sections, 128 subsections, 43 anti-patterns, and 8 security checks across the guide.
+The master index defines three **operational modes** — BUILD, TROUBLESHOOT, and AUDIT — each with its own loading rules, enforcement gates, and token budgets. A task-specific routing table maps every common operation (new blueprint, debug automation, review existing code, QA check) to the exact files and sections the AI should load. The full table of contents catalogues all 15 top-level sections, 132 subsections, 43 anti-patterns, and 8 security checks across the guide.
 
-The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.21. Each entry references the build log that produced it, creating a complete audit trail.
+The file also maintains the guide's **changelog**, tracking every structural change from the initial v2.6 through the current v3.22. Each entry references the build log that produced it, creating a complete audit trail.
 
 ## When to Load
 
