@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.19 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.21 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~110K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -34,7 +34,7 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 
 ## AI Task Routing — Load Only What You Need
 
-> **🚨 LOG GATES (AP-39):** (a) **BUILD mode:** Every file edit requires a build log in `_build_logs/` **BEFORE the first write**. Compact or full format per §11.8. (b) **AUDIT mode:** Every `sanity check` or audit command (§15.2) requires a log pair (progress + report) per §11.8.2 **BEFORE the first check runs** — unconditional, even with zero findings. (c) **Escalation:** When check findings are approved for fixing, create a build log before the first edit. These are hard gates — not "I'll do it after."
+> **🚨 LOG GATES (AP-39):** (a) **BUILD mode:** Every file edit requires a build log in `_build_logs/` **BEFORE the first write**. Full schema per §11.8 — no exceptions, no "compact" alternative. (b) **AUDIT mode:** Every `sanity check` or audit command (§15.2) requires a log pair (progress + report) per §11.8.2 **BEFORE the first check runs** — unconditional, even with zero findings. (c) **Escalation:** When check findings are approved for fixing, create a build log before the first edit. These are hard gates — not "I'll do it after."
 
 > **🚨 HEADER IMAGE GATE (AP-15) — BUILD mode only:** When building a new blueprint/script OR reviewing one that has no `![` image in its description **or whose referenced image file does not exist on disk** (at `HEADER_IMG` — see Project Instructions for resolved path): **ask the user** about the header image, generate it, present it, and **wait for explicit approval or decline**. Do NOT write any YAML until you get a clear answer. If the user ignores the question, **insist** — repeat the ask. No exceptions. See §11.1 step 4 for defaults (1K, 16:9, premise from `IMG_PREMISES`). Allowed image formats: `.jpeg`, `.jpg`, `.png`, `.webp`.
 
@@ -306,6 +306,14 @@ The section numbers are preserved across files for cross-referencing.
 ---
 
 ## Changelog
+
+### v3.21 — 2026-02-16
+- **AP-43 + `## Edit Log` section added — log-after-work enforcement.** Added `## Edit Log` section to the §11.8 build log schema template (between Files Modified and Current State) with per-edit timestamped lines. Added AP-43 (⚠️ WARNING) to the scan table flagging build logs not updated between consecutive edits ("stale log" anti-pattern). Added Rule #43 in Development Environment numbered rules. Updated §11.0 log-after-work invariant to reference the Edit Log section. Addresses the failure mode observed during v3.20 where 7 edits landed without a single log update.
+- Build log: `_build_logs/2026-02-16_log_after_work_enforcement_build_log.md`
+
+### v3.20 — 2026-02-16
+- **§11.8 — Single build log schema, compact format eliminated.** Analysis of 47 build logs showed compact logs (5 fields) save ~3 min per log but cost ~30 min per crash recovery. Replaced the two-tier system (compact vs full) with one mandatory schema for all builds. Simple edits use shorter sections but the same schema — no fields are optional. Removed all "compact or full" references from §11.0 (log-before-work invariant), AP-39 scan table, Rule #39, §11.2 step 0, §11.8.2 escalation chain, and the master index LOG GATES box.
+- Build log: `_build_logs/2026-02-16_kill_compact_log_format_build_log.md`
 
 ### v3.19 — 2026-02-16
 - **§11.0 — Log invariants broadened and renamed** — Log-before-edit → **log-before-work**, log-after-edit → **log-after-work**. Both now MANDATORY for BUILD and AUDIT modes (previously BUILD-only). Before-work covers build logs, AUDIT log pairs (§11.8.2), and deep-pass checkpoint files (§11.15.2). After-work requires updating the relevant log after every file write (BUILD) or check/stage completion (AUDIT) before proceeding. Sequence: log → work → update log → next work. Closes the gap where the after-invariant was only implied across scattered subsections and audits had no explicit update-after-each-step rule.

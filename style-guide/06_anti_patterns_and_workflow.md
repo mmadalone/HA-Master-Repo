@@ -67,9 +67,10 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-36 | ❌ | `bash_tool` / `view` / `create_file` used for HA config file operations | §10 #36 |
 | AP-37 | ⚠️ | Single-pass generation over ~150 lines OR >3 complex template blocks | §11.5 |
 | AP-38 | ⚠️ | First output block is YAML/code with no preceding reasoning | §1.10 |
-| AP-39 | ⚠️ | (a) Any BUILD-mode file edit — regardless of size — with no build log in `_build_logs/` before the first write. Compact or full format per §11.8. (b) Any `sanity check` or audit command (§15.2) executed without creating the mandatory log pair (progress + report) per §11.8.2. Logs are unconditional — zero findings still gets logged. (c) Any check findings approved for fixing without a BUILD-mode escalation and build log before the first edit. | §11.8, §11.8.1, §11.8.2 |
+| AP-39 | ⚠️ | (a) Any BUILD-mode file edit — regardless of size — with no build log in `_build_logs/` before the first write. (b) Any `sanity check` or audit command (§15.2) executed without creating the mandatory log pair (progress + report) per §11.8.2. Logs are unconditional — zero findings still gets logged. (c) Any check findings approved for fixing without a BUILD-mode escalation and build log before the first edit. | §11.8, §11.8.1, §11.8.2 |
 | AP-40 | ⚠️ | Full-file `read_file` on a 1000+ line file when the task only requires editing a specific section | §11.13 |
 | AP-41 | ⚠️ | User indicates a crash/interruption occurred but AI begins fresh work without checking `_build_logs/`, git state, or past conversations for recovery context | §11.0 |
+| AP-43 | ⚠️ | Build log exists but `## Edit Log` section was not updated between consecutive edits (batched log updates — defeats crash recovery because the log doesn't reflect which edits actually landed) | §11.0, §11.8 |
 
 **Severity key:** ❌ ERROR = must fix before presenting · ⚠️ WARNING = fix unless user explicitly accepts · ℹ️ INFO = flag to user, fix if trivial
 
@@ -186,9 +187,10 @@ For daily call budgets, pair with a `counter` helper that resets at midnight via
 36. **Never use container/sandbox tools (`bash_tool`, `view`, `create_file`) for HA config or project file operations.** All filesystem access goes through Desktop Commander or Filesystem MCP tools targeting the user's actual filesystem. The container environment is for Claude's internal scratch work only — the user's files don't live there. Using the wrong toolset creates delays, generates errors, and wastes everyone's time.
 37. **Never generate a file over ~150 lines in a single uninterrupted pass.** Context compression during long outputs causes dropped sections, forgotten decisions, and inconsistent logic. Use the chunked generation workflow (§11.5) instead.
 38. **Never jump straight to YAML/code without explaining your approach first.** The reasoning-first directive (§1.10) is MANDATORY — state your understanding, explain chosen patterns, flag ambiguities, THEN generate. If your first output block is a code fence, you skipped the step.
-39. **Never edit a file in BUILD mode without a build log on disk first. Never run a sanity check or audit command without creating the mandatory log pair first.** Three gates, no exceptions: (a) Every BUILD-mode file edit gets a build log (compact or full per §11.8) before the first write. (b) Every `sanity check` or audit command (§15.2) gets a log pair — progress + report per §11.8.2 — before the first check runs. Logs are unconditional: zero findings still gets logged. (c) When check findings are approved for fixing, that's a BUILD-mode escalation — build log before the first edit, referencing the report log. Without the log pair, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it found nothing, why log it?" rationalization is exactly how audit trails disappear.
+39. **Never edit a file in BUILD mode without a build log on disk first. Never run a sanity check or audit command without creating the mandatory log pair first.** Three gates, no exceptions: (a) Every BUILD-mode file edit gets a build log (§11.8) before the first write. (b) Every `sanity check` or audit command (§15.2) gets a log pair — progress + report per §11.8.2 — before the first check runs. Logs are unconditional: zero findings still gets logged. (c) When check findings are approved for fixing, that's a BUILD-mode escalation — build log before the first edit, referencing the report log. Without the log pair, crash recovery forces a full re-scan, and there's no paper trail linking findings to fixes. The "it found nothing, why log it?" rationalization is exactly how audit trails disappear.
 40. **Never load an entire large file (1000+ lines) into context just to edit a specific section.** Use `read_file` with line range parameters to read only the relevant section. Use `edit_block` for surgical edits — replace only what changed. Verify with a targeted `read_file` of the edited section, not the whole file. If you need to understand the file's structure first, read the first ~50 lines or use `search_files` / `grep` to locate the target section. Full file reads are only justified when the task genuinely requires understanding the entire file (e.g., full audits, refactors, or new builds). See §11.13.
 41. **Never ignore crash recovery signals.** When the user says "it crashed," "you bugged out," "pick up where we left off," or any variation implying a previous session was interrupted, always execute the §11.0 crash-recovery protocol before starting new work. Check `_build_logs/` for incomplete logs, run `ha_git_pending` / `ha_git_diff` for uncommitted changes, and use `conversation_search` / `recent_chats` to recover conversation context. Present findings to the user before touching any files. Skipping recovery because "it's faster to start fresh" is how you overwrite 80% of a working build with a blank file.
+43. **Never batch build log updates across multiple edits.** After every write to a target file, update the build log's `## Edit Log` section BEFORE starting the next edit. The sequence is: edit target file → append to Edit Log → next edit. If the session crashes between edits 3 and 4, the Edit Log must show edits 1–3 as landed. A build log that exists but was not updated between edits is a stale log — it tells recovery sessions the wrong state and causes duplicate or missed edits. This is the log-after-work invariant (§11.0) made concrete and scannable.
 
 ---
 
@@ -227,9 +229,9 @@ This applies even to single-file tasks. The key insight: *git* knows about crash
 
 The proactive check catches crashes the user *forgot* to mention. The reactive check handles crashes the user *explicitly reports*. Together, they ensure no interrupted work is silently lost or overwritten.
 
-**Log-before-work invariant (MANDATORY — BUILD and AUDIT modes):** Every BUILD-mode file edit requires a build log in `_build_logs/` before the first write to any target file. No threshold, no minimum change count — one fix or fifty, the log comes first. Simple edits use the compact log format (§11.8); multi-chunk builds, crash recovery, and multi-file scopes use the full build log schema. Every AUDIT-mode command requires its log pair (§11.8.2) before the first check runs, and deep-pass audits require the checkpoint file (§11.15.2) with the first stage marked `IN_PROGRESS` before that stage begins. Scanning, analyzing, and planning do not count as work — but the moment a target file is written (BUILD) or a check is executed (AUDIT), the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
+**Log-before-work invariant (MANDATORY — BUILD and AUDIT modes):** Every BUILD-mode file edit requires a build log in `_build_logs/` before the first write to any target file. No threshold, no minimum change count — one fix or fifty, the log comes first. Simple edits use the same schema as complex builds (§11.8) — sections will be shorter, but no fields are optional. Every AUDIT-mode command requires its log pair (§11.8.2) before the first check runs, and deep-pass audits require the checkpoint file (§11.15.2) with the first stage marked `IN_PROGRESS` before that stage begins. Scanning, analyzing, and planning do not count as work — but the moment a target file is written (BUILD) or a check is executed (AUDIT), the log must already be on disk. This is a hard gate, not a "create it when you get around to it." The log captures intent and state *before* the edit changes reality — writing the log after the edit defeats its purpose as a recovery checkpoint.
 
-**Log-after-work invariant (MANDATORY — BUILD and AUDIT modes):** After every write to a target file (BUILD) or completion of a check/stage (AUDIT), update the relevant log BEFORE proceeding to the next step. For BUILD: update the build log’s status, files modified, and completed chunks/tasks. For AUDIT: update the progress log with each check result, and for deep-pass audits update the stage marker from `IN_PROGRESS` to `COMPLETE` in the checkpoint (§11.15.2). No batching, no “I’ll update the log when I’m done.” The log reflects reality at all times — if the session crashes, the log tells the recovery session exactly what landed and what didn’t. The sequence is: log → work → update log → next work. Every cycle, no exceptions. A build log that says “none yet” while three files have been modified, or a progress log missing results from completed checks, is not a log — it’s a fiction.
+**Log-after-work invariant (MANDATORY — BUILD and AUDIT modes):** After every write to a target file (BUILD) or completion of a check/stage (AUDIT), update the relevant log BEFORE proceeding to the next step. For BUILD: append a line to the build log’s `## Edit Log` section recording what just landed, then update `Planned Work` checkboxes and `Current State` as needed. For AUDIT: update the progress log with each check result, and for deep-pass audits update the stage marker from `IN_PROGRESS` to `COMPLETE` in the checkpoint (§11.15.2). No batching, no “I’ll update the log when I’m done.” The log reflects reality at all times — if the session crashes, the log tells the recovery session exactly what landed and what didn’t. The sequence is: log → work → update log → next work. Every cycle, no exceptions. A build log that says “none yet” while three files have been modified, or a progress log missing results from completed checks, is not a log — it’s a fiction.
 
 **`_build_logs/` location (MANDATORY):** Build and audit logs are ALWAYS created in `PROJECT_DIR/_build_logs/`, never in `HA_CONFIG` or any other directory. `HA_CONFIG` is for Home Assistant configuration — not development artifacts. If you catch yourself writing a log to the SMB mount path, you're targeting the wrong filesystem. This applies regardless of whether the files being edited live in `PROJECT_DIR` or `HA_CONFIG`.
 
@@ -257,7 +259,7 @@ The proactive check catches crashes the user *forgot* to mention. The reactive c
 8. **README generation (§11.14)** — After the blueprint/script is verified and the user has confirmed it works, generate the companion README. Use the §11.14 template. Save to the appropriate `readme/` subdirectory (`README_AUTO_DIR`, `README_SCRI_DIR`, or `README_TEMPL_DIR` per Project Instructions). If the build session is long and the user seems done, offer rather than force: *"Blueprint's working — want me to generate the README now, or save it for later?"* For fresh builds, default to generating it immediately.
 
 ### 11.2 When the user asks to review/improve something
-0. **(Mandatory for any review that produces findings)** Create an audit log per §11.8.1 before reporting findings — even one finding on one file gets a log on disk. Update it after each file completes. Findings are also reported in-chat using the structured `[ISSUE]` format: `[ISSUE] filename | AP-ID | severity | line | description | fix`. Skipping the log is a violation of AP-39. If the review leads to edits (AUDIT → BUILD escalation), a build log (compact or full per §11.8) is required before the first edit.
+0. **(Mandatory for any review that produces findings)** Create an audit log per §11.8.1 before reporting findings — even one finding on one file gets a log on disk. Update it after each file completes. Findings are also reported in-chat using the structured `[ISSUE]` format: `[ISSUE] filename | AP-ID | severity | line | description | fix`. Skipping the log is a violation of AP-39. If the review leads to edits (AUDIT → BUILD escalation), a build log (§11.8) is required before the first edit.
 1. Read the file from the SMB mount.
 1b. **Verify referenced assets** — check that any images, scripts, or entities referenced in the blueprint/script header actually exist. For images: verify the file exists at `HEADER_IMG` (`GIT_REPO/images/header/`) and that the GitHub raw URL in the description resolves correctly (should match `HEADER_IMG_RAW` + filename). Flag missing assets as AP-15 violations. Additionally, verify that a companion README exists in the appropriate `readme/` subdirectory (see §11.14). Flag missing READMEs as documentation gaps.
 2. Identify issues against this style guide.
@@ -373,9 +375,17 @@ During any multi-step build, maintain a running decision log as a file. After ea
 ## Meta
 - **Date started:** YYYY-MM-DD
 - **Status:** in-progress | completed | aborted
-- **Last updated chunk:** <chunk N of M>
+- **Mode:** BUILD | crash-recovery | audit-escalation
 - **Target file(s):** <path(s) being written>
 - **Style guide sections loaded:** <list of § refs, e.g. §3, §5.1, §7.4>
+- **Git checkpoint:** <checkpoint tag or "not required (style guide edits)">
+
+## Task
+<!-- 2-4 sentences: what's being built and why. Enough context for a cold-start session
+     to understand the goal without reading the full conversation history. -->
+Build bedtime routine blueprint v5.1.3. Presence-aware bedtime negotiation with
+Rick persona, MA integration for lullaby playback, and snooze support via mobile
+notification actions.
 
 ## Decisions
 <!-- One line per decision. Format: topic: choice (rationale if non-obvious) -->
@@ -384,8 +394,9 @@ During any multi-step build, maintain a running decision log as a file. After ea
 - TTS engine: ElevenLabs via tts.speak, post-TTS delay 5s
 - Agent: Rick - Extended - Bedtime (separate prompt file)
 
-## Completed chunks
-<!-- Checked = written and confirmed. Unchecked = planned but not yet written. -->
+## Planned Work
+<!-- Checked = written and confirmed. Unchecked = planned but not yet written.
+     For single-edit tasks, a one-item list is fine. The point is: what's done vs what's left. -->
 - [x] Blueprint header + inputs (written to /config/blueprints/automation/madalone/bedtime.yaml)
 - [x] Variables + trigger block
 - [ ] Actions part 1 (detection + preparation)
@@ -396,6 +407,15 @@ During any multi-step build, maintain a running decision log as a file. After ea
 <!-- Every file touched during this build, with what changed. -->
 - `/config/blueprints/automation/madalone/bedtime.yaml` — created, chunks 1-2 written
 - Git checkpoint `chk-2026-02-10-bedtime` — pre-edit state preserved
+
+## Edit Log
+<!-- One line per edit, appended IMMEDIATELY after each write lands.
+     This is the log-after-work invariant (§11.0) made visible.
+     Format: [N] target_file — what changed — status
+     A recovery session reads this to know exactly which edits landed. -->
+- [1] bedtime.yaml — header + inputs (chunk 1) — DONE
+- [2] bedtime.yaml — variables + trigger block (chunk 2) — DONE
+- [3] bedtime.yaml — actions part 1 (chunk 3) — IN PROGRESS
 
 ## Current state
 <!-- What's done, what's next, any blockers. This is what a new session reads first. -->
@@ -418,42 +438,32 @@ No blockers. All decisions are final unless user revisits presence detection app
 
 **Why every field matters:**
 - **Status** — so the new session knows whether to resume or start fresh.
-- **Last updated chunk** — so the new session knows exactly where to pick up.
+- **Mode** — so the new session knows the context: normal build, crash recovery, or audit escalation requiring different handling.
 - **Target file(s)** — so the new session reads the partial file without guessing paths.
 - **Style guide sections loaded** — so the new session loads the same context, not the whole guide.
+- **Git checkpoint** — so the new session can verify pre-edit state and roll back if needed.
+- **Task** — so the new session understands the goal without reading the full conversation history.
+- **Decisions** — so the new session doesn't re-debate settled questions.
+- **Planned Work** — so the new session knows exactly what's done and what's left.
 - **Files modified** — so the new session knows what to version-check before continuing.
-- **Current state** — so the new session doesn't re-debate settled decisions.
-- **Recovery** — so the new session has a machine-parseable checklist instead of parsing prose. `Current state` is the human-readable narrative; `Recovery` is the structured companion optimized for cold-start AI sessions. Both are optional individually (one is enough), but together they cover both human and AI readers.
+- **Current state** — human-readable narrative of where things stand. A new session reads this first.
+- **Recovery** — machine-parseable companion to Current State, optimized for cold-start AI sessions. Contains the resume point, next action, open decisions, blockers, and search query hints for `conversation_search`.
 
 **Recovery — when starting a new conversation after a crash:**
 
 The user pastes or points to the build log. The AI reads it, reads the partially-written file, and picks up from the last completed chunk. No re-debating decisions, no re-reading the entire style guide (use the routing table in the index).
 
 **When to create a build log:**
-- **Every BUILD-mode file edit. No exceptions.** One change or twenty — the log exists on disk before the first write.
+- **Every BUILD-mode file edit. No exceptions.** One change or twenty, one file or five — the log exists on disk before the first write. Every log uses the full schema above. There is no "light" or "compact" alternative.
 - TROUBLESHOOT mode does NOT require a log — until it escalates to BUILD (see operational modes in master index), at which point the escalation creates a log before the first edit.
-- AUDIT mode requires an audit log (§11.8.1) whenever there are findings — even one finding on one file. If the audit leads to fixes, that’s a BUILD escalation — build log (compact or full) before you edit.
+- AUDIT mode requires an audit log (§11.8.1) whenever there are findings — even one finding on one file. If the audit leads to fixes, that's a BUILD escalation — build log before you edit.
 
-**Two formats, scaled to complexity:**
+**Why one schema, no exceptions:** Analysis of 47 build logs showed that "compact" logs (date, status, files, changes, git — five fields) save ~3 minutes of writing time but cost ~30 minutes on every crash recovery. They tell recovery sessions *what* was done but not *where to resume*, *what decisions led to the approach*, or *how to find the original conversation*. The full schema costs a few extra minutes per log and pays for itself the first time a session crashes. The 3rd Rule of Acquisition: "Never spend more for an acquisition than you have to." A compact log spends less upfront and pays triple later. Bad trade.
 
-| Format | Use when | Schema |
-|--------|----------|--------|
-| **Compact log** | Simple edits — quick fixes, single-file changes, small additions | Compact schema below |
-| **Full build log** | Any build using chunked generation (§11.5), crash recovery/resumed sessions, significant design discussion (§11.6), user flags the task as large, multi-file edits where changes are interdependent | Full schema above |
+**For simple edits** (quick fixes, single-file changes, alias renames): use the same schema, but most sections will be short. A one-line `Planned Work` checklist, a one-line `Decisions` section ("fix AP-16 violation"), and a two-sentence `Current state` are perfectly fine. The schema accommodates small tasks — it just doesn't let you skip the Recovery section that saves the next session 30 minutes of archaeology.
 
-When in doubt, use the full format — the overhead is five extra minutes, and the recovery value is worth it. If an edit starts compact and grows, upgrade by appending the remaining full-schema sections (Decisions, Chunks, Files Modified, Current State, Blockers).
-
-**Compact log schema** — the minimum viable receipt:
-
-```markdown
-# Edit Log — <brief_description>
-**Date:** YYYY-MM-DD · **Status:** complete | in-progress
-**File(s):** `path/to/file.yaml`
-**Changes:** <1–3 line summary of what changed and why>
-**Git:** checkpoint created before edit: yes/no
-```
-
-Same naming convention as full logs: `YYYY-MM-DD_<slug>_build_log.md`. Same location: `PROJECT_DIR/_build_logs/`.
+**Build log naming convention:** `YYYY-MM-DD_<slug>_build_log.md` (underscores in slug, no spaces)
+**Save location:** `PROJECT_DIR/_build_logs/`
 
 ---
 
@@ -605,7 +615,7 @@ Finding format: `[FINDING] CHECK-ID | severity | file | description`
 - Uses `[FINDING]` to distinguish QA check results from anti-pattern scan `[ISSUE]` entries (§11.8.1).
 
 **The escalation chain:**
-When check findings are approved for fixing, that's a BUILD-mode escalation. The escalation creates a build log (compact or full per §11.8) BEFORE the first edit. The build log's `Decisions` section references the report log by filename. This creates a complete paper trail: progress → report → build log → git commit.
+When check findings are approved for fixing, that's a BUILD-mode escalation. The escalation creates a build log (§11.8) BEFORE the first edit. The build log's `Decisions` section references the report log by filename. This creates a complete paper trail: progress → report → build log → git commit.
 
 **Relationship to §11.8.1 audit logs:**
 The structured markdown audit log format in §11.8.1 remains valid for multi-file blueprint/script compliance sweeps (e.g., "scan all 18 blueprints against §10"). The log pairs defined here cover style guide QA checks (§15 commands). Use whichever format fits the task:
