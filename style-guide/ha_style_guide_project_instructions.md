@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.22 — 2026-02-16** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.25 — 2026-02-17** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~110K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -307,6 +307,13 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Changelog
 
+### v3.25 — 2026-02-17
+- **AP-44 Section ① exemption removed.** HA requires ALL inputs in ANY collapsible section to have `default:` — regardless of `collapsed: true` or `collapsed: false`. The previous exemption ("Section ① inputs are exempt") was incorrect; HA's UI engine silently downgrades any section with a default-less input to non-collapsible. Updated: §3.2 AP-44 rule header, §3.2 code example (moved `person_entity` into Section ①, added defaults to all example inputs), §3.2 exemption bullet → corrected, AP-44 entry in `06_anti_patterns_and_workflow.md`.
+
+### v3.24 — 2026-02-17
+- **AP-44 added + §3.2 type-appropriate defaults table.** Expanded collapsible section defaults rule with per-type guidance: `input_boolean` → `default: false` (always, any section), `input_number` → midpoint, `selector: time` → contextual time, `selector: select` → safest option, `input_text` → `default: ""`. Bare `default:` (YAML null) prohibited everywhere except entity selectors (documented exception). AP-44 (⚠️ WARNING) added to Development Environment scan table with five detection flags: missing default in collapsed section, bare null, `input_boolean` without default in any section, Section ① set collapsed, Section ②+ expanded without justification. Cross-ref §3.2.
+- Build log: `_build_logs/2026-02-17_ap43_collapsible_section_defaults_build_log.md`
+
 ### v3.23 — 2026-02-17
 - **§3.2 — `default:` requirement for collapsible sections.** Added rule: every input inside a collapsible section MUST have a `default:` value or HA silently downgrades the section to non-collapsible. Entity selectors get `default:` (empty/null), target selectors get `default: {}`. Added AP-09a to scan table for detection. Discovered via bedtime_routine_plus.yaml audit — 4 of 11 sections were silently non-collapsible due to missing defaults.
 
@@ -365,6 +372,11 @@ The section numbers are preserved across files for cross-referencing.
 - **Sanity check prompt retired** — `_build_logs/sanity_check_prompt.md` deleted. Redundant — §15.2 execution standard and check definitions in §15.1 already cover the same ground. "Run a sanity check" is all that's needed.
 - **QA checklist updated** — §15.2 command table now includes log pair requirement callout with AP-39 cross-reference.
 - Build log: `_build_logs/2026-02-14_sanity_audit_log_pairs_build_log.md`
+
+### v3.13 — 2026-02-17
+- **AP-44 added** — "Null or Missing Defaults in Collapsible Sections" (Medium severity). Detects missing `default:`, bare `default:` (YAML null), `input_boolean` without explicit default, and incorrect section collapse states. Added to `06_anti_patterns_and_workflow.md` catalog table.
+- **§3.2 updated** — Collapsible section defaults rule rewritten. Section ① now requires explicit `collapsed: false` (not omitted). Section ②+ all `collapsed: true`. Bare `default:` prohibited; entity selectors use `default: {}`. `input_boolean` always requires explicit default regardless of section. Cross-references AP-44.
+- Build log: `_build_logs/2026-02-17_ap43_collapsible_section_defaults_build_log.md`
 
 ### v3.12 — 2026-02-14
 - **AP-39 — all thresholds eliminated** — Every BUILD-mode file edit now requires a log in `_build_logs/` before the first write, regardless of change count or file count. Every AUDIT with findings requires an audit log, regardless of finding count or file count. Compact log format introduced for simple BUILD edits; full build log schema unchanged for multi-chunk builds and complex scopes.

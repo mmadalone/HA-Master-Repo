@@ -66,6 +66,7 @@ blueprint:
     core_settings:
       name: "① Core settings"
       icon: mdi:music-note
+      collapsed: false
       description: The toggle and players this automation manages.
       input:
         follow_switch:
@@ -76,6 +77,7 @@ blueprint:
           selector:
             entity:
               domain: input_boolean
+          default: ""
 
         music_players:
           name: Music players to monitor
@@ -86,6 +88,7 @@ blueprint:
             entity:
               domain: media_player
               multiple: true
+          default: ""
 
     # ===========================================================================
     # ② BEHAVIOR
@@ -93,6 +96,7 @@ blueprint:
     behavior:
       name: "② Behavior"
       icon: mdi:cog-outline
+      collapsed: true
       description: Idle timeout and auto-enable settings.
       input:
         idle_minutes:

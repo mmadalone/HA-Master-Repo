@@ -56,6 +56,7 @@ blueprint:
     complete voice-controlled radio system.
 
     ### Recent changes
+    - **v6:** Empty-list guard on stop/pause action (AP-16), `>` → `>-` on condition template (§3.7), `default: []` on `players_to_stop`, `debug_summary` trace variable
     - **v5:** Empty player_list guard in stop_targets template (AP-16), `>` → `>-` on variable templates (§3.7), explicit `default: []` on auto-reset choose
     - **v4:** Template hardening & error resilience — `| int(-1)` guard on `detected_index`, trigger `id:`, all inputs in `variables:`, `continue_on_error` on service calls, `===` dividers
     - **v3:** Template safety (`| default()` on states()), §3.2 section naming/dividers, explicit `conditions: []`
@@ -99,6 +100,7 @@ blueprint:
             All Music Assistant players that should be stopped. In "stop all"
             mode, every player in this list is stopped. In "presence-aware"
             mode, only the player mapped to your current room is stopped.
+          default: []
           selector:
             entity:
               filter:
@@ -244,6 +246,12 @@ variables:
       {{ player_list }}
     {% endif %}
 
+  debug_summary: >-
+    mode={{ 'presence' if presence_aware_flag else 'all' }},
+    targets={{ stop_targets | length }},
+    pause={{ pause_flag }},
+    reset_booleans={{ reset_booleans_flag }}
+
 # ===========================================================================
 # Actions
 # ===========================================================================
@@ -262,6 +270,10 @@ actions:
     default: []
 
   - alias: "Stop or pause target players based on user preference"
+    condition: template
+    value_template: "{{ stop_targets | length > 0 }}"
+
+  - alias: "Stop or pause — dispatch by mode"
     choose:
       - alias: "Pause mode — preserve queue for later resume"
         conditions:
@@ -285,7 +297,7 @@ actions:
       - alias: "Reset enabled and booleans configured — turn them off"
         conditions:
           - condition: template
-            value_template: >
+            value_template: >-
               {{ reset_booleans_flag and radio_booleans_list | length > 0 }}
         sequence:
           - alias: "Turn off radio dispatch booleans"

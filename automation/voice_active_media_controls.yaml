@@ -1,6 +1,7 @@
 blueprint:
   name: "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
   author: madalone
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/voice_active_media_controls.yaml
   description: >
     ![Voice Active Media Controls](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_active_media_controls.jpeg)
 
@@ -18,6 +19,8 @@ blueprint:
 
     ### Recent changes
 
+    - **v3:** Audit fixes — collapsible sections, defaults on all inputs, source_url
+
     - **v2:** Restructured choose architecture, migrated to 2024.10+ syntax
 
     - **v1:** Initial version — unified voice media control dispatcher
@@ -34,18 +37,21 @@ blueprint:
       name: "① Media players"
       icon: mdi:speaker-group
       description: Configure which media players this automation can control.
+      collapsed: false
       input:
         candidates:
           name: Candidate media players (priority order)
           description: >
             Priority-ordered list of all media players this automation is
-            allowed to control.
+            allowed to control. At least one candidate is required for
+            pause_active and shut_up commands to function.
 
             Used for "pause_active" (picks the first that is playing or
             paused) and "shut_up" (pauses ALL currently playing).
 
             Recommended order: TV first, then Music Assistant speakers,
             then Spotify, then Alexa/Echo.
+          default: []
           selector:
             entity:
               domain: media_player
@@ -72,6 +78,7 @@ blueprint:
       name: "② Notifications"
       icon: mdi:bell-outline
       description: Configure misconfiguration notifications.
+      collapsed: true
       input:
         enable_notifications:
           name: Enable persistent notifications

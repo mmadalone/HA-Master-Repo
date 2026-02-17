@@ -76,15 +76,16 @@ blueprint:
     - **v2:** Added aliases to all actions, replaced templated data dict with choose block, added template safety guards, added author field
     - **v1:** Initial version
 
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/alexa_presence_radio.yaml
   homeassistant:
     min_version: 2024.10.0
 
   input:
     # ===========================================================================
-    # STAGE 1 — Trigger & Room Configuration
+    # ① TRIGGER & ROOM MAPPING
     # ===========================================================================
-    stage_1_room_mapping:
-      name: "Stage 1 \u2014 Trigger & room mapping"
+    room_mapping:
+      name: "① Trigger & room mapping"
       icon: mdi:floor-plan
       description: >
         Configure the voice-command trigger and map presence sensors to
@@ -105,6 +106,7 @@ blueprint:
             Helpers → Toggle. Expose it to Alexa via HA Cloud, then
             create a single Alexa Routine with your voice phrase
             (e.g. "Radio Klara") that turns this toggle ON.
+          default:
           selector:
             entity:
               domain: input_boolean
@@ -122,6 +124,7 @@ blueprint:
 
             Supports Aqara FP2, PIR sensors, or any binary_sensor where
             ON = someone is in the room.
+          default: []
           selector:
             entity:
               domain: binary_sensor
@@ -135,6 +138,7 @@ blueprint:
 
 
             **The order must exactly match the presence sensors list.**
+          default: []
           selector:
             entity:
               filter:
@@ -159,10 +163,10 @@ blueprint:
               multiple: false
 
     # ===========================================================================
-    # ADDITIONAL ZONE MAPPINGS (up to 10)
+    # ② ADDITIONAL ZONE MAPPINGS (up to 10)
     # ===========================================================================
-    stage_2_extra_zones:
-      name: "Stage 2 \u2014 Additional zone mappings"
+    extra_zones:
+      name: "② Additional zone mappings"
       icon: mdi:map-marker-plus-outline
       description: >
         Map extra presence zones to **existing** speakers. Use this when a
@@ -379,13 +383,14 @@ blueprint:
               multiple: false
 
     # ===========================================================================
-    # REQUIRED — Media
+    # ③ MEDIA & PLAYBACK
     # ===========================================================================
-    stage_3_media:
-      name: "Stage 3 \u2014 Media & playback"
+    media_playback:
+      name: "③ Media & playback"
       icon: mdi:radio
       description: >
         Configure what to play and how.
+      collapsed: true
       input:
         media_id:
           name: Radio station or media to play
@@ -399,6 +404,7 @@ blueprint:
 
 
             Examples: `Radio Klara`, `Studio Brussel`, `BBC Radio 1`
+          default: ""
           selector:
             text:
               multiline: false
@@ -467,10 +473,10 @@ blueprint:
           default: Use player settings
 
     # ===========================================================================
-    # VOLUME SETTINGS
+    # ④ VOLUME SETTINGS
     # ===========================================================================
-    stage_4_volume:
-      name: "Stage 4 \u2014 Volume settings"
+    volume_settings:
+      name: "④ Volume settings"
       icon: mdi:volume-high
       description: >
         Optionally set the speaker volume before playback starts.
@@ -501,10 +507,10 @@ blueprint:
               mode: slider
 
     # ===========================================================================
-    # BEHAVIOUR & SAFETY
+    # ⑤ BEHAVIOUR & SAFETY
     # ===========================================================================
-    stage_5_behaviour:
-      name: "Stage 5 \u2014 Behaviour & safety"
+    behaviour_safety:
+      name: "⑤ Behaviour & safety"
       icon: mdi:shield-check-outline
       description: >
         Control edge-case behaviour: auto-reset, playback protection,
@@ -586,10 +592,10 @@ blueprint:
               multiple: false
 
     # ===========================================================================
-    # ADVANCED OPTIONS
+    # ⑥ ADVANCED OPTIONS
     # ===========================================================================
-    stage_6_advanced:
-      name: "Stage 6 \u2014 Advanced options"
+    advanced_options:
+      name: "⑥ Advanced options"
       icon: mdi:cog-outline
       description: >
         Person gating, voice assistant guard, and additional configuration.
@@ -758,6 +764,9 @@ variables:
 
 # =============================================================================
 # ACTIONS
+# NOTE: Conditions are inline within actions: so auto-off reset runs
+# before any condition can abort the sequence. Do not add a top-level
+# conditions: block.
 # =============================================================================
 actions:
   - alias: "Auto-reset trigger boolean — MUST run before any condition that could abort"
@@ -867,6 +876,7 @@ actions:
         sequence:
           - alias: "Play media with radio_mode true"
             action: music_assistant.play_media
+            continue_on_error: true
             target:
               entity_id: "{{ target_player }}"
             data:
@@ -881,6 +891,7 @@ actions:
         sequence:
           - alias: "Play media with radio_mode false"
             action: music_assistant.play_media
+            continue_on_error: true
             target:
               entity_id: "{{ target_player }}"
             data:
@@ -891,6 +902,7 @@ actions:
     default:
       - alias: "Play media with player default radio mode"
         action: music_assistant.play_media
+        continue_on_error: true
         target:
           entity_id: "{{ target_player }}"
         data:

@@ -13,6 +13,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v10:** Collapsible section compliance — added collapsed keys to
+      all six input sections (① open, ②–⑥ collapsed). Replaced four null
+      defaults with empty strings to enable collapsibility. Removed dead
+      variable `source_is_paused` (computed but never referenced).
+
     - **v9:** Added source-occupied gate — when enabled, the automation
       will not transfer music away from a room that still has presence.
       This prevents "stealing" music from another person who is still
@@ -24,16 +29,6 @@ blueprint:
       bump to 2024.10.0, trigger alias, box-style dividers, trimmed
       changelog.
 
-    - **v7:** Added transfer error recovery — transfer_queue failures no
-      longer crash the automation. Configurable failure announcements with
-      human-friendly messages. Cooldown stamp and silence-other-players
-      are skipped on failed transfers.
-
-    - **v6:** Replaced single TTS players list with independent pre-transfer
-      and post-transfer TTS player lists. Each list is parallel to the
-      presence sensors — you choose exactly which hardware speaker handles
-      each announcement phase per zone. Added exclusive-room toggle to
-      silence all non-target players after a successful transfer.
   domain: automation
   homeassistant:
     min_version: "2024.10.0"
@@ -45,6 +40,7 @@ blueprint:
     core_setup:
       name: "① Core setup"
       icon: mdi:music-note-bluetooth
+      collapsed: false
       description: Follow-me toggle and paired presence-sensor / player lists.
       input:
         follow_switch:
@@ -54,6 +50,7 @@ blueprint:
           selector:
             entity:
               domain: input_boolean
+          default: ""
 
         presence_sensors:
           name: Presence sensors (priority order, first = highest)
@@ -64,6 +61,7 @@ blueprint:
             entity:
               domain: binary_sensor
               multiple: true
+          default: ""
 
         target_players:
           name: Music Assistant players (same order as sensors)
@@ -77,6 +75,7 @@ blueprint:
                   domain:
                     - media_player
               multiple: true
+          default: ""
 
         tts_pre_players:
           name: TTS players for pre-transfer announcements (same order as sensors)
@@ -114,6 +113,7 @@ blueprint:
     persons_gate:
       name: "② Persons gate"
       icon: mdi:account-check
+      collapsed: true
       description: Optionally restrict follow-me to when specific persons are home.
       input:
         person_required:
@@ -142,7 +142,8 @@ blueprint:
     # ===========================================================================
     playback_filters:
       name: "③ Playback filters"
-      icon: mdi:filter-music-note
+      icon: mdi:clipboard-play
+      collapsed: true
       description: >
         Control when follow-me runs based on what's currently playing,
         source restrictions, and target protection.
@@ -268,6 +269,7 @@ blueprint:
     priority_timing:
       name: "④ Priority & timing"
       icon: mdi:timer-cog
+      collapsed: true
       description: >
         Priority anchoring, anti-flicker, transfer delay, and cooldown between transfers.
       input:
@@ -324,7 +326,7 @@ blueprint:
             Input_datetime entity used to remember the time of the last successful
             queue transfer. It must have both date and time. If omitted or if
             cooldown_seconds is 0, the cooldown check is skipped.
-          default:
+          default: ""
           selector:
             entity:
               domain: input_datetime
@@ -336,6 +338,7 @@ blueprint:
     announcements:
       name: "⑤ Announcements"
       icon: mdi:bullhorn
+      collapsed: true
       description: Optional scripts to run before and/or after a queue transfer.
       input:
         pre_announcements_enabled:
@@ -355,7 +358,7 @@ blueprint:
             Script to call before a successful queue transfer. It will receive
             variables "target_player" and "source_player".
             Example: script.announce_music_follow_me_tts_llm_driven
-          default:
+          default: ""
           selector:
             entity:
               domain: script
@@ -377,7 +380,7 @@ blueprint:
             Script to call after a successful queue transfer. It will receive
             variables "target_player" and "source_player".
             Example: script.announce_music_follow_me_tts_llm_driven
-          default:
+          default: ""
           selector:
             entity:
               domain: script
@@ -401,6 +404,7 @@ blueprint:
     safety:
       name: "⑥ Safety"
       icon: mdi:shield-check
+      collapsed: true
       description: Guards to prevent follow-me from interfering with voice interactions.
       input:
         voice_assistant_guard:
@@ -409,7 +413,7 @@ blueprint:
             Optional helper (for example input_boolean.voice_pe_ducking_active)
             that is turned ON while your voice assistant / TTS is speaking.
             When this is ON, follow-me does nothing.
-          default:
+          default: ""
           selector:
             entity:
               multiple: false
@@ -558,13 +562,6 @@ actions:
           {% endif %}
         {% endfor %}
         {{ ns.src }}
-
-      source_is_paused: >
-        {% if music_source_player != '' %}
-          {{ states(music_source_player) | default('unknown') == 'paused' }}
-        {% else %}
-          {{ false }}
-        {% endif %}
 
       any_music_playing: >
         {% set ns = namespace(any=false) %}

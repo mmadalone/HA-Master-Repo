@@ -1,6 +1,7 @@
 blueprint:
-  name: "Proactive – Presence-based suggestions (v5 – direct LLM)"
+  name: "Proactive – Presence-based suggestions (v6 – direct LLM)"
   author: madalone
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/proactive_llm.yaml
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive_llm-header.jpeg)
 
@@ -18,9 +19,9 @@ blueprint:
     Preview) that can call a bedtime script when you say yes.
 
     ### Recent changes
+    - **v6:** Collapsible sections with defaults, continue_on_error on LLM+TTS, source_url
     - **v5:** Style guide compliance — collapsible inputs, modern syntax, aliases
     - **v4:** Direct LLM generation with conversation.process
-    - **v3:** Added bedtime yes/no question via Assist Satellite
   domain: automation
   homeassistant:
     min_version: "2024.10.0"
@@ -33,6 +34,7 @@ blueprint:
       name: "① Presence & schedule"
       icon: mdi:motion-sensor
       description: Configure presence detection and the active time window.
+      collapsed: false
       input:
         presence_sensors:
           name: Presence sensors for this area
@@ -40,6 +42,7 @@ blueprint:
             One or more binary sensors that indicate presence in this area
             (e.g. FP2 room groups for Living room, Workshop, etc.).
             The automation will fire when ANY of these is used as a trigger.
+          default: []
           selector:
             entity:
               domain: binary_sensor
@@ -71,12 +74,14 @@ blueprint:
       name: "② Speaker & TTS"
       icon: mdi:speaker-message
       description: Configure the speaker and TTS integration for announcements.
+      collapsed: true
       input:
         media_player:
           name: Speaker / media player to speak from
           description: >
             Media player that should talk in this area.
             Can be a Home Assistant Voice Preview speaker, Sonos, etc.
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -103,6 +108,7 @@ blueprint:
             - For official ElevenLabs: tts.elevenlabs
             - For custom 11Labs: tts.elevenlabs_custom_tts
             - Any other TTS entity also works.
+          default: ""
           selector:
             entity:
               domain: tts
@@ -126,6 +132,7 @@ blueprint:
       name: "③ AI / LLM"
       icon: mdi:robot
       description: Configure the conversation agent and prompt style.
+      collapsed: true
       input:
         conversation_agent:
           name: Conversation / LLM agent
@@ -134,6 +141,7 @@ blueprint:
             optionally, the bedtime question. This can be OpenAI Conversation,
             Extended OpenAI Conversation, Llama, or any other conversation
             agent that supports the conversation.process action.
+          default: homeassistant
           selector:
             conversation_agent:
 
@@ -180,6 +188,7 @@ blueprint:
       name: "④ Nagging behavior"
       icon: mdi:repeat
       description: Cooldown, repeat nagging, and session limits.
+      collapsed: true
       input:
         cooldown_minutes:
           name: Cooldown / nag interval (minutes)
@@ -229,6 +238,7 @@ blueprint:
       name: "⑤ Bedtime feature"
       icon: mdi:bed
       description: Optional bedtime yes/no question via Assist Satellite.
+      collapsed: true
       input:
         enable_bedtime_question:
           name: Ask if you want help going to bed
@@ -248,6 +258,7 @@ blueprint:
             Assist Satellite (Voice Preview) entity that should ask the
             bedtime question. Typically the satellite in the same area as
             the media player.
+          default: ""
           selector:
             entity:
               domain: assist_satellite
@@ -302,7 +313,7 @@ blueprint:
             create this script separately (e.g. via a script blueprint) and
             then select it here. Leave empty if you are not using the bedtime
             script feature.
-          default:
+          default: ""
           selector:
             entity:
               domain: script
@@ -407,6 +418,7 @@ actions:
 
   - alias: "Generate proactive message with conversation / LLM agent"
     action: conversation.process
+    continue_on_error: true
     data:
       agent_id: !input conversation_agent
       text: >
@@ -462,6 +474,7 @@ actions:
         sequence:
           - alias: "Speak proactive message via ElevenLabs"
             action: tts.speak
+            continue_on_error: true
             target:
               entity_id: "{{ tts_entity }}"
             data:
@@ -477,6 +490,7 @@ actions:
         sequence:
           - alias: "Speak proactive message via standard TTS"
             action: tts.speak
+            continue_on_error: true
             target:
               entity_id: "{{ tts_entity }}"
             data:
@@ -494,6 +508,7 @@ actions:
 
       - alias: "Generate bedtime question with conversation / LLM agent"
         action: conversation.process
+        continue_on_error: true
         data:
           agent_id: !input conversation_agent
           text: >

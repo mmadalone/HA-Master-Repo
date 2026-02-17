@@ -118,6 +118,7 @@ blueprint:
             Should be configured WITHOUT house control — it only needs to return JSON.
           selector:
             conversation_agent:
+          default: ""
 
         default_player:
           name: Default Player
@@ -131,13 +132,13 @@ blueprint:
                 - integration: music_assistant
                   domain: media_player
               multiple: false
-          default:
+          default: ""
 
     playback:
       name: "② Playback settings"
       icon: mdi:music
       description: Controls how Music Assistant handles the playback request.
-      collapsed: false
+      collapsed: true
       input:
         play_continuously:
           name: Radio Mode
@@ -201,7 +202,7 @@ blueprint:
       description: >
         Permanently exclude players from receiving music via this automation.
         Optionally divert to a fallback player instead.
-      collapsed: false
+      collapsed: true
       input:
         blacklisted_players:
           name: Blacklisted players
@@ -241,7 +242,7 @@ blueprint:
                 - integration: music_assistant
                   domain: media_player
               multiple: false
-          default:
+          default: ""
 
     responses:
       name: "④ Trigger & response settings"

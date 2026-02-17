@@ -72,10 +72,11 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-40 | ⚠️ | Full-file `read_file` on a 1000+ line file when the task only requires editing a specific section | §11.13 |
 | AP-41 | ⚠️ | User indicates a crash/interruption occurred but AI begins fresh work without checking `_build_logs/`, git state, or past conversations for recovery context | §11.0 |
 | AP-43 | ⚠️ | Build log exists but `## Edit Log` section was not updated between consecutive edits (batched log updates — defeats crash recovery because the log doesn't reflect which edits actually landed) | §11.0, §11.8 |
+| AP-44 | ⚠️ | Input in **any** collapsible section (including `collapsed: false`) missing `default:`, has bare `default:` (YAML null), or `input_boolean` anywhere without explicit default. HA silently refuses to render the collapsible chevron when any input lacks a default — regardless of the `collapsed:` value. Also: Section ① declared `collapsed: true`, or Section ②+ declared `collapsed: false` without documented justification. | §3.2 |
 
 **Severity key:** ❌ ERROR = must fix before presenting · ⚠️ WARNING = fix unless user explicitly accepts · ℹ️ INFO = flag to user, fix if trivial
 
-**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-42 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
+**Note on AP numbering:** IDs are non-sequential (AP-01 through AP-44 with gaps and sub-items like AP-10a, AP-25a). This is deliberate — IDs are stable references preserved from the original unified guide. Adding new anti-patterns gets the next available number; removing one retires the ID permanently (never reuse). Don't renumber — external references (changelogs, violation reports, build logs) depend on stable IDs.
 
 *Rules #14 (verify integration docs) and #28-29 (ESPHome debug sensors, config archiving) require architectural judgment and cannot be mechanically scanned. Everything else is in the tables above.*
 

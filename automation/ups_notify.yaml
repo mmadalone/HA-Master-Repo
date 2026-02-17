@@ -25,6 +25,7 @@ blueprint:
     ups_sensors:
       name: "① UPS sensors"
       icon: mdi:battery-charging
+      collapsed: false
       description: Select the NUT integration sensors for UPS status and battery level.
       input:
         ups_status:
@@ -33,6 +34,7 @@ blueprint:
             Sensor from the NUT integration that reports UPS status
             (e.g. sensor.madups_status). Values typically contain:
             OL = On line (mains), OB = On battery, LB = Low battery.
+          default:
           selector:
             entity:
               domain: sensor
@@ -42,6 +44,7 @@ blueprint:
           description: >
             Sensor that reports the UPS battery charge in percent
             (e.g. sensor.madups_battery_charge).
+          default:
           selector:
             entity:
               domain: sensor
@@ -52,6 +55,7 @@ blueprint:
     thresholds_notifications:
       name: "② Thresholds & notifications"
       icon: mdi:bell-alert
+      collapsed: true
       description: Battery warning level and notification target.
       input:
         low_battery_percent:
@@ -72,9 +76,9 @@ blueprint:
           name: Notification service
           description: >
             Home Assistant notify service to use, e.g.
-            notify.mobile_app_madaringer. No native HA selector exists
+            notify.mobile_app_your_device. No native HA selector exists
             for notify services, so this is a free-text field.
-          default: notify.mobile_app_madaringer
+          default:
           selector:
             text:
 
@@ -98,7 +102,6 @@ triggers:
     entity_id: !input ups_battery_percent
     below: !input low_battery_percent
 
-conditions: []
 
 actions:
   - alias: "Resolve current UPS state into variables"
@@ -118,6 +121,7 @@ actions:
         sequence:
           - alias: "Notify — power outage, UPS on battery"
             action: "{{ notify_svc }}"
+            continue_on_error: true
             data:
               title: "Power outage: UPS on battery"
               message: >-
@@ -134,6 +138,7 @@ actions:
         sequence:
           - alias: "Notify — power restored"
             action: "{{ notify_svc }}"
+            continue_on_error: true
             data:
               title: "Power restored"
               message: >-
@@ -150,6 +155,7 @@ actions:
         sequence:
           - alias: "Notify — battery critically low"
             action: "{{ notify_svc }}"
+            continue_on_error: true
             data:
               title: "UPS battery low"
               message: >-

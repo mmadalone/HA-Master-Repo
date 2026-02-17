@@ -13,7 +13,24 @@ blueprint:
     on Voice PE satellites. Includes GPS-bounce cooldown, timeout handling on
     every wait, and guaranteed cleanup of temporary switches on all exit paths.
 
+    **Note:** Uses `mode: restart` — if a second person arrives while the first
+    flow is running, the first run is cancelled and temporary switches may
+    remain ON until the new run completes its cleanup.
+
     ### Recent changes
+    - **v4.2:** Added defaults to person_entities, entrance_sensor,
+      conversation_agent, and assist_satellites so all four sections render
+      as collapsible in the HA UI. Inputs are technically optional but the
+      automation will not function without them.
+    - **v4.1:** Section structure — moved `person_entities` and `person_names`
+      into Section ① (detection), added explicit `collapsed: false` to
+      Section ① header per §3.2.
+    - **v4:** Audit remediation — fixed person identification bug (greets
+      triggering person, not all configured), hardened LLM response parsing
+      with chained `.get()` guards, made person_entities required, converted
+      arrival_switches to optional entity selector with choose guards,
+      added `collapsed: true` to sections ②③④, added `continue_on_error`
+      to reset switch actions, documented restart-mode cleanup gap.
     - **v3:** Multi-person support — person selector accepts multiple entities,
       new multiline text field for custom arrival names (overrides entity
       friendly names). Reset switches now optional (empty = skip power-cycle).
@@ -23,48 +40,50 @@ blueprint:
   homeassistant:
     min_version: "2024.10.0"
   input:
-    person_entities:
-      name: Persons (optional)
-      description: >-
-        Person entities whose home/not_home state transition triggers this
-        automation. When any selected person arrives home, the flow runs.
-        Friendly names from these entities are used in the AI greeting
-        unless overridden by the arrival names field below. Select multiple
-        persons to trigger on any of them arriving.
-      default: []
-      selector:
-        entity:
-          domain: person
-          multiple: true
-
-    person_names:
-      name: Arrival names (optional)
-      description: >-
-        Custom names to use in the AI greeting. One name per line. When
-        provided, these override the person entity friendly names in the
-        greeting prompt. Useful when the arriving party includes people
-        without HA person entities (partner, guest, frequent visitor).
-      default: ""
-      selector:
-        text:
-          multiline: true
-
     # ===========================================================================
     # ① DETECTION & TRIGGERS
     # ===========================================================================
     detection:
       name: "① Detection & triggers"
       icon: mdi:motion-sensor
+      collapsed: false
       description: >-
         Configure how arrival is detected and how aggressively GPS bounces
         are filtered.
       input:
+        person_entities:
+          name: Persons
+          description: >-
+            Person entities whose home/not_home state transition triggers this
+            automation. When any selected person arrives home, the flow runs.
+            The triggering person's friendly name is used in the AI greeting
+            unless overridden by the arrival names field below. At least one
+            person entity is required — the automation cannot fire without it.
+          default: []
+          selector:
+            entity:
+              domain: person
+              multiple: true
+
+        person_names:
+          name: Arrival names (optional)
+          description: >-
+            Custom names to use in the AI greeting. One name per line. When
+            provided, these override the person entity friendly names in the
+            greeting prompt. Useful when the arriving party includes people
+            without HA person entities (partner, guest, frequent visitor).
+          default: ""
+          selector:
+            text:
+              multiline: true
+
         entrance_sensor:
           name: Entrance occupancy sensor
           description: >-
             Binary sensor that confirms physical presence at the entrance.
             The automation won't proceed on GPS alone — it waits for this
             sensor to trigger before resetting speakers or greeting.
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -99,6 +118,7 @@ blueprint:
     preparation:
       name: "② Device preparation"
       icon: mdi:cog-refresh
+      collapsed: true
       description: >-
         Switches to power-cycle (reset speakers/audio chains) and temporary
         helper switches to activate during the arrival flow.
@@ -127,16 +147,17 @@ blueprint:
             duration: {}
 
         arrival_switches:
-          name: Temporary switches
+          name: Temporary switches (optional)
           description: >-
-            Switches to activate during the arrival flow (e.g., helper
+            Switch entities to activate during the arrival flow (e.g., helper
             booleans, relay flags). They are turned ON when the flow starts
             and guaranteed to turn OFF on every exit path — including
-            timeouts and aborts.
+            timeouts and aborts. Leave empty to skip.
+          default: []
           selector:
-            target:
-              entity:
-                domain: switch
+            entity:
+              domain: switch
+              multiple: true
 
     # ===========================================================================
     # ③ AI CONVERSATION
@@ -144,6 +165,7 @@ blueprint:
     conversation:
       name: "③ AI conversation"
       icon: mdi:robot-outline
+      collapsed: true
       description: >-
         Conversation agent, greeting prompt, and satellite targeting for
         the AI-generated welcome interaction.
@@ -156,6 +178,7 @@ blueprint:
             OpenAI Conversation, or any agent supporting conversation.process.
             The agent's own system prompt handles personality and device
             permissions — this blueprint only passes dynamic arrival context.
+          default: ""
           selector:
             conversation_agent:
 
@@ -182,6 +205,7 @@ blueprint:
             Voice PE or Assist satellite entities that should speak the
             AI-generated greeting and handle the follow-up conversation.
             Multiple satellites can be targeted for whole-house announcements.
+          default: {}
           selector:
             target:
               entity:
@@ -193,6 +217,7 @@ blueprint:
     cleanup:
       name: "④ Cleanup & timing"
       icon: mdi:broom
+      collapsed: true
       description: >-
         Post-conversation delay before temporary switches are turned off.
       input:
@@ -210,19 +235,15 @@ trigger_variables:
   cooldown_seconds: !input cooldown_seconds
 
 variables:
-  person_entities_list: !input person_entities
   person_names_raw: !input person_names
   reset_switches_list: !input reset_switches
+  arrival_switches_list: !input arrival_switches
   person_name: >-
     {% set custom = person_names_raw | string | trim %}
     {% if custom != '' %}
       {{ custom.split('\n') | map('trim') | reject('equalto', '') | join(' and ') }}
-    {% elif person_entities_list | length > 0 %}
-      {% set ns = namespace(names=[]) %}
-      {% for p in person_entities_list %}
-        {% set ns.names = ns.names + [state_attr(p, 'friendly_name') | default('someone')] %}
-      {% endfor %}
-      {{ ns.names | join(' and ') }}
+    {% elif trigger is defined and trigger.entity_id is defined %}
+      {{ state_attr(trigger.entity_id, 'friendly_name') | default('someone') }}
     {% else %}
       someone
     {% endif %}
@@ -269,6 +290,7 @@ actions:
             action: switch.turn_off
             target:
               entity_id: "{{ reset_switches_list }}"
+            continue_on_error: true
 
           - alias: "Wait for speaker hardware to fully power down"
             delay: !input reset_switch_delay
@@ -277,10 +299,19 @@ actions:
             action: switch.turn_on
             target:
               entity_id: "{{ reset_switches_list }}"
+            continue_on_error: true
 
-  - alias: "Activate temporary switches for arrival flow"
-    action: switch.turn_on
-    target: !input arrival_switches
+  - alias: "Activate temporary switches for arrival flow (optional, skipped if none configured)"
+    choose:
+      - alias: "Arrival switches are configured"
+        conditions:
+          - condition: template
+            value_template: "{{ arrival_switches_list | length > 0 }}"
+        sequence:
+          - alias: "Turn on temporary switches"
+            action: switch.turn_on
+            target:
+              entity_id: "{{ arrival_switches_list }}"
 
   - alias: "Wait for entrance to clear — person moved past the door"
     wait_for_trigger:
@@ -296,8 +327,15 @@ actions:
         value_template: "{{ not wait.completed }}"
     then:
       - alias: "Clean up temporary switches before aborting"
-        action: switch.turn_off
-        target: !input arrival_switches
+        choose:
+          - alias: "Arrival switches are configured"
+            conditions:
+              - condition: template
+                value_template: "{{ arrival_switches_list | length > 0 }}"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: "{{ arrival_switches_list }}"
       - stop: "Entrance never cleared — aborting and cleaning up."
 
   - alias: "Generate AI greeting via conversation agent"
@@ -311,14 +349,10 @@ actions:
   - alias: "Extract greeting text with fallback if LLM failed"
     variables:
       welcome_line: >-
-        {% if ai_greeting is defined
-           and ai_greeting.response is defined
-           and ai_greeting.response.speech is defined %}
-          {{ ai_greeting.response.speech.plain.speech
-             | default("Yo " ~ person_name ~ ", you're back. Workshop, living room, or both?") }}
-        {% else %}
-          Yo {{ person_name }}, you're back. Workshop, living room, or both?
-        {% endif %}
+        {% set fallback = "Yo " ~ person_name ~ ", you're back. Workshop, living room, or both?" %}
+        {% set resp = (ai_greeting | default({})) %}
+        {% set speech_obj = resp.get('response', {}).get('speech', {}).get('plain', {}) %}
+        {{ speech_obj.get('speech', '') | default(fallback, true) }}
 
   - alias: "Start Assist conversation on satellites — agent handles the rest"
     action: assist_satellite.start_conversation
@@ -335,8 +369,15 @@ actions:
   - alias: "Post-conversation cooldown before cleanup"
     delay: !input post_conversation_delay
 
-  - alias: "Clean up — turn off all temporary switches"
-    action: switch.turn_off
-    target: !input arrival_switches
+  - alias: "Clean up — turn off all temporary switches (optional, skipped if none configured)"
+    choose:
+      - alias: "Arrival switches are configured"
+        conditions:
+          - condition: template
+            value_template: "{{ arrival_switches_list | length > 0 }}"
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: "{{ arrival_switches_list }}"
 
 mode: restart

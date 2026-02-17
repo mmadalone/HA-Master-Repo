@@ -11,6 +11,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v5:** Audit fixes — collapsible sections on all stages (§1 expanded,
+      §2–5 collapsed); defaults on all collapsed-section inputs; plural
+      top-level keys (`triggers:`, `conditions:`, `actions:`); fixed
+      `music_script` description (optional, not required)
+
     - **v4:** Collapsible sections (stages 3–5); defaults for `llm_agent` and
       `music_script`; removed hardcoded name from TTS/notification text;
       improved `notify_service` description with expected format
@@ -32,6 +37,7 @@ blueprint:
       name: "Stage 1 — Schedule"
       icon: mdi:calendar-clock
       description: When the alarm fires.
+      collapsed: false
       input:
 
         active_days:
@@ -66,6 +72,7 @@ blueprint:
         wakeup_time:
           name: Wake-up time
           description: Time at which the alarm should fire.
+          default: "07:00:00"
           selector:
             time: {}
 
@@ -86,11 +93,13 @@ blueprint:
       name: "Stage 2 — TTS & audio"
       icon: mdi:volume-high
       description: TTS engine, output player, and volume settings.
+      collapsed: true
       input:
 
         tts_engine:
           name: TTS engine
           description: TTS entity to use with tts.speak.
+          default: ""
           selector:
             entity:
               domain: tts
@@ -98,6 +107,7 @@ blueprint:
         tts_output_player:
           name: TTS output media_player
           description: media_player where the TTS wake-up announcement will play.
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -268,8 +278,7 @@ blueprint:
           name: Wake-up music script
           description: >
             Script to call when the wake-up flow completes (no stop received,
-            or after snooze expires). **Required** — must be configured for
-            post-alarm music to work.
+            or after snooze expires). Leave empty to skip post-alarm music.
           default: ""
           selector:
             entity:
@@ -292,13 +301,13 @@ variables:
   v_wakeup_time: !input wakeup_time
   v_voice_profile: !input voice_profile
 
-trigger:
+triggers:
   - alias: "Wake-up time"
-    platform: time
+    trigger: time
     at: !input wakeup_time
 
 # No native weekday condition exists — template is the only option here.
-condition:
+conditions:
   - alias: "Today is in active_days"
     condition: template
     value_template: >-
@@ -306,7 +315,7 @@ condition:
       {% set map = ['mon','tue','wed','thu','fri','sat','sun'] %}
       {{ map[idx] in v_active_days }}
 
-action:
+actions:
 
   - alias: "Turn on wake-up lights / switches"
     action: homeassistant.turn_on

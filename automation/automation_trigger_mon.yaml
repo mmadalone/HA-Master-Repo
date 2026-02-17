@@ -10,40 +10,33 @@ blueprint:
 
     ### Recent changes
 
-    - **v2:** Style guide compliance — modern syntax, template safety, collapsible inputs, header image
+    - **v2:** Style guide compliance — modern syntax, template safety, header image
 
     - **v1:** Initial version
   domain: automation
   homeassistant:
     min_version: "2024.10.0"
   input:
-    # ===========================================================================
-    # ① MONITORING TARGETS
-    # ===========================================================================
-    monitoring_targets:
-      name: "① Monitoring targets"
-      icon: mdi:eye
-      description: Select which automations to watch and what extra state to capture.
-      input:
-        monitored_automations:
-          name: Automations to monitor
-          description: >
-            Pick one or more automations you want to log whenever they are
-            triggered. Do NOT include this monitor automation itself.
-          selector:
-            entity:
-              domain: automation
-              multiple: true
+    monitored_automations:
+      name: Automations to monitor
+      description: >
+        Pick one or more automations you want to log whenever they are
+        triggered. Do NOT include this monitor automation itself.
+      default: []
+      selector:
+        entity:
+          domain: automation
+          multiple: true
 
-        entities_to_log:
-          name: Extra entities to log (optional)
-          description: >
-            Optional: entities whose states should be included in the log line
-            when a monitored automation fires (e.g. bed/workshop/bathroom sensors).
-          default: []
-          selector:
-            entity:
-              multiple: true
+    entities_to_log:
+      name: Extra entities to log (optional)
+      description: >
+        Optional: entities whose states should be included in the log line
+        when a monitored automation fires (e.g. bed/workshop/bathroom sensors).
+      default: []
+      selector:
+        entity:
+          multiple: true
 
 mode: queued
 
@@ -52,7 +45,8 @@ variables:
   v_entities: !input entities_to_log
 
 triggers:
-  - trigger: event
+  - alias: "Any automation triggered"
+    trigger: event
     event_type: automation_triggered
 
 conditions:

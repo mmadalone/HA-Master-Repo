@@ -28,6 +28,7 @@ blueprint:
     sensors:
       name: "① Sensors & detection"
       icon: mdi:motion-sensor
+      collapsed: false
       description: Configure motion, door, and shower zone sensors.
       input:
         motion_sensor:
@@ -40,6 +41,7 @@ blueprint:
               domain:
                 - binary_sensor
               multiple: false
+          default: ""
 
         use_door_sensor:
           name: Use Door Sensor?
@@ -55,7 +57,7 @@ blueprint:
           description: >-
             Door/contact sensor entity. Only evaluated when "Use Door Sensor?"
             is enabled — safe to leave empty if disabled.
-          default: {}
+          default: ""
           selector:
             entity:
               domain:
@@ -81,7 +83,7 @@ blueprint:
             Presence zone sensor for the shower area. Only evaluated when
             "Use Shower Zone Sensor?" is enabled — safe to leave empty
             if disabled.
-          default: {}
+          default:
           selector:
             entity:
               domain:
@@ -98,6 +100,7 @@ blueprint:
     lights_helpers:
       name: "② Lights & helpers"
       icon: mdi:lightbulb-outline
+      collapsed: true
       description: Target light and occupancy tracking helper.
       input:
         light_entity:
@@ -105,6 +108,7 @@ blueprint:
           description: >-
             The light (or switch/input_boolean) to control. Turned on when
             occupancy is detected, off when the room empties.
+          default:
           selector:
             entity:
               filter:
@@ -120,6 +124,7 @@ blueprint:
             An input_boolean that tracks whether the bathroom is currently
             occupied. Must be a dedicated helper — create one in
             Settings → Helpers if you don't have one.
+          default:
           selector:
             entity:
               domain:
@@ -132,6 +137,7 @@ blueprint:
     timing:
       name: "③ Timing"
       icon: mdi:clock-outline
+      collapsed: true
       description: Motion sensor delay and exit wait timeout.
       input:
         delay_before_motion_check:

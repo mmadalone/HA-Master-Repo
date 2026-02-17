@@ -71,11 +71,6 @@ All blueprint inputs MUST be organized into collapsible sections grouped by **st
 
 ```yaml
 input:
-  # Top-level inputs that don't belong to a stage (rare — e.g. person entity)
-  person_entity:
-    name: Person
-    ...
-
   # ===========================================================================
   # ① DETECTION & TRIGGERS
   # ===========================================================================
@@ -83,12 +78,19 @@ input:
     name: "① Detection & triggers"
     icon: mdi:motion-sensor
     description: Configure how arrival/presence is detected.
+    collapsed: false
     input:
+      person_entity:
+        name: Person
+        default: []
+        ...
       entrance_sensor:
         name: Entrance occupancy sensor
+        default: ""
         ...
       entrance_wait_timeout:
         name: Entrance wait timeout
+        default: "0:02:00"
         ...
 
   # ===========================================================================
@@ -98,9 +100,11 @@ input:
     name: "② Device preparation"
     icon: mdi:cog
     description: Devices to reset or prepare before the main flow.
+    collapsed: true
     input:
       reset_switches:
         name: Reset switches
+        default: []
         ...
 
   # ===========================================================================
@@ -114,6 +118,7 @@ input:
     input:
       conversation_agent:
         name: Conversation agent
+        default: ""
         ...
 
   # ===========================================================================
@@ -127,6 +132,7 @@ input:
     input:
       post_conversation_delay:
         name: Post-conversation delay
+        default: "0:01:00"
         ...
 ```
 
@@ -144,8 +150,16 @@ input:
 - Each section gets a short `description` explaining what it configures
 - Inputs within a section are ordered logically (most important first)
 - **No exceptions.** Every blueprint uses collapsible sections regardless of input count. Even a 2-input blueprint gets a section wrapper — library-wide consistency is worth more than saving three lines of YAML.
-- **Default collapse state (MANDATORY):** Sections ① and ② remain expanded by default (omit the `collapsed:` key — HA defaults to expanded). Section ③ and all subsequent sections MUST include `collapsed: true`. Rationale: primary configuration (triggers, core entities) should be immediately visible; advanced and optional settings stay tucked away until the user needs them.
-- **Every input inside a collapsible section MUST have a `default:` value.** If any input in a section lacks `default:`, HA silently downgrades the entire section to non-collapsible — no error, no warning, just a missing chevron. Entity selectors get `default:` (empty/null). Target selectors get `default: {}`. This is the #1 reason "collapsed doesn't work" in practice.
+- **Default collapse state (MANDATORY):** Section ① MUST include `collapsed: false` (explicit — don't rely on HA's default-expanded behavior). All subsequent sections (②, ③, ④…) MUST include `collapsed: true`. Rationale: primary configuration should be immediately visible; everything else stays tucked away until the user needs it.
+- **Collapsible section defaults (MANDATORY — AP-44):** Every input inside **any** collapsible section — regardless of `collapsed: true` or `collapsed: false` — MUST have an explicit, non-null `default:` value. If any input in a section lacks `default:`, HA silently downgrades the entire section to non-collapsible — no error, no warning, just a missing chevron. This is the #1 reason "collapsed doesn't work" in practice. Rules:
+  - Bare `default:` (YAML null) is **prohibited** everywhere — always provide a real value.
+  - `input_boolean` → `default: false` (or `true` if opt-in-active). **Always requires explicit default regardless of section** — even in Section ①.
+  - `input_number` / `number` → reasonable midpoint or common value for the use case.
+  - `selector: time` → contextually appropriate time (e.g., `"07:00:00"`, `"22:00:00"`).
+  - `selector: select` → most common/safe option from the options list.
+  - `input_text` / `text` → `default: ""` acceptable where no sensible preset exists.
+  - Entity selectors → `default: {}`. Target selectors → `default: {}`.
+  - Section ① inputs are **NOT exempt** from the mandatory-default requirement. HA's UI requires every input in a section to have a `default:` before it will render the collapsible chevron — regardless of the `collapsed:` value. A section with `collapsed: false` and one default-less input will render as a flat, non-collapsible block. Provide sensible defaults for all inputs in all sections, and note in the `description:` when an input is functionally required (e.g., "At least one person entity is required").
 - The `collapsed:` key is part of the collapsible input sections feature introduced in HA 2024.6.0. Any blueprint using `collapsed: true` inherits the `min_version: 2024.6.0` requirement (see §3.1 threshold table)
 
 ### 3.3 Input definitions

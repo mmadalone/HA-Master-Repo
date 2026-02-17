@@ -1,7 +1,6 @@
 blueprint:
   name: "Bedtime routine Plus – LLM-driven goodnight (Kodi)"
   author: madalone
-  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/bedtime_routine_plus.yaml
   description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/bedtime_routine_plus-header.jpeg)
 
     # Bedtime routine Plus – LLM-driven goodnight (Kodi)
@@ -23,6 +22,16 @@ blueprint:
     *Bedtime Routine* blueprint (`bedtime_routine.yaml`).
 
     ### Recent changes
+
+    - **v5.3.3:** Fix collapsed sections — bare `default:` (null) on entity/time
+    selectors prevents HA from honoring `collapsed: true`. Changed 11 inputs
+    to `default: ""` across §①②③④⑨⑪. Fixed §① `collapsed: false` → `true`.
+    Time selectors use real defaults (23:00, 00:30) — empty string crashes `at:` triggers.
+
+    - **v5.3.2:** Audit remediation — removed duplicate source_url key,
+    collapsed: true on §①–② (all sections now collapsible), Kodi playback
+    verification with logbook fallback in preset mode (AP-17), explicit
+    continue_on_timeout on pre-fetch wait_for_trigger blocks (AP-04)
 
     - **v5.3.1:** Audit fixes — collapsed: true on §③–⑩, source_url added,
     continue_on_error on Kodi pre-fetch calls, response_type guard on
@@ -46,6 +55,7 @@ blueprint:
     trigger_settings:
       name: "① Trigger"
       icon: mdi:play-circle-outline
+      collapsed: false
       description: >
         How the bedtime routine starts. Enable scheduled, manual, or both.
       input:
@@ -54,7 +64,7 @@ blueprint:
           description: >
             Time to automatically trigger bedtime. Leave empty to disable
             the scheduled trigger.
-          default:
+          default: "23:00:00"
           selector:
             time: {}
 
@@ -64,7 +74,7 @@ blueprint:
             An input_boolean entity exposed to voice assistants (e.g. Alexa).
             Toggling it ON triggers the bedtime routine. Leave empty to disable
             manual triggering.
-          default:
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -150,6 +160,7 @@ blueprint:
     devices:
       name: "② Devices"
       icon: mdi:television
+      collapsed: true
       description: >
         TV, lights, and speaker switches involved in the bedtime flow. Note:
         the TV stays ON in this blueprint — Kodi needs the screen. Use the
@@ -161,7 +172,7 @@ blueprint:
             The TV media_player entity for CEC control. Used by the TV sleep
             timer to power off after a delay. Leave empty if your TV doesn't
             support CEC or if you use an IR script instead.
-          default:
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -172,7 +183,7 @@ blueprint:
             A script entity for TV shutdown — useful for IR sequences or
             multi-step power-off. Used by the TV sleep timer (not during the
             main routine — TV stays on for Kodi). Leave empty if not needed.
-          default:
+          default: ""
           selector:
             entity:
               domain: script
@@ -196,7 +207,7 @@ blueprint:
           description: >
             The lamp that stays on during the countdown and is turned off last,
             after the bathroom guard clears. Can be a light or a switch (smart plug).
-          default:
+          default: ""
           selector:
             entity:
               domain:
@@ -268,7 +279,7 @@ blueprint:
           name: TTS engine
           description: >
             Text-to-speech engine for spoken messages (e.g. ElevenLabs, Piper).
-          default:
+          default: ""
           selector:
             entity:
               domain: tts
@@ -356,7 +367,7 @@ blueprint:
           description: >
             The Kodi media_player entity for playback. This entity stays
             playing during the bedtime routine — the TV is NOT turned off.
-          default:
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -440,7 +451,7 @@ blueprint:
             The media_player entity where TTS audio plays — typically a bedroom
             speaker, NOT the TV. Keeps spoken announcements on a separate output
             from Kodi video playback.
-          default:
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -710,7 +721,7 @@ blueprint:
           description: >
             Binary sensor that detects bathroom occupancy. The lamp stays on
             while this sensor is occupied, with a grace period after it clears.
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -740,7 +751,7 @@ blueprint:
             An input_number helper that the conversation agent uses to set
             the negotiated countdown duration (via an exposed script).
             Create one with min=1, max=30, step=1.
-          default:
+          default: ""
           selector:
             entity:
               domain: input_number
@@ -878,7 +889,7 @@ blueprint:
             weekend profile. Can differ from the weekday schedule —
             e.g. 01:00 for late weekend nights. Leave empty to disable
             the weekend time trigger.
-          default:
+          default: "00:30:00"
           selector:
             time: {}
 
@@ -1361,6 +1372,22 @@ actions:
                 delay:
                   seconds: "{{ post_play_delay | int(3) }}"
 
+              - alias: "Verify Kodi playback started — log if play_media failed silently"
+                if:
+                  - condition: template
+                    value_template: >-
+                      {{ states(kodi_entity) | default('unknown')
+                         not in ['playing', 'paused', 'buffering'] }}
+                then:
+                  - alias: "Log preset play_media failure — content may not have started"
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine Plus"
+                      message: >-
+                        Preset play_media may have failed — Kodi state is
+                        {{ states(kodi_entity) | default('unknown') }} after play
+                        attempt. Content ID: {{ kodi_preset_content_id }}.
+
           # --- Optional settling-in contextual TTS ---
           - alias: "Settling-in TTS — optional contextual announcement after content starts"
             choose:
@@ -1646,7 +1673,7 @@ actions:
                                   result_ok: true
                             timeout:
                               seconds: "{{ library_fetch_timeout | int(10) }}"
-                            continue_on_error: true
+                            continue_on_timeout: true
 
                           - alias: "Pre-fetch: store in-progress TV shows result"
                             variables:
@@ -1685,7 +1712,7 @@ actions:
                                   result_ok: true
                             timeout:
                               seconds: "{{ library_fetch_timeout | int(10) }}"
-                            continue_on_error: true
+                            continue_on_timeout: true
 
                           - alias: "Pre-fetch: store movies result"
                             variables:
@@ -1721,7 +1748,7 @@ actions:
                                   result_ok: true
                             timeout:
                               seconds: "{{ library_fetch_timeout | int(10) }}"
-                            continue_on_error: true
+                            continue_on_timeout: true
 
                           - alias: "Pre-fetch: store recently added episodes result"
                             variables:
@@ -1751,7 +1778,7 @@ actions:
                                   result_ok: true
                             timeout:
                               seconds: "{{ library_fetch_timeout | int(10) }}"
-                            continue_on_error: true
+                            continue_on_timeout: true
 
                           - alias: "Pre-fetch: store favourites result"
                             variables:

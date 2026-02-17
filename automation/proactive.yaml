@@ -1,5 +1,5 @@
 blueprint:
-  name: "Proactive – Presence-based suggestions (v4)"
+  name: "Proactive – Presence-based suggestions (v5)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive-header.jpeg)
@@ -14,6 +14,7 @@ blueprint:
     bedtime yes/no question via Assist Satellite.
 
     ### Recent changes
+    - **v5:** Collapsible section audit — added `collapsed:` to all sections, defaults on all entity inputs
     - **v4:** Style guide compliance — collapsible sections, modern syntax, template safety
     - **v3:** Added bedtime question via Assist Satellite, nag limits
     - **v2:** Added ElevenLabs custom TTS mode, refresh button support
@@ -29,6 +30,7 @@ blueprint:
       name: "① Detection"
       icon: mdi:motion-sensor
       description: Presence sensors that trigger the proactive message.
+      collapsed: false
       input:
         presence_sensors:
           name: Presence sensors for this area
@@ -40,6 +42,7 @@ blueprint:
             entity:
               domain: binary_sensor
               multiple: true
+          default: ""
 
         area_name:
           name: Area name (for the message)
@@ -58,6 +61,7 @@ blueprint:
                 - Kitchen
                 - Bathroom
               custom_value: true
+          default: ""
 
     # ===========================================================================
     # ② TTS CONFIGURATION
@@ -66,12 +70,14 @@ blueprint:
       name: "② TTS configuration"
       icon: mdi:text-to-speech
       description: Speaker and text-to-speech engine settings.
+      collapsed: true
       input:
         media_player:
           name: Speaker / media player to speak from
           description: >
             Media player to use for TTS in this area.
             Can be a Voice PE speaker, Sonos, etc.
+          default: {}
           selector:
             entity:
               domain: media_player
@@ -96,6 +102,7 @@ blueprint:
             TTS entity used by tts.speak. Examples: tts.elevenlabs
             (official), tts.elevenlabs_custom_tts (HACS custom), or
             any other TTS entity.
+          default: {}
           selector:
             entity:
               domain: tts
@@ -119,6 +126,7 @@ blueprint:
       name: "③ Schedule & timing"
       icon: mdi:clock-outline
       description: Active time window and cooldown between messages.
+      collapsed: true
       input:
         start_time:
           name: Active from
@@ -159,6 +167,7 @@ blueprint:
       name: "④ Nagging behavior"
       icon: mdi:repeat
       description: Controls for repeated messages while presence persists.
+      collapsed: true
       input:
         repeat_while_present:
           name: Keep nagging while present
@@ -192,6 +201,7 @@ blueprint:
       name: "⑤ Message sources"
       icon: mdi:message-text-outline
       description: Input text helpers storing time-of-day messages, plus optional refresh.
+      collapsed: true
       input:
         message_morning_helper:
           name: Morning message input_text
@@ -199,6 +209,7 @@ blueprint:
             input_text entity storing the MORNING message for this area.
             Typically filled by an AI refresh automation, but can be
             set manually.
+          default: {}
           selector:
             entity:
               domain: input_text
@@ -207,6 +218,7 @@ blueprint:
           name: Afternoon message input_text
           description: >
             input_text entity storing the AFTERNOON message for this area.
+          default: {}
           selector:
             entity:
               domain: input_text
@@ -216,6 +228,7 @@ blueprint:
           description: >
             input_text entity storing the EVENING/NIGHT message.
             In bedtime mode this is always the one spoken.
+          default: {}
           selector:
             entity:
               domain: input_text
@@ -234,6 +247,7 @@ blueprint:
           description: >
             input_button that triggers the AI "Refresh messages"
             automation for this area. Only pressed if refresh is enabled.
+          default: {}
           selector:
             entity:
               domain: input_button
@@ -245,6 +259,7 @@ blueprint:
       name: "⑥ Bedtime question"
       icon: mdi:bed
       description: Optional bedtime yes/no question via Assist Satellite.
+      collapsed: true
       input:
         enable_bedtime_question:
           name: Ask if you want help going to bed
@@ -277,6 +292,7 @@ blueprint:
             Assist Satellite (Voice PE) entity that asks the bedtime
             question. Typically the satellite in the same area as the
             media player.
+          default: {}
           selector:
             entity:
               domain: assist_satellite
@@ -297,6 +313,7 @@ blueprint:
             Script called when the bedtime question is answered YES.
             Should be your 'put me to bed' routine, created separately
             and selected here.
+          default: {}
           selector:
             entity:
               domain: script

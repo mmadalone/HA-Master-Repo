@@ -32,6 +32,7 @@ blueprint:
     presence_area:
       name: "① Presence & area"
       icon: mdi:motion-sensor
+      collapsed: false
       description: >
         Configure which sensors detect presence and the area name for context.
       input:
@@ -41,6 +42,7 @@ blueprint:
           description: >
             One or more binary sensors indicating presence in this area.
             The automation triggers when ANY of these turns ON.
+          default: []
           selector:
             entity:
               domain: binary_sensor
@@ -68,6 +70,7 @@ blueprint:
     schedule:
       name: "② Schedule"
       icon: mdi:clock-outline
+      collapsed: true
       description: >
         Time window and days when this automation is allowed to run.
       input:
@@ -119,6 +122,7 @@ blueprint:
     speech_output:
       name: "③ Speech output"
       icon: mdi:bullhorn
+      collapsed: true
       description: >
         Speaker and TTS engine configuration for the spoken announcement.
       input:
@@ -127,6 +131,7 @@ blueprint:
           name: Media player for speech
           description: >
             Speaker or media player used for the spoken announcement.
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -146,6 +151,7 @@ blueprint:
           name: TTS entity
           description: >
             TTS entity used to speak the message.
+          default: ""
           selector:
             entity:
               domain: tts
@@ -208,6 +214,7 @@ blueprint:
           name: Conversation / LLM agent
           description: >
             Conversation agent that generates the spoken message.
+          default: homeassistant
           selector:
             conversation_agent:
 
@@ -273,6 +280,7 @@ blueprint:
           description: >
             External script to execute after the announcement.
             This blueprint does not define what the script does.
+          default: ""
           selector:
             entity:
               domain: script
@@ -340,7 +348,7 @@ conditions:
       {% if not block_if_media_playing %}
         true
       {% else %}
-        {{ states(player_entity) not in ['playing', 'buffering'] }}
+        {{ states(player_entity) | default('unknown') not in ['playing', 'buffering'] }}
       {% endif %}
 
   - condition: template

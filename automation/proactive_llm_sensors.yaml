@@ -41,6 +41,7 @@ blueprint:
       name: "① Presence & detection"
       icon: mdi:motion-sensor
       description: Configure how presence is detected and optional guards.
+      collapsed: false
       input:
         presence_sensors:
           name: Presence sensors for this area
@@ -53,6 +54,7 @@ blueprint:
               domain: binary_sensor
               device_class: occupancy
               multiple: true
+          default: ""
 
         min_presence_seconds:
           name: Minimum presence duration (seconds)
@@ -85,12 +87,14 @@ blueprint:
       name: "② TTS & speaker"
       icon: mdi:speaker-message
       description: Configure which speaker and TTS integration to use.
+      collapsed: true
       input:
         media_player:
           name: Speaker / media player to speak from
           description: >
             Media player that should talk in this area.
             Can be a Home Assistant Voice Preview speaker, Sonos, etc.
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -114,6 +118,7 @@ blueprint:
             TTS entity used by tts.speak. Examples: tts.elevenlabs for
             official ElevenLabs, tts.elevenlabs_custom_tts for custom
             11Labs, or any other TTS entity.
+          default: ""
           selector:
             entity:
               domain: tts
@@ -155,6 +160,7 @@ blueprint:
       name: "③ AI conversation"
       icon: mdi:robot
       description: Configure the conversation agent, prompts, and context.
+      collapsed: true
       input:
         user_names:
           name: User names / nicknames (optional)
@@ -199,6 +205,7 @@ blueprint:
             optionally, the bedtime question. Can be OpenAI Conversation,
             Extended OpenAI Conversation, Llama, or any agent that supports
             conversation.process.
+          default: ""
           selector:
             conversation_agent:
 
@@ -236,6 +243,7 @@ blueprint:
       name: "④ Schedule & timing"
       icon: mdi:clock-outline
       description: Configure when the automation is active and cooldown behavior.
+      collapsed: true
       input:
         start_time:
           name: Active from
@@ -963,7 +971,8 @@ actions:
               {{ bedtime_question_text | default('Do you want me to help you go to bed now?') }}
             {% endif %}
 
-      - alias: "Ask bedtime yes/no on Assist Satellite — service has built-in timeout, continue_on_error covers failures"
+      # Service has built-in timeout; continue_on_error covers failures
+      - alias: "Ask bedtime yes/no on Assist Satellite"
         continue_on_error: true
         action: assist_satellite.ask_question
         data:

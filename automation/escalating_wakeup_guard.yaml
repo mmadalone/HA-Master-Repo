@@ -16,6 +16,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v8:** Plural top-level keys (§1.4), added `collapsed:` to all input
+      sections with empty defaults on required inputs for proper collapse
+      (§3.2), DRY comments on duplicated cleanup triad, comment on
+      replace() chain workaround
     - **v7:** Wired up llm_context_entities — sensor readings now injected
       into conversation.process text when configured (was declared but unused)
     - **v6:** Replaced template weekday condition with native condition:time
@@ -35,6 +39,7 @@ blueprint:
       name: "① Schedule"
       icon: mdi:calendar-clock
       description: When the escalation guard fires.
+      collapsed: false
       input:
 
         active_days:
@@ -73,12 +78,14 @@ blueprint:
           description: >
             When escalation begins. Set this 5–10 minutes after your
             primary alarm so it only fires if you slept through Layer 1.
+          default: "07:15:00"
           selector:
             time: {}
 
     section_2_activity:
       name: "② Activity sensors"
       icon: mdi:motion-sensor
+      collapsed: true
       description: >
         Non-bedroom sensors used for inverted presence detection. If ANY
         of these have been active recently, the user is considered awake
@@ -91,6 +98,7 @@ blueprint:
             Binary sensors outside the bedroom — motion, presence zones,
             door sensors. If any have been ON (or recently turned OFF
             within the lookback window), you are considered awake.
+          default: []
           selector:
             entity:
               domain: binary_sensor
@@ -114,6 +122,7 @@ blueprint:
     section_3_tts:
       name: "③ TTS & voice"
       icon: mdi:volume-high
+      collapsed: true
       description: >
         TTS engine for speaking messages, and output player for
         volume control during escalation.
@@ -125,6 +134,7 @@ blueprint:
             The text-to-speech entity used to speak wake-up messages
             (e.g. tts.elevenlabs_text_to_speech). The resolved message
             text is sent directly — no conversation agent in the loop.
+          default: ""
           selector:
             entity:
               domain: tts
@@ -134,6 +144,7 @@ blueprint:
           description: >
             Media player that receives TTS audio and whose volume is
             controlled during escalation.
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -141,6 +152,7 @@ blueprint:
     section_4_escalation:
       name: "④ Escalation"
       icon: mdi:volume-vibrate
+      collapsed: true
       description: >
         Configure the escalation ramp. Volume interpolates from start to
         end across all stages. Lights and music are optional — leave
@@ -481,6 +493,7 @@ blueprint:
             UI or another automation to cancel escalation immediately.
             Gets reset to OFF on exit. Create one via Helpers if you
             don't already have it.
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -489,12 +502,12 @@ mode: restart
 trace:
   stored_traces: 15
 
-trigger:
+triggers:
   - id: guard_time
     trigger: time
     at: !input guard_time
 
-condition:
+conditions:
   - alias: "Only run on active weekdays"
     condition: time
     weekday: !input active_days
@@ -540,7 +553,7 @@ variables:
     {{ v_stop_cleanup_script | default('') | string | length > 0
        and v_stop_cleanup_script not in ['[]', 'none', 'None', 'unknown'] }}
 
-action:
+actions:
 
   # ── Initial activity check — bail immediately if user is already up ──
 
@@ -646,6 +659,8 @@ action:
                         {% endfor %}
                         {{ ns.awake }}
               then:
+                # NOTE: cleanup triad duplicated in post-loop cleanup — no extraction
+                # path in HA blueprints (repeat sequence can't call external action groups)
                 - alias: "Restore TTS volume — escalation interrupted"
                   action: media_player.volume_set
                   target:
@@ -708,6 +723,9 @@ action:
               {% if is_first %}{{ v_llm_prompt_first }}
               {% elif is_last %}{{ v_llm_prompt_final }}
               {% else %}{{ v_llm_prompt_middle }}{% endif %}
+            # NOTE: HA doesn't support nested Jinja in !input strings — using replace()
+            # chain as workaround. Handles {{ x }} and {{x}} spacing variants only;
+            # mixed-spacing like {{ x}} or {{x }} would slip through.
             static_message: >-
               {% if is_first %}{{ v_first_stage_message }}
               {% elif is_last %}{{ v_final_stage_message
@@ -838,6 +856,8 @@ action:
                     delay:
                       milliseconds: 500
 
+  # NOTE: cleanup triad duplicated from in-loop cancel path — no extraction
+  # path in HA blueprints (repeat sequence can't call external action groups)
   - alias: "Restore TTS volume after escalation completes"
     action: media_player.volume_set
     target:

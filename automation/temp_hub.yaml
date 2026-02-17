@@ -29,12 +29,14 @@ blueprint:
       name: "① Sensor & fan"
       icon: mdi:fan
       description: Temperature sensor to monitor and fan switch to control.
+      collapsed: false
       input:
         temp_sensor:
           name: Temperature sensor
           description: >
             Temperature sensor to monitor for this device
             (e.g. Glances CPU temp from madteevee).
+          default: ""
           selector:
             entity:
               domain: sensor
@@ -45,6 +47,7 @@ blueprint:
           description: >
             Smart plug / switch that powers the external fan for this
             device.
+          default: ""
           selector:
             entity:
               domain: switch
@@ -58,6 +61,7 @@ blueprint:
       description: >
         Temperature thresholds for fan control. Set the OFF threshold
         lower than the ON threshold to create hysteresis and avoid flapping.
+      collapsed: true
       input:
         high_temp:
           name: Turn fan ON above (°C)

@@ -1,0 +1,9 @@
+[SESSION] 2026-02-17 | type: quick-pass audit | scope: bedtime_routine_plus.yaml v5.3.1 | status: complete
+[FINDING] no-AP | ⚠️ WARNING | L4,L39 | Duplicate source_url key under blueprint: — YAML parsers silently drop the first; second one wins. Remove the duplicate at L4 (inside description block position) or L39.
+[FINDING] AP-08 | ⚠️ WARNING | L1890-1970 | Nesting depth reaches 10+ levels in conversational mode → media offer → settling TTS → voice profile branch. Exceeds §1.8 max of 4 levels. Consider extracting TTS delivery as a script or flattening choose trees.
+[FINDING] AP-17 | ⚠️ WARNING | L1352-1358 | continue_on_error: true on Kodi play_media in preset mode. If content fails to play, routine continues silently — no logbook entry, no notification. User thinks bedtime content is playing but it isn't.
+[FINDING] AP-04 | ℹ️ INFO | L1641,1680,1716,1746 | Pre-fetch wait_for_trigger blocks use continue_on_error: true instead of explicit continue_on_timeout: true. Functionally OK (default is true) and wait.trigger is defined check handles timeout, but intent is less clear.
+[INTERPRETATION] AP-08 nesting depth — unavoidable given 4 content modes × optional TTS × voice profile branching. Flattening would require extracting TTS delivery into a helper script. Severity stays WARNING not ERROR because the blueprint functions correctly; it's a maintainability concern.
+[INTERPRETATION] AP-17 on Kodi play_media — the continue_on_error is arguably correct (don't abort the whole bedtime routine if Kodi hiccups) but should have a logbook.log fallback or at minimum a post-play state check.
+[SUMMARY] 23 AP checks + 8 security checks executed | 19 PASS | 3 FAIL (4 findings: 0 ❌ ERROR, 3 ⚠️ WARNING, 1 ℹ️ INFO) | 0 SKIP
+[ACTION] Findings ready for user review. Fixes require BUILD-mode escalation with build log.
