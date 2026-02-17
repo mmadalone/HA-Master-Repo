@@ -38,11 +38,29 @@ When a troubleshooting session requires editing YAML to fix the issue, escalate 
 
 > **🚨 HEADER IMAGE GATE (AP-15) — BUILD mode only:** When building a new blueprint/script OR reviewing one that has no `![` image in its description **or whose referenced image file does not exist on disk** (at `HEADER_IMG` — see Project Instructions for resolved path): **ask the user** about the header image, generate it, present it, and **wait for explicit approval or decline**. Do NOT write any YAML until you get a clear answer. If the user ignores the question, **insist** — repeat the ask. No exceptions. See §11.1 step 4 for defaults (1K, 16:9, premise from `IMG_PREMISES`). Allowed image formats: `.jpeg`, `.jpg`, `.png`, `.webp`.
 
+## Context Budget Gate (applies to all modes)
+
+default execution is **single-file**:
+- read and edit only the one target file required to complete the task
+- do not auto-load other style guide files, checklists, build logs, or directories
+
+reference mode is explicit:
+- only enter when the user says `reference mode: <file/section>`
+- read the smallest excerpt needed, answer, then exit reference mode
+
+debug mode is explicit:
+- only enter when the user says `enter debug mode`
+- use diff-first + excerpt-second: prefer git diff and small log slices (error + limited surrounding lines)
+- never ingest full raw logs unless the user explicitly requests it
+
+note: routing tables describe *what is allowed* to load, not what must be loaded. the context budget gate overrides default “always load” behavior when a task can be completed with less.
+
 **Mode-specific loading:**
+(note: context budget gate applies — do not auto-load docs/logs beyond the single-file target unless explicitly in reference/debug mode.)
 
 | Mode | Always load | Load per task |
 |------|-------------|---------------|
-| **🔨 BUILD** | `00_core_philosophy.md` (§1) + §2.3 (pre-flight checklist) | Relevant pattern doc + `06_anti_patterns_and_workflow.md` (§10, §11.1 or §11.3) |
+| **🔨 BUILD** | `00_core_philosophy.md` (§1, include §1.9.1) + §2.3 (checklist bullets only) | Relevant pattern doc + `06_anti_patterns_and_workflow.md` (§10, §11.1 or §11.3) |
 | **🔧 TROUBLESHOOT** | `07_troubleshooting.md` | Relevant domain pattern doc (optional, load §-level sections on demand) |
 | **🔍 AUDIT** | `06_anti_patterns_and_workflow.md` (§10 scan tables, §10.5 security, §11.2, §11.15) | §1.11 (severity taxonomy) from Core Philosophy, §15.4 (audit tiers) from QA Checklist |
 
