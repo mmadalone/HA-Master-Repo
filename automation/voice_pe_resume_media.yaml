@@ -73,7 +73,6 @@ blueprint:
       description: >
         Select the Voice PE satellite(s) to monitor and the media players
         whose playback should be resumed after a conversation ends.
-      collapsed: false
       input:
         satellites:
           name: Voice PE satellites to monitor
