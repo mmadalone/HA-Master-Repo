@@ -35,6 +35,9 @@ blueprint:
     * **Music Assistant** integration must be installed
 
     ### Recent changes
+    - **v4:** Fixed AP-16 — added `| default()` guards to all `states()` calls
+      in ducking flag and playing-state conditions. Fixed AP-09a — added
+      `default:` to ducking flag input for collapsed section stability.
     - **v3:** Fixed section naming convention, moved ducking flag into section
     - **v2:** Added author, header image, changelog, missing action aliases
     - **v1:** Initial version
@@ -100,7 +103,9 @@ blueprint:
             The same input_boolean used in the Voice PE duck/restore
             blueprints. When this flag is ON, volume sync is paused to
             prevent feedback loops during voice interactions. Create one
-            if you don't have it yet.
+            if you don't have it yet. **Required** — select an
+            input_boolean or create one before saving.
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -273,7 +278,7 @@ actions:
   # 1) Skip sync while Voice PE is ducking volumes
   - condition: template
     alias: "Voice PE ducking not active"
-    value_template: "{{ states(ducking_flag_entity) != 'on' }}"
+    value_template: "{{ states(ducking_flag_entity) | default('off') != 'on' }}"
 
   # 2) Check direction is allowed
   - condition: template
@@ -287,7 +292,8 @@ actions:
       {% if not only_playing %}
         true
       {% else %}
-        {{ states(source_entity) == 'playing' or states(target_entity) == 'playing' }}
+        {{ states(source_entity) | default('off') == 'playing'
+           or states(target_entity) | default('off') == 'playing' }}
       {% endif %}
 
   # 4) Branch: mute sync vs volume sync
