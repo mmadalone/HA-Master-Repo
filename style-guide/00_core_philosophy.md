@@ -188,26 +188,6 @@ This style guide is ~110K tokens across 10 files (plus master index). **Never lo
 
 **Cross-domain tasks** (e.g., "blueprint with MA + voice control"): load each relevant T1 doc, but read them sequentially — don't dump 3 pattern docs into context simultaneously. Read one, extract what you need, move to the next.
 
-#### 1.9.1 execution modes — single-file by default
-
-**default mode is single-file execution.** for any build/edit task, the assistant may read and modify **only the one target file** required to complete the request.
-
-the assistant must not auto-load:
-- other style guide files
-- build logs / crash logs
-- checklists / audits
-- entire directories
-- “project instructions” files
-
-**reference mode (explicit only):**
-- only enter when the user says: `reference mode: <file/section>`
-- read the smallest excerpt needed, answer the question, then exit reference mode
-
-**debug mode (explicit only):**
-- only enter when the user says: `enter debug mode`
-- use **diff-first + excerpt-second**: prefer git diff and small log slices (error + limited surrounding lines)
-- never ingest full raw logs unless the user explicitly requests it
-
 ### 1.10 Reasoning-first directive — explain before you code (MANDATORY)
 Before generating **any** code (YAML, ESPHome config, markdown, conversation agent prompts), you MUST:
 
@@ -357,21 +337,7 @@ Once a code block, config snippet, or design decision has been established in th
 
 This extends §1.9's "never echo back file contents" from tool outputs to all conversation content. If the user needs to see something again, they can scroll up or you can re-read the file. Don't burn 500 tokens on a courtesy repost.
 
-**4. don’t go context-diving.**
-filesystem access is not a license to read the project. treat every file read as token spend.
-
-- read only the target file you will edit
-- when troubleshooting, start with `git diff` and the smallest relevant log excerpt
-- do not “scan for more context” unless the user explicitly requests it
-- see also: §11.0 crash recovery and §11.15.3 token pre-flight.
-
-**5. big inputs require a gate.**
-if a requested input is large (full logs, long markdown docs, multi-file reads), stop and propose the minimal evidence pack first:
-- git diff (preferred)
-- error excerpt (error + limited surrounding lines)
-- the specific file path + section/line range to inspect next
-
-**6. Artifact-first — files over explanation.**
+**4. Artifact-first — files over explanation.**
 When the deliverable is code, write the file. Don't narrate 50 lines of YAML across three conversational messages when a single file write does the job in one turn. The reasoning-first directive (§1.10) still applies — explain your approach *before* generating — but once the plan is agreed, go straight to the artifact. Save conversational explanation for things that went wrong, surprising decisions mid-generation, or post-delivery context the user needs.
 
 | Situation | Do this | Not this |
@@ -380,25 +346,7 @@ When the deliverable is code, write the file. Don't narrate 50 lines of YAML acr
 | Applying 5 fixes to an existing file | Make the edits, list what changed | Explain each fix in a paragraph, then make the edits, then summarize again |
 | User asks "what did you change?" | Reference the git diff or list changes concisely | Paste the before and after side by side |
 
-**6.1 Diff-first checkpoints (non-coder friendly).**
-When the goal is "don't lose work" and "continue mid-task without reloading everything", **git diffs beat conversational log files**.
-
-- **Default:** treat **git as the checkpoint system**. conversational “build logs” are for decision metadata, not as a transport for code. (see §2 and §11.8 boundary rules)
-- **You don't need to code to use this.** You only need to ask the assistant to run 3 operations: **status → diff → commit** (or stash), then continue.
-
-| Situation | Do this (diff-first) | Not this |
-|----------|-----------------------|----------|
-| Mid-work and worried about token limits / crash | commit a small checkpoint with a clear message (or stash), then continue | paste huge logs / re-send entire files into chat |
-| Need help debugging a change | share **the diff of the changed file(s)** + the error/trace | share a full repo dump or multi-thousand-line file again |
-| Assistant says “what changed?” | point it at `git diff` (or paste the diff) | re-explain changes from memory or re-post old content |
-
-**Minimum checkpoint payload (what to share):**
-- the **git diff** for the changed files (preferred)
-- plus: the **exact error message/trace** you’re reacting to
-
-**Why this matters:** diffs are small, precise, and let any assistant reconstruct intent without reloading your whole context window.
-
-**7. Trim your toolkit.**
+**5. Trim your toolkit.**
 Not every session needs every tool. If you're doing pure YAML config work, web search and image generation are dead weight in the context window. Mentally scope your active tools at session start:
 
 | Task type | Active tools | Idle tools |
@@ -410,7 +358,7 @@ Not every session needs every tool. If you're doing pure YAML config work, web s
 
 This isn't about disabling anything — it's about not reaching for tools that add latency and context overhead when they're irrelevant to the task. If a YAML session suddenly needs web search (e.g., verifying an integration's API), use it. But don't proactively search for things you already know.
 
-**8. Session scoping — one major deliverable at a time.**
+**6. Session scoping — one major deliverable at a time.**
 Complex builds (new blueprints, multi-file refactors, full audits) should be one-per-session. Don't start a second blueprint in the same conversation where you just finished a 200-line bedtime automation — the context is already loaded with decisions, partial reads, and tool outputs from the first build. Start a fresh session. Quick follow-ups ("fix this one line," "rename that helper") are fine to chain.
 
 **The turn threshold:**

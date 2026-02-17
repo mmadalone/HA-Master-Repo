@@ -145,6 +145,7 @@ input:
 - Inputs within a section are ordered logically (most important first)
 - **No exceptions.** Every blueprint uses collapsible sections regardless of input count. Even a 2-input blueprint gets a section wrapper — library-wide consistency is worth more than saving three lines of YAML.
 - **Default collapse state (MANDATORY):** Sections ① and ② remain expanded by default (omit the `collapsed:` key — HA defaults to expanded). Section ③ and all subsequent sections MUST include `collapsed: true`. Rationale: primary configuration (triggers, core entities) should be immediately visible; advanced and optional settings stay tucked away until the user needs them.
+- **Every input inside a collapsible section MUST have a `default:` value.** If any input in a section lacks `default:`, HA silently downgrades the entire section to non-collapsible — no error, no warning, just a missing chevron. Entity selectors get `default:` (empty/null). Target selectors get `default: {}`. This is the #1 reason "collapsed doesn't work" in practice.
 - The `collapsed:` key is part of the collapsible input sections feature introduced in HA 2024.6.0. Any blueprint using `collapsed: true` inherits the `min_version: 2024.6.0` requirement (see §3.1 threshold table)
 
 ### 3.3 Input definitions

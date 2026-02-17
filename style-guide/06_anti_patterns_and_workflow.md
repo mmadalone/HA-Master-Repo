@@ -21,6 +21,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-07 | ℹ️ | HA API calls (`ha_call_service`, `ha_get_state`) without filesystem fallback plan | §10 #7 |
 | AP-08 | ⚠️ | Blueprint action block >200 lines OR nesting depth >4 levels | §1.1, §1.8 |
 | AP-09 | ⚠️ | Blueprint with 0 `input:` sections (no collapsible groups) | §3.2 |
+| AP-09a | ⚠️ | Input inside collapsible section missing `default:` — silently breaks collapse | §3.2 |
 | AP-10 | ⚠️ | `service:` keyword in new code | §11.3 |
 | AP-10a | ⚠️ | `platform:` as trigger type prefix in new code (should be `trigger:`) | §11.3 |
 | AP-10b | ⚠️ | `data_template:` in new code (deprecated ~HA 0.115/2020, no removal date announced — use `data:`) | §11.3 |
@@ -71,7 +72,6 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-40 | ⚠️ | Full-file `read_file` on a 1000+ line file when the task only requires editing a specific section | §11.13 |
 | AP-41 | ⚠️ | User indicates a crash/interruption occurred but AI begins fresh work without checking `_build_logs/`, git state, or past conversations for recovery context | §11.0 |
 | AP-43 | ⚠️ | Build log exists but `## Edit Log` section was not updated between consecutive edits (batched log updates — defeats crash recovery because the log doesn't reflect which edits actually landed) | §11.0, §11.8 |
-| AP-44 | ⚠️ | Full raw crash logs or full-file dumps provided/loaded when a `ha_git_diff` + targeted excerpt would suffice (context bloat → missed details + higher crash risk) | §11.0.x, §1.9 |
 
 **Severity key:** ❌ ERROR = must fix before presenting · ⚠️ WARNING = fix unless user explicitly accepts · ℹ️ INFO = flag to user, fix if trivial
 
@@ -209,21 +209,6 @@ If a task involves editing multiple files, a single `ha_create_checkpoint` cover
 - Run `ha_git_pending` to check for uncommitted changes. Uncommitted changes on the target file mean work was interrupted.
 - Run `ha_git_diff` to see what was modified since the last commit.
 - Check `_build_logs/` for any logs referencing the target file, regardless of their `status:` field. A log might exist with `status: in-progress`, or it might not exist at all (crash happened before log creation).
-
-#### 11.0.x context evidence order (diff-first, excerpt-second)
-
-when troubleshooting or resuming after a crash, treat context like a limited budget (see §1.9 token budget). do not ingest full logs or full files by default.
-
-**evidence priority (in order):**
-1) **git diff is the source of truth** (what actually changed on disk). always prefer `ha_git_diff` over “what the log says”.
-2) **targeted excerpts only**: if logs are needed, pull the smallest relevant slice (error block + ~30 lines before/after). do not paste entire multi-thousand-line logs unless explicitly requested.
-3) **only then** load larger sections (and only the specific section needed), following the line-range read workflow (§11.13) for big files.
-
-**minimal crash / bug evidence pack (preferred):**
-- `ha_git_pending` result
-- `ha_git_diff` for the target file(s)
-- the build/audit log id (if any) + the last completed chunk/check marker
-- the smallest relevant log excerpt (error + context), not the full log
 
 **Step 2 — If an in-progress build/audit log is found, verify file state before trusting it:**
 - Read the log's `Files modified` and `Completed chunks` sections.
@@ -978,8 +963,6 @@ All three mechanisms interlock: tiers decide *how much* work. Chunking decides *
 #### 11.15.3 Pre-flight token budget estimation
 
 Before committing to an audit strategy, run a sizing step to catch overload before it happens. This slots between tier selection (§15.4) and Stage 1 kickoff — one turn of estimation saves multiple crashed sessions.
-
-treat full raw logs (and full-file dumps) as a high-cost target load: if they’re needed, split into staged excerpts (error block + limited surrounding lines) and only expand scope on request.
 
 **Procedure:**
 
