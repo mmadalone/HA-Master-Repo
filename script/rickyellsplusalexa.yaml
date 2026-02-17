@@ -1,134 +1,131 @@
 blueprint:
-  name: Rick wake-up helper – TTS + Alexa music
+  name: Rick wake-up helper – TTS + Alexa music (v2.0)
   description: |
-    **Rick wake-up helper – TTS + Alexa music**
+    ![Rick wake-up helper](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/rickyellsplusalexa-header.jpeg)
 
-    This is a small reusable SCRIPT blueprint.  
-    It does exactly two things in sequence:
+    ## Rick wake-up helper – TTS + Alexa music
+
+    A reusable **script blueprint** that does two things in sequence:
 
     1. Uses your ElevenLabs (or other) TTS entity to make "Rick" speak on a
        chosen media player.
     2. After a configurable delay, sends two text commands to a chosen Alexa
-       device:
-       - One to set the volume.
-       - One to start a song / playlist / station.
+       device — one to set volume, one to start a song / playlist / station.
 
-    You can call this script from ANY automation, for example:
-    - Morning routine ("if still in bed", "if motion not detected", etc.).
-    - Pomodoro overrun ("you worked too long, go stretch").
-    - Idle too long at PC, bedtime reminders, etc.
+    Call this script from any automation: morning routines, pomodoro overruns,
+    idle-too-long reminders, bedtime nudges, etc.
 
-    ---
-    💡 Requirements
+    ### Requirements
     - A TTS entity that supports `tts.speak` (e.g. ElevenLabs).
-    - A media_player where Rick should speak.
-    - Alexa Devices (or compatible) integration which exposes the
-      `alexa_devices.send_text_command` service and an Alexa device.
+    - A `media_player` where Rick should speak.
+    - **Alexa Devices** integration exposing `alexa_devices.send_text_command`.
 
-    ---
-    🛠 How to set up
-    1. Save this file as e.g.:
-         `config/blueprints/script/rick_tts_alexa_helper.yaml`
-    2. Restart Home Assistant or reload blueprints.
-    3. Go to **Settings → Automations & Scenes → Scripts → Create script → From blueprint**
-       and select **"Rick wake-up helper – TTS + Alexa music"**.
-    4. Fill in:
-       - TTS entity, media player, message, voice profile.
-       - Delay before Alexa commands.
-       - Alexa device, volume command, and song command.
-    5. Use the created script in any automation as a normal `script.turn_on`.
+    ### Version / Changelog
+    - **v2.0** — Full style-guide compliance rewrite: collapsible sections,
+      `action:` syntax, aliases, `continue_on_error`, device selector filter,
+      header image, version tagging.
+    - **v1.0** — Initial release.
 
   domain: script
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/rickyellsplusalexa.yaml
 
   input:
-    tts_engine:
-      name: TTS entity (Rick voice)
-      description: >
-        Your ElevenLabs (or other) TTS entity that will be used with
-        `tts.speak`. Example: `tts.elevenlabs_custom_tts`.
-      selector:
-        entity:
-          domain: tts
+    tts_settings:
+      name: "🎙️ TTS Configuration"
+      icon: mdi:account-voice
+      collapsed: false
+      input:
+        tts_engine:
+          name: TTS entity (Rick voice)
+          description: >
+            Your ElevenLabs (or other) TTS entity used with `tts.speak`.
+          default:
+          selector:
+            entity:
+              domain: tts
 
-    tts_output_player:
-      name: Media player for Rick's voice
-      description: >
-        Media player where Rick should yell at you.
-        Example: `media_player.home_assistant_voice_0a0109_media_player_2_2`.
-      selector:
-        entity:
-          domain: media_player
+        tts_output_player:
+          name: Media player for Rick's voice
+          description: >
+            Media player where Rick should yell at you.
+          default:
+          selector:
+            entity:
+              domain: media_player
 
-    tts_message:
-      name: Rick's message
-      description: >
-        The text Rick will shout. You can customize this freely per script
-        instance.
-      default: >
-        Hey Miquel, it's after eight. Get your lazy carbon-based ass out of bed
-        before I start charging you rent for lying there. Come on, I know you
-        hate your job but get up! Come on, get up and start your day! Come on
-        Come on Come on Come on!
-      selector:
-        text:
-          multiline: true
+        tts_message:
+          name: Rick's message
+          description: >
+            The text Rick will shout. Customize freely per script instance.
+          default: >
+            Hey Miquel, it's after eight. Get your lazy carbon-based ass out of bed
+            before I start charging you rent for lying there. Come on, I know you
+            hate your job but get up! Come on, get up and start your day! Come on
+            Come on Come on Come on!
+          selector:
+            text:
+              multiline: true
 
-    tts_voice_profile:
-      name: TTS voice profile
-      description: >
-        Value to send as `options.voice_profile` to your TTS service.
-        Example: "Rick Sanchez - Custom 11".
-      default: "Rick Sanchez - Custom 11"
-      selector:
-        text:
-          multiline: false
+        tts_voice_profile:
+          name: TTS voice profile
+          description: >
+            Value sent as `options.voice_profile` to your TTS service.
+          default: "Rick Sanchez - Custom 11"
+          selector:
+            text:
+              multiline: false
 
-    alexa_delay_after_tts:
-      name: Delay before Alexa commands (seconds)
-      description: >
-        How long to wait after Rick finishes yelling before sending the Alexa
-        commands (volume + song).
-      default: 40
-      selector:
-        number:
-          min: 0
-          max: 600
-          unit_of_measurement: s
-          mode: slider
+    alexa_settings:
+      name: "📻 Alexa Configuration"
+      icon: mdi:speaker-wireless
+      collapsed: true
+      input:
+        alexa_delay_after_tts:
+          name: Delay before Alexa commands (seconds)
+          description: >
+            How long to wait after Rick finishes yelling before sending the
+            Alexa commands (volume + song).
+          default: 40
+          selector:
+            number:
+              min: 0
+              max: 600
+              unit_of_measurement: s
+              mode: slider
 
-    alexa_device:
-      name: Alexa device
-      description: >
-        Alexa device that should receive the text commands.  
-        This must be a device supported by `alexa_devices.send_text_command`.
-      selector:
-        device: {}
+        alexa_device:
+          name: Alexa device
+          description: >
+            Alexa device that should receive the text commands. Must be
+            supported by `alexa_devices.send_text_command`.
+          default:
+          selector:
+            device:
+              integration: alexa_devices
 
-    alexa_volume_command:
-      name: Alexa volume command
-      description: >
-        Text command to set the volume before music starts.
-        Example: "set volume to 10".
-      default: "set volume to 10"
-      selector:
-        text:
-          multiline: false
+        alexa_volume_command:
+          name: Alexa volume command
+          description: >
+            Text command to set the volume before music starts.
+          default: "set volume to 10"
+          selector:
+            text:
+              multiline: false
 
-    alexa_song_command:
-      name: Alexa play command
-      description: >
-        Text command to start your wake-up song / playlist.
-        Example: "play Mark on the bus by the Beastie Boys".
-      default: "play Mark on the bus by the Beastie Boys"
-      selector:
-        text:
-          multiline: false
+        alexa_song_command:
+          name: Alexa play command
+          description: >
+            Text command to start your wake-up song / playlist.
+          default: "play Mark on the bus by the Beastie Boys"
+          selector:
+            text:
+              multiline: false
 
 mode: single
 
 sequence:
-  # 1) Rick yells via TTS on the selected media player
-  - service: tts.speak
+  - alias: "Rick TTS speak on media player"
+    action: tts.speak
     target:
       entity_id: !input tts_engine
     data:
@@ -136,21 +133,22 @@ sequence:
       message: !input tts_message
       options:
         voice_profile: !input tts_voice_profile
+    continue_on_error: true
 
-  # 2) Wait before sending Alexa commands
-  - delay:
-      hours: 0
-      minutes: 0
+  - alias: "Delay before Alexa commands"
+    delay:
       seconds: !input alexa_delay_after_tts
 
-  # 3) Alexa: set volume
-  - service: alexa_devices.send_text_command
+  - alias: "Alexa set volume"
+    action: alexa_devices.send_text_command
     data:
       device_id: !input alexa_device
       text_command: !input alexa_volume_command
+    continue_on_error: true
 
-  # 4) Alexa: play wake-up song / playlist
-  - service: alexa_devices.send_text_command
+  - alias: "Alexa play wake-up music"
+    action: alexa_devices.send_text_command
     data:
       device_id: !input alexa_device
       text_command: !input alexa_song_command
+    continue_on_error: true
