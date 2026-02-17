@@ -35,12 +35,14 @@ blueprint:
       name: "① Toggles & entities"
       icon: mdi:toggle-switch
       description: Shared input_booleans and media players used by the wake-up system.
+      collapsed: false
       input:
         snooze_toggle:
           name: Snooze toggle
           description: >
             Same input_boolean as "Snooze toggle" in Wake-up guard.
             Will be turned ON when Snooze is triggered.
+          default:
           selector:
             entity:
               domain: input_boolean
@@ -50,6 +52,7 @@ blueprint:
           description: >
             Same input_boolean as "Stop toggle" in Wake-up guard.
             Will be turned ON when Stop is triggered.
+          default:
           selector:
             entity:
               domain: input_boolean
@@ -59,6 +62,7 @@ blueprint:
           description: >
             Media player used by TTS (same as "Media player for voice"
             in the main wake-up blueprint).
+          default:
           selector:
             entity:
               domain: media_player
@@ -81,6 +85,7 @@ blueprint:
       name: "② Notification action IDs"
       icon: mdi:bell-ring
       description: Action strings that must match the Companion app notification actions.
+      collapsed: true
       input:
         snooze_action_id:
           name: Snooze action ID

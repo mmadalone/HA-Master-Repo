@@ -45,6 +45,7 @@ blueprint:
     schedule:
       name: "① Schedule & presence"
       icon: mdi:calendar-clock
+      collapsed: false
       description: >
         When the wake-up fires and what presence conditions must be met.
       input:
@@ -83,6 +84,7 @@ blueprint:
           description: >
             Time at which the wake-up guard fires. Combined with active weekdays
             to determine when the automation triggers.
+          default: "07:00:00"
           selector:
             time: {}
 
@@ -92,6 +94,7 @@ blueprint:
             One or more binary sensors that are ON when you are in bed (e.g. mmWave
             bed presence). ALL must have been continuously ON for at least the
             configured minimum minutes before wake-up time.
+          default: []
           selector:
             entity:
               multiple: true
@@ -143,6 +146,7 @@ blueprint:
     devices:
       name: "② Lights & switches"
       icon: mdi:lightbulb-on
+      collapsed: true
       description: >
         Optional devices to turn on when the wake-up fires, and off during snooze.
       input:
@@ -174,6 +178,7 @@ blueprint:
     tts_voice:
       name: "③ TTS & voice output"
       icon: mdi:account-voice
+      collapsed: true
       description: >
         TTS engine, output speaker, volume levels, and ElevenLabs voice profile.
       input:
@@ -183,6 +188,7 @@ blueprint:
             TTS entity used for the wake-up announcement. If this is exactly
             tts.elevenlabs_custom_tts (HACS custom integration), the blueprint
             passes the voice profile string via options.voice_profile.
+          default: ""
           selector:
             entity:
               domain: tts
@@ -191,6 +197,7 @@ blueprint:
           name: Media player for TTS output
           description: >
             Speaker or speaker group where TTS will play.
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -249,6 +256,7 @@ blueprint:
     message:
       name: "④ Wake-up message"
       icon: mdi:robot-outline
+      collapsed: true
       description: >
         Static fallback message or LLM-generated wake-up rant.
       input:
@@ -302,6 +310,7 @@ blueprint:
     controls:
       name: "⑤ Snooze/Stop controls"
       icon: mdi:alarm-snooze
+      collapsed: true
       description: >
         Control toggles, music handoff, and timing for snooze/stop behavior.
       input:
@@ -311,6 +320,7 @@ blueprint:
             Boolean helper used as the Snooze control flag. This blueprint turns it
             ON when snooze is triggered via mobile notification. Can also be driven
             from a dashboard button or another automation.
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -321,6 +331,7 @@ blueprint:
             Boolean helper used as the Stop control flag. This blueprint turns it
             ON when stop is triggered via mobile notification. Can also be driven
             from a dashboard button or another automation.
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -331,6 +342,7 @@ blueprint:
             Script that starts your wake-up music or hands off to your music
             helper logic. Called when the snooze/stop window times out without
             user intervention.
+          default: ""
           selector:
             entity:
               domain: script
@@ -368,6 +380,7 @@ blueprint:
     optional:
       name: "⑥ Optional integrations"
       icon: mdi:puzzle-outline
+      collapsed: true
       description: >
         Mobile notifications, Assist Satellite, person name, and companion
         helper scripts. All have sensible defaults.

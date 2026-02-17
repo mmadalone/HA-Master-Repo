@@ -1,9 +1,11 @@
 blueprint:
   name: "Wake-Up Guard – External Alarm Trigger (Android / Alexa / etc.)"
   author: madalone
-  min_version: "2024.10.0"
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/wake_up_guard_external_alarm.yaml
+  homeassistant:
+    min_version: "2024.10.0"
   description: >-
-    ![Wake-Up Guard header](https://homeassistant.local:8123https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/wake_up_guard_external_alarm-header.jpeg)
+    ![Wake-Up Guard header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/wake_up_guard_external_alarm-header.jpeg)
 
 
     Triggers your wake-up script based on an external alarm-time sensor,
@@ -23,6 +25,9 @@ blueprint:
 
 
     ### Recent changes
+
+    - **v3 (2026-02-17):** Audit fixes — collapsible defaults on all inputs,
+      `source_url`, `homeassistant: min_version` nesting, `continue_on_error`.
 
     - **v2 (2026-02-11):** Full style-guide compliance rewrite —
       header image, collapsible sections, variables block, 2024.10+ syntax,
@@ -44,6 +49,8 @@ blueprint:
             Examples: `sensor.pixel_7_next_alarm`,
             `sensor.bedroom_echo_next_alarm`.
             Must have device class "timestamp".
+            At least one alarm sensor is required.
+          default: {}
           selector:
             entity:
               domain: sensor
@@ -74,6 +81,8 @@ blueprint:
           description: >-
             Script that performs the actual wake-up routine, e.g.
             `script.wake_up_guard_rick`.
+            A wake-up script must be selected for the automation to function.
+          default: {}
           selector:
             entity:
               domain: script
@@ -117,3 +126,4 @@ actions:
     action: script.turn_on
     target:
       entity_id: !input wakeup_script
+    continue_on_error: true
