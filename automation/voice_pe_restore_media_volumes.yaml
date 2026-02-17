@@ -1,6 +1,8 @@
 blueprint:
   name: Voice PE – Restore media volumes after conversation (Alexa-safe, 8 players)
   description: >
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_pe_restore_media_volumes-header.jpeg)
+
     Restores the original volumes of your media players after a Voice PE
     conversation has finished.
 
