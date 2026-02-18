@@ -13,6 +13,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v3:** Bumped min_version to 2024.10.0; added default to tts_entity
+      and collapsed properties on all sections; fixed time_of_day whitespace;
+      added continue_on_error to TTS speak actions
+
     - **v2:** Fixed voice_profile crash on non-ElevenLabs engines; migrated
       to action: syntax; added collapsible sections, aliases, and descriptions
 
@@ -20,13 +24,14 @@ blueprint:
 
   domain: script
   homeassistant:
-    min_version: "2024.8.0"
+    min_version: "2024.10.0"
 
   input:
     tts_voice_settings:
       name: "① TTS & Voice"
       icon: mdi:account-voice
       description: TTS engine and optional ElevenLabs voice settings.
+      collapsed: false
       input:
         tts_entity:
           name: TTS entity
@@ -34,6 +39,7 @@ blueprint:
             The text-to-speech engine to use for announcements.
             Select your ElevenLabs TTS entity if using voice/profile options,
             or any other TTS entity for basic announcements.
+          default: ""
           selector:
             entity:
               domain: tts
@@ -61,6 +67,7 @@ blueprint:
     message_strategy:
       name: "② Message Strategy"
       icon: mdi:message-text
+      collapsed: true
       description: >
         Choose between static, random, or LLM-generated announcement messages.
       input:
@@ -109,6 +116,7 @@ blueprint:
     llm_settings:
       name: "③ LLM Configuration"
       icon: mdi:robot
+      collapsed: true
       description: >
         Settings for LLM-generated announcements. Only used when both random
         messages and LLM fun messages are enabled.
@@ -201,11 +209,10 @@ sequence:
       current_time: "{{ now().strftime('%H:%M') }}"
       time_of_day: >-
         {% set h = now().hour %}
-        {% if h < 6 %}late night
-        {% elif h < 12 %}morning
-        {% elif h < 18 %}afternoon
-        {% else %}evening
-        {% endif %}
+        {{ 'late night' if h < 6
+           else 'morning' if h < 12
+           else 'afternoon' if h < 18
+           else 'evening' }}
 
   - alias: "Decide announcement message — LLM, random pool, or default"
     choose:
@@ -290,6 +297,7 @@ sequence:
               message: "{{ tts_message }}"
               options:
                 voice_profile: "{{ el_voice_profile }}"
+            continue_on_error: true
 
       - alias: "TTS with voice name only (ElevenLabs voice, no profile)"
         conditions:
@@ -305,6 +313,7 @@ sequence:
               message: "{{ tts_message }}"
               options:
                 voice: "{{ el_voice }}"
+            continue_on_error: true
 
     default:
       - alias: "Speak via generic TTS — no ElevenLabs options"
@@ -314,3 +323,4 @@ sequence:
         data:
           media_player_entity_id: "{{ tts_target_player }}"
           message: "{{ tts_message }}"
+        continue_on_error: true
