@@ -48,7 +48,7 @@ blueprint:
           description: >-
             Enable if you have a door/contact sensor. When off, door state
             is ignored in all logic.
-          default: false
+          default: ""
           selector:
             boolean: {}
 
@@ -170,6 +170,12 @@ blueprint:
               mode: slider
 
 mode: single
+
+trigger_variables:
+  has_door: !input use_door_sensor
+  door_entity: !input door_sensor
+  has_shower_zone: !input use_shower_zone
+  shower_zone: !input shower_zone_sensor
 
 variables:
   has_door: !input use_door_sensor

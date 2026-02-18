@@ -306,5 +306,5 @@ actions:
               entity_id: "{{ radio_booleans_list }}"
             continue_on_error: true
 
-mode: single
+mode: restart
 max_exceeded: silent
