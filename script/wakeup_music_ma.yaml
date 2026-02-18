@@ -14,6 +14,9 @@ blueprint:
 
     ### Recent changes
 
+    - **v2.1:** QA audit remediation — collapsible section defaults + collapsed
+    flags, continue_on_error on volume set, template default guards
+
     - **v2:** Full rebuild — music_assistant.play_media, modern syntax,
     collapsible sections, radio_mode/enqueue inputs, MA entity filter
 
@@ -23,6 +26,7 @@ blueprint:
   homeassistant:
     min_version: "2024.10.0"
 
+  # --- version: 2.1 ---
   input:
     # ===========================================================================
     # ① PLAYER & MEDIA
@@ -31,6 +35,7 @@ blueprint:
       name: "① Player & media"
       icon: mdi:music-box
       description: Select the MA player and the media to play.
+      collapsed: false
       input:
         player:
           name: Music Assistant player
@@ -38,6 +43,7 @@ blueprint:
             The Music Assistant speaker to play on. Only MA players are
             shown — do not use the underlying platform entity (Alexa,
             ESPHome, Sonos, etc.).
+          default: ""
           selector:
             entity:
               filter:
@@ -85,6 +91,7 @@ blueprint:
       name: "② Playback settings"
       icon: mdi:tune-vertical
       description: Volume, queue behavior, and continuous playback options.
+      collapsed: true
       input:
         volume_before:
           name: Volume BEFORE playback
@@ -141,13 +148,14 @@ mode: single
 
 sequence:
   - alias: "Set volume BEFORE playback"
+    continue_on_error: true
     action: media_player.volume_set
     target:
       entity_id: !input player
     data:
       volume_level: !input volume_before
 
-  - alias: "Clear queue — fresh start for wake-up (non-critical, safe to fail)"
+  - alias: "Clear queue — fresh start for wake-up"
     continue_on_error: true
     action: media_player.clear_playlist
     target:
@@ -158,7 +166,7 @@ sequence:
       - alias: "Radio mode: Always — force continuous playback"
         conditions:
           - condition: template
-            value_template: "{{ radio_mode_value == 'Always' }}"
+            value_template: "{{ radio_mode_value | default('Use player settings') == 'Always' }}"
         sequence:
           - alias: "Play media with radio_mode on"
             action: music_assistant.play_media
@@ -173,7 +181,7 @@ sequence:
       - alias: "Radio mode: Never — disable continuous playback"
         conditions:
           - condition: template
-            value_template: "{{ radio_mode_value == 'Never' }}"
+            value_template: "{{ radio_mode_value | default('Use player settings') == 'Never' }}"
         sequence:
           - alias: "Play media with radio_mode off"
             action: music_assistant.play_media
