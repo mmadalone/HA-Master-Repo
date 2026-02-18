@@ -16,6 +16,17 @@ blueprint:
 
     ### Recent changes
 
+    - **v10:** Added minimum active presence input — requires a sensor to
+      stay ON for a configurable duration before counting as genuine
+      activity. Prevents brief sensor blips from cancelling escalation.
+      Applied to both pre-loop check, inter-stage lookback template,
+      and wait_for_trigger for: gate.
+    - **v9:** Fixed Jinja placeholder bug — input defaults with {{ stage }},
+      {{ total }}, {{ stage_delay }} were evaluated at variable-resolution
+      time (before repeat loop), resolving to empty strings. Replaced with
+      non-Jinja {STAGE}, {TOTAL}, {STAGE_DELAY} tokens. Updated replace()
+      chains to match. Simplified chains (no more spacing-variant handling).
+      Added {STAGE}/{TOTAL} to final-stage LLM prompt default.
     - **v8:** Plural top-level keys (§1.4), added `collapsed:` to all input
       sections with empty defaults on required inputs for proper collapse
       (§3.2), DRY comments on duplicated cleanup triad, comment on
@@ -115,6 +126,21 @@ blueprint:
             number:
               min: 1
               max: 30
+              step: 1
+              unit_of_measurement: min
+              mode: slider
+
+        activity_min_duration:
+          name: Minimum active presence (minutes)
+          description: >
+            How long a sensor must stay ON before counting as genuine
+            activity. A brief bathroom trip (under this threshold) will
+            not cancel escalation. Set to 0 to cancel on any activity.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 10
               step: 1
               unit_of_measurement: min
               mode: slider
@@ -327,12 +353,12 @@ blueprint:
           name: LLM prompt — first stage
           description: >
             Prompt sent to the conversation agent for the first stage.
-            Supports {{ stage }}, {{ total }}, {{ stage_delay }}.
+            Supports {STAGE}, {TOTAL}, {STAGE_DELAY} placeholders.
             Only used if LLM is enabled above.
           default: >-
             Generate a gentle, friendly wake-up message. Keep it under
             two sentences. Be warm but clear that it is time to get up.
-            You have about {{ stage_delay }} minutes before the next
+            You have about {STAGE_DELAY} minutes before the next
             escalation.
           selector:
             text:
@@ -341,11 +367,12 @@ blueprint:
         middle_stage_message:
           name: Middle stage message
           description: >
-            Message for stages between first and last. Supports Jinja2:
-            {{ stage }} = current stage number, {{ total }} = total stages.
+            Message for stages between first and last. Supports
+            placeholders: {STAGE} = current stage number,
+            {TOTAL} = total stages.
             Used when LLM is disabled, or as fallback if LLM fails.
           default: >-
-            You are still in bed. This is stage {{ stage }} of {{ total }}.
+            You are still in bed. This is stage {STAGE} of {TOTAL}.
           selector:
             text:
               multiline: true
@@ -361,11 +388,11 @@ blueprint:
         llm_prompt_middle_stage:
           name: LLM prompt — middle stages
           description: >
-            Prompt for middle stages. Supports {{ stage }}, {{ total }},
-            {{ stage_delay }}. Only used if LLM is enabled above.
+            Prompt for middle stages. Supports {STAGE}, {TOTAL},
+            {STAGE_DELAY} placeholders. Only used if LLM is enabled above.
           default: >-
-            Generate an escalating wake-up message. This is stage {{ stage }}
-            of {{ total }}, with {{ stage_delay }} minutes between stages.
+            Generate an escalating wake-up message. This is stage {STAGE}
+            of {TOTAL}, with {STAGE_DELAY} minutes between stages.
             Be progressively more insistent but not angry.
           selector:
             text:
@@ -374,10 +401,11 @@ blueprint:
         final_stage_message:
           name: Final stage message
           description: >
-            Nuclear last-resort message. Supports Jinja2: {{ stage }} and
-            {{ total }}. Used when LLM is disabled, or as fallback.
+            Nuclear last-resort message. Supports placeholders:
+            {STAGE} and {TOTAL}. Used when LLM is disabled, or
+            as fallback.
           default: >-
-            Last warning. Stage {{ stage }} of {{ total }}. I am not asking again.
+            Last warning. Stage {STAGE} of {TOTAL}. I am not asking again.
           selector:
             text:
               multiline: true
@@ -393,12 +421,12 @@ blueprint:
         llm_prompt_final_stage:
           name: LLM prompt — final stage
           description: >
-            Prompt for the final stage. Supports {{ stage }}, {{ total }},
-            {{ stage_delay }}. Should produce an urgent, no-nonsense
-            message. Only used if LLM is enabled above.
+            Prompt for the final stage. Supports {STAGE}, {TOTAL},
+            {STAGE_DELAY} placeholders. Should produce an urgent,
+            no-nonsense message. Only used if LLM is enabled above.
           default: >-
             Generate an urgent, final wake-up warning. This is the LAST
-            stage. Be direct and firm. No pleasantries.
+            stage (stage {STAGE} of {TOTAL}). Be direct and firm. No pleasantries.
           selector:
             text:
               multiline: true
@@ -516,6 +544,7 @@ variables:
   # v_ prefix = resolved !input value, available to templates below
   v_activity_sensors: !input activity_sensors
   v_activity_lookback: !input activity_lookback
+  v_activity_min_duration: !input activity_min_duration
   v_tts_entity: !input tts_entity
   v_tts_output_player: !input tts_output_player
   v_num_stages: !input num_stages
@@ -564,9 +593,11 @@ actions:
         value_template: >-
           {% set sensors = expand(v_activity_sensors | default([])) %}
           {% set lookback_secs = (v_activity_lookback | int(5)) * 60 %}
+          {% set min_dur_secs = (v_activity_min_duration | int(0)) * 60 %}
           {% set ns = namespace(awake=false) %}
           {% for s in sensors %}
-            {% if s.state == 'on' %}
+            {% if s.state == 'on'
+                and (now() - s.last_changed).total_seconds() >= min_dur_secs %}
               {% set ns.awake = true %}
             {% elif s.state == 'off'
                 and (now() - s.last_changed).total_seconds() < lookback_secs %}
@@ -631,6 +662,8 @@ actions:
                 - trigger: state
                   entity_id: !input activity_sensors
                   to: "on"
+                  for:
+                    minutes: "{{ v_activity_min_duration | int(0) }}"
               timeout:
                 minutes: "{{ v_stage_delay | int(10) }}"
               continue_on_timeout: true
@@ -648,9 +681,11 @@ actions:
                       value_template: >-
                         {% set sensors = expand(v_activity_sensors | default([])) %}
                         {% set lookback_secs = (v_activity_lookback | int(5)) * 60 %}
+                        {% set min_dur_secs = (v_activity_min_duration | int(0)) * 60 %}
                         {% set ns = namespace(awake=false) %}
                         {% for s in sensors %}
-                          {% if s.state == 'on' %}
+                          {% if s.state == 'on'
+                              and (now() - s.last_changed).total_seconds() >= min_dur_secs %}
                             {% set ns.awake = true %}
                           {% elif s.state == 'off'
                               and (now() - s.last_changed).total_seconds() < lookback_secs %}
@@ -723,21 +758,17 @@ actions:
               {% if is_first %}{{ v_llm_prompt_first }}
               {% elif is_last %}{{ v_llm_prompt_final }}
               {% else %}{{ v_llm_prompt_middle }}{% endif %}
-            # NOTE: HA doesn't support nested Jinja in !input strings — using replace()
-            # chain as workaround. Handles {{ x }} and {{x}} spacing variants only;
-            # mixed-spacing like {{ x}} or {{x }} would slip through.
+            # NOTE: Input defaults use non-Jinja {VAR} placeholders to survive
+            # HA's Jinja evaluation of !input strings at variable-resolution time.
+            # replace() swaps them for real values inside the repeat loop.
             static_message: >-
               {% if is_first %}{{ v_first_stage_message }}
               {% elif is_last %}{{ v_final_stage_message
-                 | replace('{{ stage }}', stage | string)
-                 | replace('{{stage}}', stage | string)
-                 | replace('{{ total }}', total | string)
-                 | replace('{{total}}', total | string) }}
+                 | replace('{STAGE}', stage | string)
+                 | replace('{TOTAL}', total | string) }}
               {% else %}{{ v_middle_stage_message
-                 | replace('{{ stage }}', stage | string)
-                 | replace('{{stage}}', stage | string)
-                 | replace('{{ total }}', total | string)
-                 | replace('{{total}}', total | string) }}{% endif %}
+                 | replace('{STAGE}', stage | string)
+                 | replace('{TOTAL}', total | string) }}{% endif %}
 
         - alias: "Resolve message — LLM with safe fallback to static text"
           if:
@@ -751,12 +782,9 @@ actions:
                 agent_id: "{{ v_llm_agent }}"
                 text: >-
                   {{ llm_prompt_raw
-                     | replace('{{ stage }}', stage | string)
-                     | replace('{{stage}}', stage | string)
-                     | replace('{{ total }}', total | string)
-                     | replace('{{total}}', total | string)
-                     | replace('{{ stage_delay }}', v_stage_delay | string)
-                     | replace('{{stage_delay}}', v_stage_delay | string) }}
+                     | replace('{STAGE}', stage | string)
+                     | replace('{TOTAL}', total | string)
+                     | replace('{STAGE_DELAY}', v_stage_delay | string) }}
                   {% if v_llm_context_entities | default([]) | length > 0 %}
                   Current sensor readings:
                   {% for e in v_llm_context_entities %}
