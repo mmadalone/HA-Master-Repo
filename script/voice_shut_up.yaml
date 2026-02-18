@@ -1,7 +1,7 @@
 blueprint:
   name: Voice – Shut Up (pause all media) (tool script)
   description: |
-    ![Voice Shut Up](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_shut_up.jpeg)
+    ![Voice Shut Up](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_shut_up-header.jpeg)
 
     SCRIPT TOOL: "Shut up" – pause ALL playing media players.
 
