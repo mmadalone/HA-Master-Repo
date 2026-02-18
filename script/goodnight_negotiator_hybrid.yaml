@@ -1,5 +1,5 @@
 blueprint:
-  name: "Goodnight Negotiator (Hybrid) v8.7.0"
+  name: "Goodnight Negotiator (Hybrid) v8.8.0"
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/goodnight_negotiator_hybrid-header.jpeg)
 
@@ -10,59 +10,12 @@ blueprint:
     Announce selection, then play.
 
 
-    V8.6.3 notes:
-    - change: stage 3 now uses option a json parsing with mapping type-check fallback (parse once; never re-parse dicts).
-    - change: if stage 1 tv answer is no, it acknowledges and skips stage 3.
+    V8.8.0 notes (audit remediation):
+    - fix: 14 action aliases in Stage 1 were mislabeled as "Stage 3:" — corrected to "Stage 1:" for accurate trace debugging.
+    - fix: added missing `default: ""` on stage3_music_assistant_config_entry_id and stage3_music_assistant_player (required for collapsed section UI).
+    - fix: corrected indentation on end-of-file comment blocks.
+    - housekeeping: trimmed historical changelog from description (v6–v8.6.3 moved to repository README).
 
-    V8.6.2 notes:
-    - fix: map qa_unclear_retries input into runtime variables to avoid UndefinedError.
-
-    V8.5.0 notes:
-    - Change: stage 3 now uses the Music Assistant LLM pattern (json -> play_media) and no longer calls music_assistant.search.
-    - This makes playback less brittle (no manual parsing of search results) and matches your mass_llm_enhanced_assist blueprint approach.
-
-    V8.4.3 notes:
-    - Fix: stage 3 Music Assistant search used a mis-cased variable name, which could make the query empty and stop playback.
-
-    V8.4.2 notes:
-    - Helper settings now use entity selectors (searchable dropdowns) filtered to helper domains.
-      The picker UI also offers a create-new-helper option.
-
-    V8.4.1 notes:
-    - Fix: YAML parsing error caused by unquoted "Example:" in helper input descriptions.
-
-    V8.4 notes:
-    - Added optional helper-backed memory/locking (reduces repeated opening lines; prevents double-runs)
-    - Moved debounce to the very start (before any speech) when helpers are configured
-    - Strengthened opening prompt against time clichés and can reference the last opening line
-    - Fix: debounce no longer self-triggers (uses pre-run this.attributes.last_triggered).
-
-    V8.2 notes:
-    - Normalized all user-facing input names and descriptions to sentence case.
-    - Standardized capitalization for common terms (Home Assistant, Music Assistant, LLM, TV, TTS, URI).
-
-    V8.1 notes:
-    - Updated the changelog and tightened the default opening prompt rules.
-
-    V8 improvements:
-    - Added run debounce to prevent double-triggered speech.
-    - Changed script mode to single to prevent overlapping or duplicated runs.
-    - Tightened the default opening prompt to forbid late-night/time clichés unless
-      Context explicitly says "It's late.".
-
-    V7 improvements:
-    - All spoken messages route through the conversation agent (persona-aware) unless
-      A custom phrase is provided.
-    - Added custom phrase inputs for confirmation, cancellation, unclear response,
-      Not found, etc.
-    - Search clarification: if the target category is empty but other results exist,
-      Ask the user to clarify or try a different category.
-    - Fixed: removed hardcoded robot-sounding messages.
-
-    V6 fixes:
-    - Added config_entry_id input for Music Assistant (required by MA 2024+ for
-      Search/play actions).
-    - Added spoken feedback when voice response is unintelligible ("I didn't catch that").
 
     Notes on Music Assistant search/play:
     - Stage 3 uses an LLM to return a strict JSON payload (media_id/media_type/etc.) and then calls
@@ -538,6 +491,7 @@ blueprint:
             Find it in: developer tools → states → search "music_assistant" → look at entity attributes,
             Or check the URL when you open the Music Assistant integration page (the long hex string).
             Example: 01ABC123DEF456...
+          default: ""
           selector:
             text:
 
@@ -546,6 +500,7 @@ blueprint:
           description: >
             Select the Music Assistant media_player entity (example: media_player.workshop).
             Do not select the raw sonos entity if you want MA queue control.
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -1148,14 +1103,14 @@ sequence:
                             value_template: "{{ s1_q_kind == 'state' and s1_allow == 'no' and not script_aborted }}"
                         sequence:
                           - action: conversation.process
-                            alias: "Stage 3: process via LLM"
+                            alias: "Stage 1: acknowledge TV already off via LLM"
                             continue_on_error: true
                             data:
                               agent_id: "{{ agent_id }}"
                               text: "acknowledge briefly that it's already off. one short sentence."
                             response_variable: s1_state_no_resp
                           - action: assist_satellite.announce
-                            alias: "Stage 3: announce via satellite"
+                            alias: "Stage 1: announce TV already off via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1231,7 +1186,7 @@ sequence:
                             value_template: "{{ s1_fallback == 'do_it_anyway' and (p_unclear_do | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
-                            alias: "Stage 3: announce via satellite"
+                            alias: "Stage 1: announce unclear (doing anyway) via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
@@ -1241,14 +1196,14 @@ sequence:
                             value_template: "{{ s1_fallback != 'do_it_anyway' and (p_unclear_skip | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
-                            alias: "Stage 3: announce via satellite"
+                            alias: "Stage 1: announce unclear (skipping) via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
                               message: "{{ p_unclear_skip }}"
                     default:
                       - action: conversation.process
-                        alias: "Stage 3: process via LLM"
+                        alias: "Stage 1: generate unclear response via LLM"
                         continue_on_error: true
                         data:
                           agent_id: "{{ agent_id }}"
@@ -1260,7 +1215,7 @@ sequence:
                             {% endif %}
                         response_variable: unclear_resp
                       - action: assist_satellite.announce
-                        alias: "Stage 3: announce via satellite"
+                        alias: "Stage 1: announce unclear response via satellite"
                         continue_on_error: true
                         data:
                           entity_id: "{{ sat }}"
@@ -1280,21 +1235,21 @@ sequence:
                             value_template: "{{ (p_cancel | trim) != '' }}"
                         sequence:
                           - action: assist_satellite.announce
-                            alias: "Stage 3: announce via satellite"
+                            alias: "Stage 1: announce abort (custom phrase) via satellite"
                             continue_on_error: true
                             data:
                               entity_id: "{{ sat }}"
                               message: "{{ p_cancel }}"
                     default:
                       - action: conversation.process
-                        alias: "Stage 3: process via LLM"
+                        alias: "Stage 1: generate abort message via LLM"
                         continue_on_error: true
                         data:
                           agent_id: "{{ agent_id }}"
                           text: "say briefly that you're cancelling the bedtime routine. one short sentence."
                         response_variable: cancel_resp
                       - action: assist_satellite.announce
-                        alias: "Stage 3: announce via satellite"
+                        alias: "Stage 1: announce abort via satellite"
                         continue_on_error: true
                         data:
                           entity_id: "{{ sat }}"
@@ -1308,14 +1263,14 @@ sequence:
                     value_template: "{{ s1_allow == 'no' and not script_aborted }}"
                 sequence:
                   - action: conversation.process
-                    alias: "Stage 3: process via LLM"
+                    alias: "Stage 1: acknowledge TV stays on via LLM"
                     continue_on_error: true
                     data:
                       agent_id: "{{ agent_id }}"
                       text: "acknowledge briefly that you'll leave the tv on. say you'll continue with lights only and skip bedtime audio. one short sentence."
                     response_variable: s1_no_resp
                   - action: assist_satellite.announce
-                    alias: "Stage 3: announce via satellite"
+                    alias: "Stage 1: announce TV stays on via satellite"
                     continue_on_error: true
                     data:
                       entity_id: "{{ sat }}"
@@ -1349,21 +1304,21 @@ sequence:
                                     value_template: "{{ (p_confirm | trim) != '' }}"
                                 sequence:
                                   - action: assist_satellite.announce
-                                    alias: "Stage 3: announce via satellite"
+                                    alias: "Stage 1: announce completion (custom phrase) via satellite"
                                     continue_on_error: true
                                     data:
                                       entity_id: "{{ sat }}"
                                       message: "{{ p_confirm }}"
                             default:
                               - action: conversation.process
-                                alias: "Stage 3: process via LLM"
+                                alias: "Stage 1: generate completion message via LLM"
                                 continue_on_error: true
                                 data:
                                   agent_id: "{{ agent_id }}"
                                   text: "say a very brief confirmation that you turned off {{ s1_name }}. one or two words max."
                                 response_variable: confirm_resp
                               - action: assist_satellite.announce
-                                alias: "Stage 3: announce via satellite"
+                                alias: "Stage 1: announce completion via satellite"
                                 continue_on_error: true
                                 data:
                                   entity_id: "{{ sat }}"
@@ -2197,7 +2152,7 @@ sequence:
                                       - variables:
                                           resolved_media_id: "{{ llm_media_id_raw }}"
 
-# play via Music Assistant (or delegate to a custom script)
+                                  # play via Music Assistant (or delegate to a custom script)
                                   - choose:
                                       - conditions:
                                           - condition: template
@@ -2261,7 +2216,7 @@ sequence:
                               - variables:
                                   stage3_done: true
 
-# ---------------------------------------------------------------------
+  # ---------------------------------------------------------------------
   # closing line (only if not aborted)
   # ---------------------------------------------------------------------
   - choose:
