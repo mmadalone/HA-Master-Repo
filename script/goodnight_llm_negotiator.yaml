@@ -1,7 +1,7 @@
 blueprint:
   name: "Goodnight LLM Negotiator (agent personas + stage modes + fallbacks)"
   description: |
-    ![Goodnight LLM Negotiator](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/goodnight_negotiator_llm_driven.jpeg)
+    ![Goodnight LLM Negotiator](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/goodnight_negotiator_llm_driven-header.jpeg)
 
     LLM-driven goodnight routine with resilient satellite handling.
 
