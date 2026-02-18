@@ -1,9 +1,17 @@
 blueprint:
-  name: LLM Script for Music Assistant voice requests
+  name: LLM Script for Music Assistant voice requests (modified)
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml
-  description: '![Image](https://github.com/music-assistant/voice-support/blob/main/assets/music-assistant.png?raw=true)
+  description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/llm_voice_script-header.jpeg)
+
+
+    ![Image](https://github.com/music-assistant/voice-support/blob/main/assets/music-assistant.png?raw=true)
 
     # Creates a script which will allow voice requests for Music Assistant
+
+
+    > **Modified version** of the [official Music Assistant LLM Voice Script](https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml)
+    by TheFes. Local modifications: alias coverage, error handling, section naming,
+    min_version correction, header image. Check upstream for updates.
 
     * No changes are required for any of the settings below for this script to work,
     but your specific LLM integration may need some fine-tuning. To do that, adjust
@@ -73,10 +81,10 @@ blueprint:
   domain: script
   author: TheFes
   homeassistant:
-    min_version: 2024.6.0
+    min_version: 2024.8.0
   input:
     music_assistant_settings:
-      name: Settings for Music Assistant playback
+      name: "\u2460 Settings for Music Assistant playback"
       icon: mdi:music
       description: You can use these settings to configure how Music Assistant playback
         is handled.
@@ -95,7 +103,7 @@ blueprint:
                 domain:
                 - media_player
               multiple: false
-          default:
+          default: []
         play_continuously:
           name: Radio Mode
           description: 'Determines if the "radio_mode" setting should be set for the
@@ -122,7 +130,7 @@ blueprint:
               sort: false
           default: Use player settings
     prompt_settings:
-      name: Prompt settings for the LLM
+      name: "\u2461 Prompt settings for the LLM"
       icon: mdi:robot
       description: You can use these settings to fine-tune the prompts for your specific
         LLM (model).  In most cases the defaults should be fine.
@@ -275,7 +283,7 @@ blueprint:
             does not mention or request to shuffle.
             '
     addition_conditions_actions:
-      name: Additional actions
+      name: "\u2462 Additional actions"
       icon: mdi:wrench
       description: You can add additional actions to be performed after the Music
         Assistant play media action is started. Variables which can always be used
@@ -353,7 +361,8 @@ fields:
     name: Shuffle
     description: !input shuffle_prompt
 sequence:
-- variables:
+- alias: "Initialize variables — version, default player, target resolution"
+  variables:
     version: 20250526
     default_player: !input default_player
     shuffle: '{{ shuffle | default(false, true) | bool(false) }}'
@@ -386,13 +395,15 @@ sequence:
         or default_player) | default(''NA'', true) }}'
     invalid_target:
       response: Unable to find valid target
-- if:
+- alias: "Guard — stop if no valid target player or area found"
+  if:
   - condition: template
     value_template: '{{ not (area | default or player_data or default_player) }}'
   then:
   - stop: No valid target for Music Assistant Voice script found
     response_variable: invalid_target
-- variables:
+- alias: "Build action data — radio mode, media payload"
+  variables:
     play_continuously: !input play_continuously
     action_data:
       media_id: '{{ media_id.split('';'') | map(''trim'') | list if '';'' in media_id
@@ -411,4 +422,6 @@ sequence:
   data:
     shuffle: '{{ shuffle }}'
   target: '{{ dict(target_data.items() | rejectattr(''1'', ''eq'', ''NA'')) }}'
-- sequence: !input actions
+  continue_on_error: true
+- alias: "Run user-defined additional actions"
+  sequence: !input actions

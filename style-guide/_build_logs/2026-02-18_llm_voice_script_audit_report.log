@@ -1,0 +1,62 @@
+## Audit Report Log
+- **Date:** 2026-02-18
+- **Scope:** llm_voice_script.yaml (script blueprint)
+- **Mode:** AUDIT (quick-pass)
+- **Source:** Third-party (TheFes / music-assistant/voice-support)
+- **Progress Log:** 2026-02-18_llm_voice_script_audit_progress.log
+
+## Findings
+
+[ISSUE] llm_voice_script.yaml | AP-10 | ⚠️ WARNING | L398 | `action: music_assistant.play_media` — uses modern `action:` syntax ✅ PASS | N/A
+[INTERPRETATION] This blueprint already uses modern `action:` syntax throughout. No `service:` keyword found. PASS on AP-10.
+
+[ISSUE] llm_voice_script.yaml | AP-11 | ⚠️ WARNING | L363-367 | Variables block at sequence start has no `alias:`. | Add `alias:` to variables step.
+[ISSUE] llm_voice_script.yaml | AP-11 | ⚠️ WARNING | L383-392 | Second variables block (play_continuously / action_data) has no `alias:`. | Add `alias:`.
+[ISSUE] llm_voice_script.yaml | AP-11 | ⚠️ WARNING | L370-377 | `if/then` conditional block has no `alias:`. | Add `alias:`.
+[ISSUE] llm_voice_script.yaml | AP-11 | ⚠️ WARNING | L414 | `sequence: !input actions` — additional actions step has no `alias:`. | Add `alias:`.
+[INTERPRETATION] Only two action steps have aliases (L395 "Play music using Music Assistant" and L402 "Enable/Disable shuffle on a Music Assistant Media Player"). Three variables/conditional/input steps lack them entirely. For trace debugging this is a real gap — you'd see unnamed steps in the trace.
+
+[ISSUE] llm_voice_script.yaml | AP-15 | ⚠️ WARNING | description | No `![` image markdown in description — no header image. Image file not found at HEADER_IMG path. | Project convention — add header image or document exemption for third-party blueprint.
+[INTERPRETATION] Third-party blueprint — image convention may not apply. Flagging for awareness.
+
+[ISSUE] llm_voice_script.yaml | AP-09 | ⚠️ WARNING | L74-L319 | Blueprint uses collapsible input sections (3 sections) — PASS for section structure. However, section naming uses plain text without Unicode numbered circles (①②③). | Project convention — add numbered circle prefixes if adopting fully.
+[INTERPRETATION] Third-party code — Unicode circle naming is a project convention, not a HA requirement. Flagging as INFO not WARNING.
+
+[ISSUE] llm_voice_script.yaml | AP-09a/AP-44 | ⚠️ WARNING | L80-87 | `default_player` input: has bare `default:` (YAML null/empty). While the description says "Leave empty if you do not want a default player", bare `default:` is technically YAML null which may break collapsible section rendering in some HA versions. | Recommend `default: ""` or `default: []` for explicit empty.
+[INTERPRETATION] The `default:` on L87 is bare (no value). In YAML this parses as null. HA *should* handle this for entity selectors, but AP-44 flags it as risky. The `play_continuously` input at L102 correctly has `default: Use player settings`. The `actions` input at L322 has `default: []` — correct. The `collapsed: true` sections (`prompt_settings` at L107, `addition_conditions_actions` at L314) both have defaults on all contained inputs — PASS there.
+
+[ISSUE] llm_voice_script.yaml | AP-22 | ⚠️ WARNING | L66 | `min_version: 2024.6.0` — this blueprint uses `action:` keyword (introduced 2024.8) and Music Assistant integration features. min_version should be at least 2024.8.0 if `action:` is required, or verify MA compatibility. | Verify and bump `min_version` if needed.
+[INTERPRETATION] The `action:` keyword replaced `service:` in 2024.8. If this blueprint is meant to work on 2024.6, the `action:` calls would fail. However, `action:` may have been valid earlier for MA-specific calls. Needs verification. Flagging as WARNING.
+
+[ISSUE] llm_voice_script.yaml | AP-42 | ❌ ERROR | L63-67 | Blueprint metadata structure check — `homeassistant:` with `min_version:` is correctly nested. `domain: script` present. `author:` present. `source_url:` present. | PASS — no invalid keys under `blueprint:`.
+
+[ISSUE] llm_voice_script.yaml | AP-17 | ⚠️ WARNING | L395-400 | `music_assistant.play_media` call has no `continue_on_error:` — if MA is unavailable, the entire script stops. Shuffle step at L402 also has no error handling. | Add `continue_on_error: true` to MA service call (it's an external integration, failures should be handled gracefully).
+[INTERPRETATION] The `play_media` call IS the critical path here — this is literally the script's purpose. So AP-17 cuts both ways: it's critical-path (don't use continue_on_error) but also external-service (should handle gracefully). The shuffle step at L402 depends on play_media succeeding, so arguably should have `continue_on_error: true` since if play failed, shuffle would also fail.
+
+[FINDING] SEC — S1 (Secrets) | ✅ PASS | No raw API keys, passwords, or tokens found in YAML.
+[FINDING] SEC — S2 (Input validation) | ⚠️ WARNING | `default_player` entity selector is properly constrained to `music_assistant` domain. Text inputs for prompts are appropriately free-text (LLM prompts need to be customizable). However, `media_type` field uses `select` with constrained options — PASS. The `shuffle` field uses `boolean` selector — PASS.
+[FINDING] SEC — S3 (Template injection) | ℹ️ INFO | Template strings in variables blocks construct data from `!input` and field values. The `action_data` at L385-392 builds a dict from user-provided field values (media_id, media_type, artist, album). These are passed to `music_assistant.play_media` via `data:`. The MA integration presumably handles sanitization. Low risk but worth noting.
+[FINDING] SEC — S4 (Target constraints) | ✅ PASS | Service calls target only Music Assistant media players, filtered by integration. No broad `homeassistant.*` calls.
+[FINDING] SEC — S5 (Agent permissions) | N/A | Not a conversation agent — script blueprint.
+[FINDING] SEC — S6 (Log hygiene) | ✅ PASS | No logbook entries or notifications with sensitive data.
+[FINDING] SEC — S7 (Rate limiting) | ℹ️ INFO | No external API calls directly — delegates to Music Assistant integration. MA handles its own rate limiting (though Spotify rate limiting has been a known issue). No throttling concern at the blueprint level.
+
+[FINDING] ASSET — Header image | ⚠️ WARNING | No header image file found at HEADER_IMG for this blueprint.
+[FINDING] ASSET — README | ⚠️ WARNING | No companion README found at README_SCRI_DIR for this blueprint.
+
+[FINDING] TEMPLATE — Safety | ⚠️ WARNING | L366 `shuffle: '{{ shuffle | default(false, true) | bool(false) }}'` — PASS, has default guard.
+[FINDING] TEMPLATE — Safety | ⚠️ WARNING | L367-380 `player_data` variable: Uses `media_player | default([], true)` — PASS, has default.
+[FINDING] TEMPLATE — Safety | ⚠️ WARNING | L381-383 `target_data`: Uses `area | default('NA', true)` and `player_data or default_player | default('NA', true)` — PASS, has defaults.
+[FINDING] TEMPLATE — Safety | ℹ️ INFO | L389 `media_id.split(';')` — No default guard on `media_id` itself. If `media_id` is somehow empty/undefined, `.split()` would fail. However, `media_id` is marked `required: true` in fields, so HA should enforce this at the script call level.
+[INTERPRETATION] Template safety is generally good. The `required: true` on fields provides the guard at the HA level, making template-level defaults less critical but still best practice.
+
+[FINDING] SYNTAX — Modern HA | ✅ PASS | Uses `action:` (not `service:`). Uses `sequence:` (correct for script blueprints). No `platform:` misuse. No `data_template:`.
+[INTERPRETATION] No `triggers:` / `conditions:` / `actions:` plural top-level keys needed — this is a script domain blueprint, which uses `sequence:` instead. PASS.
+
+## Summary
+- **Total findings:** 17 (checked), of which:
+  - ❌ ERROR: 0 (AP-42 checked and passed)
+  - ⚠️ WARNING: 7 actionable
+  - ℹ️ INFO: 3
+  - ✅ PASS: 7
+- **Actionable items:** 7 warnings requiring attention if adopting/customizing this blueprint
