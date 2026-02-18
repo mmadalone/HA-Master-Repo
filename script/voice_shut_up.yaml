@@ -1,6 +1,8 @@
 blueprint:
   name: Voice – Shut Up (pause all media) (tool script)
   description: |
+    ![Voice Shut Up](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_shut_up.jpeg)
+
     SCRIPT TOOL: "Shut up" – pause ALL playing media players.
 
     WHAT THIS SCRIPT DOES
@@ -116,79 +118,88 @@ blueprint:
 
   domain: script
   author: Madalone + Assistant
-  source_url: https://example.com/madalone/voice_shut_up.yaml
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/voice_shut_up.yaml
 
   input:
-    active_media_automation:
-      name: "Voice Active Media Controls automation"
-      description: |
-        Select the automation created from the automation blueprint:
-          "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
+    section_core:
+      name: "① Core Configuration"
+      icon: mdi:cog
+      collapsed: false
+      input:
+        active_media_automation:
+          name: "Voice Active Media Controls automation"
+          description: |
+            Select the automation created from the automation blueprint:
+              "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
 
-        That automation must have its "candidates" list populated with ALL
-        media players you want the "shut up" behavior to affect.
-      selector:
-        entity:
-          domain: automation
+            That automation must have its "candidates" list populated with ALL
+            media players you want the "shut up" behavior to affect.
+          default: ""
+          selector:
+            entity:
+              domain: automation
 
-    enable_notifications:
-      name: Enable requirement notifications
-      description: |
-        When enabled, this script will create a persistent notification if:
-          - The selected "Voice Active Media Controls" automation is missing
-            or disabled.
-      default: true
-      selector:
-        boolean: {}
+        enable_notifications:
+          name: Enable requirement notifications
+          description: |
+            When enabled, this script will create a persistent notification if:
+              - The selected "Voice Active Media Controls" automation is missing
+                or disabled.
+          default: true
+          selector:
+            boolean: {}
 
-    shutdown_phrases:
-      name: Shutdown phrases (media-stop intent)
-      description: |
-        Example phrases that *do* mean "stop all media / sound". These are
-        not used by the script itself, but are meant for you to copy into
-        your LLM agent description.
+    section_phrases:
+      name: "② Phrase Documentation"
+      icon: mdi:comment-text-outline
+      collapsed: true
+      input:
+        shutdown_phrases:
+          name: Shutdown phrases (media-stop intent)
+          description: |
+            Example phrases that *do* mean "stop all media / sound". These are
+            not used by the script itself, but are meant for you to copy into
+            your LLM agent description.
 
-        Add any variations you actually use when you want the audio to stop,
-        including explicit ones like:
-          - "shut the fuck up"
-      default:
-        - shut up
-        - shut the fuck up
-        - be quiet
-        - stop everything
-        - kill the sound
-        - stop all the noise
-        - mute everything
-      selector:
-        text:
-          multiline: false
-          multiple: true
+            Add any variations you actually use when you want the audio to stop,
+            including explicit ones like:
+              - "shut the fuck up"
+          default:
+            - shut up
+            - shut the fuck up
+            - be quiet
+            - stop everything
+            - kill the sound
+            - stop all the noise
+            - mute everything
+          selector:
+            text:
+              multiline: false
+              multiple: true
 
-    conversational_phrases:
-      name: Conversational / insult phrases (NO media-stop intent)
-      description: |
-        Example phrases where you're telling it to shut up in a more
-        conversational or insulting way, *without* clearly asking media to
-        stop. These are also for your LLM agent description, to show it what
-        NOT to treat as a media command.
+        conversational_phrases:
+          name: Conversational / insult phrases (NO media-stop intent)
+          description: |
+            Example phrases where you're telling it to shut up in a more
+            conversational or insulting way, *without* clearly asking media to
+            stop. These are also for your LLM agent description, to show it what
+            NOT to treat as a media command.
 
-        Examples:
-          - "shut up, you're wrong"
-          - "shut the fuck up, Rick"
-          - "shut up, that's not what I meant"
-      default:
-        - shut up, you're wrong
-        - shut the fuck up, Rick
-        - shut up, that's not what I meant
-      selector:
-        text:
-          multiline: false
-          multiple: true
+            Examples:
+              - "shut up, you're wrong"
+              - "shut the fuck up, Rick"
+              - "shut up, that's not what I meant"
+          default:
+            - shut up, you're wrong
+            - shut the fuck up, Rick
+            - shut up, that's not what I meant
+          selector:
+            text:
+              multiline: false
+              multiple: true
 
 mode: single
 max_exceeded: silent
-
-fields: {}
 
 variables:
   active_media_automation: !input active_media_automation
@@ -198,20 +209,25 @@ variables:
 
 sequence:
   # 1) Requirement checks: ensure the central automation is available.
-  - variables:
+  - alias: "Resolve automation state — check if available and enabled"
+    variables:
       auto_state: "{{ states(active_media_automation) | default('unavailable') }}"
       missing_or_disabled: >
         {{ auto_state in ['unavailable', 'unknown'] or auto_state == 'off' }}
 
-  - if:
+  - alias: "Gate — abort if automation is missing or disabled"
+    if:
       - condition: template
         value_template: "{{ missing_or_disabled }}"
     then:
-      - if:
+      - alias: "Gate — notify only if notifications are enabled"
+        if:
           - condition: template
             value_template: "{{ enable_notifications }}"
         then:
-          - service: persistent_notification.create
+          - alias: "Warn user — automation misconfigured"
+            action: persistent_notification.create
+            continue_on_error: true
             data:
               title: "Voice – Shut Up (script) – Misconfiguration"
               message: >-
@@ -226,10 +242,12 @@ sequence:
                   2) Enabled it.
                   3) Configured the "candidates" input with all media players
                      that should be paused for a "shut up" command.
-      - stop: "Active media automation not available"
+      - alias: "Abort — automation not available"
+        stop: "Active media automation not available"
 
   # 2) Trigger the central automation with command = "shut_up"
-  - service: automation.trigger
+  - alias: "Fire shut_up command — pause all playing media via central automation"
+    action: automation.trigger
     target:
       entity_id: "{{ active_media_automation }}"
     data:

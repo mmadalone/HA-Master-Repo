@@ -1,0 +1,86 @@
+# Audit Report — voice_shut_up.yaml
+**Date:** 2026-02-18
+**Mode:** AUDIT (quick-pass)
+**Target:** blueprints/script/madalone/voice_shut_up.yaml
+**Style Guide Version:** 3.25
+
+## Status: COMPLETE
+
+## Summary
+- **File:** 239 lines, script blueprint (tool wrapper for Voice Active Media Controls)
+- **Findings:** 5 ⚠️ WARNING, 2 ℹ️ INFO, 0 ❌ ERROR
+- **Verdict:** No blockers, but several compliance gaps. BUILD escalation recommended.
+
+---
+
+## ⚠️ WARNING Findings
+
+### W1 — AP-10: Legacy `service:` keyword (2 instances)
+- **Line 214:** `service: persistent_notification.create` → should be `action:`
+- **Line 232:** `service: automation.trigger` → should be `action:`
+- **Fix:** Find-replace `service:` → `action:` on both lines.
+
+### W2 — AP-11: Missing `alias:` on ALL action steps (6 instances)
+No action step in the `sequence:` block has an `alias:` field. Affected steps:
+1. `variables:` block (~line 195) — requirement check vars
+2. Outer `if:` block (~line 200) — missing_or_disabled gate
+3. Inner `if:` block (~line 204) — enable_notifications guard
+4. `persistent_notification.create` (~line 214) — misconfiguration warning
+5. `stop:` (~line 230) — abort on missing automation
+6. `automation.trigger` (~line 232) — fire shut_up command
+- **Fix:** Add descriptive `alias:` to every step following "what — why" pattern.
+
+### W3 — AP-09: No collapsible input sections
+All 4 inputs are flat under `input:` with no `section:` groupings.
+Suggested sections:
+- ① Core Configuration (active_media_automation, enable_notifications)
+- ② Phrase Documentation (shutdown_phrases, conversational_phrases)
+- **Fix:** Wrap inputs in collapsible sections with Unicode circle headers, `collapsed: false` for §①, `collapsed: true` for §②. Ensure all inputs within sections have `default:` values. Note: `active_media_automation` (entity selector) currently has no default — it will need one (empty string or documented required) to support collapsibility.
+
+### W4 — AP-15: No header image
+- No `![` markdown image in `description:` field.
+- No image file matching `voice_shut_up*` found at `HEADER_IMG`.
+- **Fix:** Generate header image (1K, 16:9, Rick & Quark premise), add to description. Blocking gate for BUILD mode.
+
+### W5 — Source URL is placeholder
+- **Line 119:** `source_url: https://example.com/madalone/voice_shut_up.yaml`
+- Should be: `https://github.com/mmadalone/HA-Master-Repo/blob/main/script/voice_shut_up.yaml`
+- **Fix:** Update to actual repo URL.
+
+---
+
+## ℹ️ INFO Findings
+
+### I1 — Missing `continue_on_error: true` on `persistent_notification.create`
+- Line 214: notification is non-critical (script can function without it).
+- The `automation.trigger` call correctly omits it (critical-path action, per AP-17).
+- **Fix:** Add `continue_on_error: true` to the notification action only.
+
+### I2 — Empty `fields: {}` block
+- Line 191: Script declares empty `fields:` which is unnecessary noise.
+- **Fix:** Remove entirely, or populate with documented fields if intent-reporting is desired.
+
+---
+
+## Security Checklist
+
+| # | Check | Result |
+|---|-------|--------|
+| S1 | Secrets | ✅ PASS — No API keys, passwords, or tokens in file |
+| S2 | Input validation | ✅ PASS — Entity selector constrains domain; `default()` on `states()` call |
+| S3 | Template injection | ✅ PASS — No user input concatenated into service data unsafely |
+| S4 | Target constraints | ✅ PASS — `automation.trigger` targets explicit entity from input |
+| S5 | Agent permissions | N/A — Not a conversation agent config |
+| S6 | Log hygiene | ✅ PASS — Notification text contains only entity ID reference |
+| S7 | Rate limiting | ✅ PASS — `mode: single` / `max_exceeded: silent` provides basic throttling |
+| S8 | Exposed scripts | ✅ PASS — Thin wrapper, constrained target, no arbitrary entity acceptance |
+
+---
+
+## Positive Observations
+- Template safety: `states(active_media_automation) | default('unavailable')` is correct ✓
+- Requirement validation before firing — good defensive pattern ✓
+- `mode: single` / `max_exceeded: silent` — appropriate for tool script ✓
+- Clean separation of concerns — delegates to central automation ✓
+- Excellent description with usage documentation for LLM integration ✓
+- Phrase lists with sensible defaults ✓
