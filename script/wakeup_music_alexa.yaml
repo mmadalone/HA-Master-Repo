@@ -13,14 +13,19 @@ blueprint:
 
     ### Recent changes
 
+    - **v2.1:** Audit remediation — bumped `min_version` to 2024.10.0,
+      added `version` metadata, `continue_on_error` on both steps,
+      `default` on device input for collapsible section.
+
     - **v2:** Modernised syntax (`action:`), added aliases, collapsible
     input section, header image, metadata fields, `min_version`.
 
     - **v1:** Initial version.
 
   domain: script
+  version: "2.1.0"
   homeassistant:
-    min_version: "2024.8.0"
+    min_version: "2024.10.0"
 
   input:
     # =========================================================================
@@ -34,6 +39,7 @@ blueprint:
         alexa_device:
           name: Alexa device
           description: Alexa / Echo device to control.
+          default: ""
           selector:
             device:
               integration: alexa_devices
@@ -64,9 +70,11 @@ sequence:
     data:
       device_id: !input alexa_device
       text_command: !input volume_command
+    continue_on_error: true
 
   - alias: "Start wake-up music via Alexa text command"
     action: alexa_devices.send_text_command
     data:
       device_id: !input alexa_device
       text_command: !input song_command
+    continue_on_error: true
