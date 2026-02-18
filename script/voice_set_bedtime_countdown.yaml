@@ -1,3 +1,4 @@
+# voice_set_bedtime_countdown v1.1.0
 blueprint:
   name: "Voice — Set bedtime countdown"
   description: >
@@ -28,6 +29,7 @@ blueprint:
             The input_number entity that stores the bedtime countdown
             duration. Must match the helper configured in the bedtime
             routine blueprint.
+          default: ""
           selector:
             entity:
               domain: input_number
@@ -72,7 +74,8 @@ fields:
 mode: single
 
 sequence:
-  - variables:
+  - alias: "Resolve inputs and clamp requested minutes"
+    variables:
       _helper: !input countdown_helper
       _min: !input min_minutes
       _max: !input max_minutes
@@ -81,6 +84,8 @@ sequence:
       _was_clamped: "{{ _requested != _clamped }}"
 
   - alias: "Set countdown helper to clamped value"
+    # continue_on_error intentionally omitted — failure here must surface
+    # to the conversation agent rather than silently succeed with no effect.
     action: input_number.set_value
     target:
       entity_id: "{{ _helper }}"
