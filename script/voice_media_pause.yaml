@@ -1,7 +1,14 @@
 blueprint:
-  name: Voice – Pause Active Media (tool script)
+  name: "Voice – Pause Active Media (tool script)"
   description: |
+    ![Voice – Pause Active Media](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_media_pause.jpeg)
+
     SCRIPT TOOL: Pause the currently "active" media player.
+
+    **v2.0** — Full style-guide compliance (collapsible sections, action syntax, aliases)
+    **v1.0** — Initial release
+
+    ---
 
     RELATIONSHIP TO AUTOMATION BLUEPRINT
     ------------------------------------
@@ -77,73 +84,91 @@ blueprint:
 
   domain: script
   author: Madalone + Assistant
-  source_url: https://example.com/madalone/voice_media_pause.yaml
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/voice_media_pause.yaml
 
   input:
-    active_media_automation:
-      name: "Voice Active Media Controls automation"
-      description: |
-        Select the automation created from the automation blueprint:
-          "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
+    # =========================================================================
+    # ① CORE CONFIGURATION
+    # =========================================================================
+    core:
+      name: "① Core configuration"
+      icon: mdi:play-pause
+      description: "Select the automation that controls active media players."
+      collapsed: false
+      input:
+        active_media_automation:
+          name: "Voice Active Media Controls automation"
+          description: |
+            Select the automation created from the automation blueprint:
+              "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
 
-        This script will trigger that automation with `command = "pause_active"`.
-        That automation will:
-          - Find the highest-priority active media player.
-          - Pause it.
-      selector:
-        entity:
-          domain: automation
+            This script will trigger that automation with `command = "pause_active"`.
+            That automation will:
+              - Find the highest-priority active media player.
+              - Pause it.
 
-    enable_notifications:
-      name: Enable requirement notifications
-      description: |
-        When enabled, this script will create a Home Assistant persistent
-        notification if:
-          - The selected "Voice Active Media Controls" automation is missing
-            or disabled.
-      default: true
-      selector:
-        boolean: {}
+            At least one automation entity is required for this script to function.
+          default: {}
+          selector:
+            entity:
+              domain: automation
 
-    pause_phrases:
-      name: Pause phrases (media-pause intent)
-      description: |
-        Example phrases that *should* trigger a media pause.
-        These are not parsed by the script, they are for documentation and
-        for you to copy into your LLM agent description.
+        enable_notifications:
+          name: "Enable requirement notifications"
+          description: |
+            When enabled, this script will create a Home Assistant persistent
+            notification if the selected "Voice Active Media Controls"
+            automation is missing or disabled.
+          default: true
+          selector:
+            boolean: {}
 
-        Add all the ways you actually say "pause the current media".
-      default:
-        - pause
-        - pause it
-        - pause the TV
-        - stop the music
-        - stop that sound
-        - hold on a second
-      selector:
-        text:
-          multiline: false
-          multiple: true
+    # =========================================================================
+    # ② PHRASE CONFIGURATION
+    # =========================================================================
+    phrases:
+      name: "② Phrase configuration"
+      icon: mdi:microphone-message
+      description: "Example phrases for your LLM agent prompt — not parsed by the script."
+      collapsed: true
+      input:
+        pause_phrases:
+          name: "Pause phrases (media-pause intent)"
+          description: |
+            Example phrases that *should* trigger a media pause.
+            These are not parsed by the script, they are for documentation and
+            for you to copy into your LLM agent description.
 
-    pause_exclude_phrases:
-      name: Pause EXCLUDE phrases (NO pause intent)
-      description: |
-        Optional examples where the word "pause" appears but you do NOT want
-        this tool used (pure conversation / jokes / ambiguous context).
-        This is for your own notes and to help your LLM prompt; the script
-        does nothing with these directly.
-      default:
-        - don't pause, keep going
-        - I said don't pause it
-      selector:
-        text:
-          multiline: false
-          multiple: true
+            Add all the ways you actually say "pause the current media".
+          default:
+            - pause
+            - pause it
+            - pause the TV
+            - stop the music
+            - stop that sound
+            - hold on a second
+          selector:
+            text:
+              multiline: false
+              multiple: true
+
+        pause_exclude_phrases:
+          name: "Pause EXCLUDE phrases (NO pause intent)"
+          description: |
+            Optional examples where the word "pause" appears but you do NOT want
+            this tool used (pure conversation / jokes / ambiguous context).
+            This is for your own notes and to help your LLM prompt; the script
+            does nothing with these directly.
+          default:
+            - don't pause, keep going
+            - I said don't pause it
+          selector:
+            text:
+              multiline: false
+              multiple: true
 
 mode: single
 max_exceeded: silent
-
-fields: {}
 
 variables:
   active_media_automation: !input active_media_automation
@@ -152,20 +177,24 @@ variables:
   pause_exclude_phrases: !input pause_exclude_phrases
 
 sequence:
-  - variables:
+  - alias: "Resolve automation state — check availability"
+    variables:
       auto_state: "{{ states(active_media_automation) | default('unavailable') }}"
       missing_or_disabled: >
         {{ auto_state in ['unavailable', 'unknown'] or auto_state == 'off' }}
 
-  - if:
+  - alias: "Gate — abort if automation missing or disabled"
+    if:
       - condition: template
         value_template: "{{ missing_or_disabled }}"
     then:
-      - if:
+      - alias: "Notify user if notifications enabled"
+        if:
           - condition: template
             value_template: "{{ enable_notifications }}"
         then:
-          - service: persistent_notification.create
+          - alias: "Send persistent notification — misconfiguration warning"
+            action: persistent_notification.create
             data:
               title: "Voice – Pause Active Media (script) – Misconfiguration"
               message: >-
@@ -179,9 +208,12 @@ sequence:
                      "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
                   2) Enabled it.
                   3) Configured its "candidates" media players.
-      - stop: "Active media automation not available"
+            continue_on_error: true
+      - alias: "Stop — automation not available"
+        stop: "Active media automation not available"
 
-  - service: automation.trigger
+  - alias: "Trigger pause_active command on media controls automation"
+    action: automation.trigger
     target:
       entity_id: "{{ active_media_automation }}"
     data:
