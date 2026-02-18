@@ -32,7 +32,10 @@ Sections 1, 2, 9, and 12 — Design principles, versioning, naming conventions, 
 - Prefer native HA actions over templates when both can achieve the same result:
   - `condition: state` with `state: [list]` instead of template for multiple states.
   - `condition: numeric_state` instead of template for number comparisons.
-  - `wait_for_trigger` instead of `wait_template` when waiting for state changes.
+- Use the right wait primitive for the semantics:
+  - Use `wait_for_trigger` when you need a state transition (an event/edge you expect to occur after the wait starts).
+  - Use `wait_template` when the condition may already be true and you want it to pass immediately (level-triggered logic).
+  - Always add explicit timeouts and cleanup for both (see §5.1).
   - `choose` / `if-then-else` instead of template-based service names.
   - `repeat` with `for_each` instead of template loops.
 - Use `action:` (not the legacy `service:`) for HA 2024.8+ syntax when writing new code. Note: `service:` still works and HA has no plans to remove it, but `action:` is the recommended form for all new code. When editing existing files, match the style already in use unless the user asks for a migration.

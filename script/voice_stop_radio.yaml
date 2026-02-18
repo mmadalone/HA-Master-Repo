@@ -1,6 +1,10 @@
 blueprint:
   name: Voice – Stop Radio (Music Assistant) (tool script)
   description: |
+    ## Version 2.0
+
+    ![Header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/voice_stop_radio.jpeg)
+
     SCRIPT TOOL: Stop/pause Music Assistant "radio" playback.
 
     RELATIONSHIP TO AUTOMATION BLUEPRINT
@@ -69,64 +73,73 @@ blueprint:
 
   domain: script
   author: Madalone + Assistant
-  source_url: https://example.com/madalone/voice_stop_radio.yaml
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/voice_stop_radio.yaml
 
   input:
-    active_media_automation:
-      name: "Voice Active Media Controls automation"
-      description: |
-        Select the automation created from the automation blueprint:
-          "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
+    section_core:
+      name: "① Core Configuration"
+      icon: mdi:cog
+      collapsed: false
+      input:
+        active_media_automation:
+          name: "Voice Active Media Controls automation"
+          description: |
+            Select the automation created from the automation blueprint:
+              "Voice – Active Media Controls (Kodi / MA / SpotifyPlus / Alexa / etc.)"
 
-        In that automation, configure the "radio_players" list with the
-        Music Assistant players that you treat as "radio".
-      selector:
-        entity:
-          domain: automation
+            In that automation, configure the "radio_players" list with the
+            Music Assistant players that you treat as "radio".
+          default:
+          selector:
+            entity:
+              domain: automation
 
-    enable_notifications:
-      name: Enable requirement notifications
-      description: |
-        When enabled, this script will create a persistent notification if:
-          - The selected "Voice Active Media Controls" automation is missing
-            or disabled.
-      default: true
-      selector:
-        boolean: {}
+        enable_notifications:
+          name: Enable requirement notifications
+          description: |
+            When enabled, this script will create a persistent notification if:
+              - The selected "Voice Active Media Controls" automation is missing
+                or disabled.
+          default: true
+          selector:
+            boolean: {}
 
-    radio_phrases:
-      name: Radio stop phrases (radio-stop intent)
-      description: |
-        Example phrases that *should* trigger stopping MA radio.
-        For your LLM agent prompt; the script itself doesn't parse them.
-      default:
-        - stop the radio
-        - turn off the radio
-        - stop this radio station
-        - kill the radio
-        - stop the radio in here
-      selector:
-        text:
-          multiline: false
-          multiple: true
+    section_phrases:
+      name: "② Phrase Lists"
+      icon: mdi:format-list-text
+      collapsed: true
+      input:
+        radio_phrases:
+          name: Radio stop phrases (radio-stop intent)
+          description: |
+            Example phrases that *should* trigger stopping MA radio.
+            For your LLM agent prompt; the script itself doesn't parse them.
+          default:
+            - stop the radio
+            - turn off the radio
+            - stop this radio station
+            - kill the radio
+            - stop the radio in here
+          selector:
+            text:
+              multiline: false
+              multiple: true
 
-    radio_exclude_phrases:
-      name: Radio EXCLUDE phrases (NO radio-stop intent)
-      description: |
-        Optional examples where "radio" appears but does NOT mean "stop".
-        For documentation and LLM guidance only.
-      default:
-        - I like this radio station
-        - which radio station is this
-      selector:
-        text:
-          multiline: false
-          multiple: true
+        radio_exclude_phrases:
+          name: Radio EXCLUDE phrases (NO radio-stop intent)
+          description: |
+            Optional examples where "radio" appears but does NOT mean "stop".
+            For documentation and LLM guidance only.
+          default:
+            - I like this radio station
+            - which radio station is this
+          selector:
+            text:
+              multiline: false
+              multiple: true
 
 mode: single
 max_exceeded: silent
-
-fields: {}
 
 variables:
   active_media_automation: !input active_media_automation
@@ -135,20 +148,25 @@ variables:
   radio_exclude_phrases: !input radio_exclude_phrases
 
 sequence:
-  - variables:
+  - alias: "Resolve automation state — check availability"
+    variables:
       auto_state: "{{ states(active_media_automation) | default('unavailable') }}"
       missing_or_disabled: >
         {{ auto_state in ['unavailable', 'unknown'] or auto_state == 'off' }}
 
-  - if:
+  - alias: "Gate — abort if automation missing or disabled"
+    if:
       - condition: template
         value_template: "{{ missing_or_disabled }}"
     then:
-      - if:
+      - alias: "Gate — check if notifications are enabled"
+        if:
           - condition: template
             value_template: "{{ enable_notifications }}"
         then:
-          - service: persistent_notification.create
+          - alias: "Notify — misconfiguration warning"
+            action: persistent_notification.create
+            continue_on_error: true
             data:
               title: "Voice – Stop Radio (script) – Misconfiguration"
               message: >-
@@ -163,9 +181,11 @@ sequence:
                   2) Enabled it.
                   3) Configured the "radio_players" input with your MA
                      radio speakers.
-      - stop: "Active media automation not available"
+      - alias: "Stop — automation not available"
+        stop: "Active media automation not available"
 
-  - service: automation.trigger
+  - alias: "Trigger — fire stop_radio command via Active Media Controls"
+    action: automation.trigger
     target:
       entity_id: "{{ active_media_automation }}"
     data:
