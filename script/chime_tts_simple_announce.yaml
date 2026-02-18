@@ -17,7 +17,7 @@ blueprint:
     # ─── ① Media Players ────────────────────────────────────────────
     section_players:
       name: "① Media Players"
-      icon: mdi:speaker-group
+      icon: mdi:play-box
       collapsed: false
       input:
         target_players:
@@ -25,6 +25,7 @@ blueprint:
           description: >
             Media players for chime + TTS output (e.g. Voice PE satellites,
             Sonos, Alexa).
+          default: ""
           selector:
             entity:
               multiple: true
@@ -36,7 +37,7 @@ blueprint:
     section_message:
       name: "② Message & TTS Settings"
       icon: mdi:message-text
-      collapsed: true
+      collapsed: false
       input:
         message_template:
           name: Default message / template
@@ -62,7 +63,7 @@ blueprint:
     section_chime:
       name: "③ Chime & Volume"
       icon: mdi:bell-ring
-      collapsed: true
+      collapsed: false
       input:
         chime_path:
           name: Chime path / preset
