@@ -1,0 +1,74 @@
+# Audit Report — voice_kodi_play_content.yaml
+
+## Session
+- **Date:** 2026-02-18
+- **Mode:** AUDIT (quick-pass)
+- **Target:** blueprints/script/madalone/voice_kodi_play_content.yaml
+- **Style Guide Version:** 3.25
+- **Blueprint Version:** v1
+
+## Asset Verification
+- Header image: ✅ `voice_kodi_play_content-header.jpeg` exists at HEADER_IMG
+- README: ✅ `voice_kodi_play_content-readme.md` exists at README_SCRI_DIR
+- source_url: ✅ matches GIT_REPO_URL pattern
+
+## Issues Found
+
+### ⚠️ WARNINGS
+
+[ISSUE] voice_kodi_play_content.yaml | AP-04 | ⚠️ | L194,L246 | `wait_for_trigger` timeout handling relies on `wait.trigger is defined` guard instead of explicit `wait.completed` check — functional but implicit | Add explicit `wait.completed` false-path handling or document the implicit guard pattern as intentional
+
+[ISSUE] voice_kodi_play_content.yaml | AP-17 | ⚠️ | L202,L254 | `continue_on_error: true` on `wait_for_trigger` steps — these are borderline critical-path since a timeout means Kodi didn't respond; the variable guards downstream handle it, but `continue_on_error` masks genuine exceptions (network errors, malformed events) | Consider removing `continue_on_error: true` — the timeout + variable guards already handle the happy/sad path without it; if Kodi is truly unreachable, the error should surface in traces
+
+[ISSUE] voice_kodi_play_content.yaml | STYLE | ⚠️ | L133 | Main `choose:` block has no `default:` branch — if an unrecognized content_type is passed (e.g., typo from LLM agent), the script exits silently with no trace evidence | Add a `default:` branch that logs a warning: "Unknown content_type: {{ _content_type }}"
+
+### ℹ️ INFO
+
+[ISSUE] voice_kodi_play_content.yaml | AP-13 | ℹ️ | L72-75 | `error_notify_entity` uses `selector: text: {}` — could use `entity: filter: domain: notify` selector to constrain to valid notify entities; though leaving as text allows notify group syntax, so arguably intentional | Consider entity selector with notify domain filter, or add a comment explaining the text selector choice
+
+[ISSUE] voice_kodi_play_content.yaml | ARCH | ℹ️ | L283-304,L307-327 | Error reporting pattern (choose between notify and logbook.log) is duplicated twice — could be extracted into a variable-driven macro or a script call to reduce repetition | Low priority — the duplication is readable and each error path has unique messages; extract only if more content_types are added
+
+[ISSUE] voice_kodi_play_content.yaml | DOC | ℹ️ | L6-20 | Description changelog only shows v1 — no issues yet but maintain as versions accumulate
+
+## Security Checklist (§10.5)
+| # | Check | Result |
+|---|-------|--------|
+| S1 | Secrets | ✅ PASS — no credentials in file |
+| S2 | Input validation | ✅ PASS — selectors constrain types; `default()` guards on field variables |
+| S3 | Template injection | ✅ PASS — `_content_id` flows into `file:` and `value:` fields within controlled service calls, not arbitrary eval |
+| S4 | Target constraints | ✅ PASS — all targets use `{{ kodi_entity }}` from input |
+| S5 | Agent permissions | N/A — this is a tool script, not an agent |
+| S6 | Log hygiene | ✅ PASS — log messages contain only content titles, no PII |
+| S7 | Rate limiting | ℹ️ NOTE — no rate limiting, but this script is called on-demand (not looping) and Kodi calls are local LAN; acceptable |
+| S8 | Exposed scripts | ℹ️ NOTE — designed as LLM tool script; field inputs provide selectors that constrain types; LLM passes content_type from a fixed set via the select selector. Acceptable. |
+
+## Anti-Pattern Scan Summary
+| Check | Result |
+|-------|--------|
+| AP-01 (LLM prompts in YAML) | ✅ PASS |
+| AP-02 (hardcoded entity_id) | ✅ PASS — all from !input |
+| AP-03 (device_id) | ✅ PASS — not used |
+| AP-04 (wait_for_trigger timeout) | ⚠️ — timeouts present but implicit handling |
+| AP-05 (removed behavior) | N/A |
+| AP-06 (boolean cleanup) | ✅ PASS — no booleans used |
+| AP-08 (>200 lines / >4 nesting) | ✅ PASS — 327 lines total, nesting at 4 levels max |
+| AP-09 (input sections) | ✅ PASS — 2 collapsible sections |
+| AP-09a (missing defaults in collapsible) | ✅ PASS — section ② has defaults on both inputs |
+| AP-10/10a/10b (legacy syntax) | ✅ PASS — modern syntax throughout |
+| AP-11 (missing alias) | ✅ PASS — every action has alias |
+| AP-13 (text vs select selector) | ℹ️ — error_notify_entity |
+| AP-15 (header image) | ✅ PASS — image exists |
+| AP-16 (unguarded states) | ✅ PASS — no states() calls |
+| AP-17 (continue_on_error on critical) | ⚠️ — on wait_for_trigger steps |
+| AP-21 (raw secrets) | ✅ PASS |
+| AP-42 (blueprint schema keys) | ✅ PASS — valid keys only under blueprint: |
+| AP-44 (collapsible defaults) | ✅ PASS |
+
+## Verdict
+**Clean blueprint.** 3 warnings and 3 info items — no errors. This is solid, well-structured code. The warnings are all judgment calls rather than correctness bugs. Recommended fixes in priority order:
+
+1. **Add `default:` branch to main `choose:`** — catches unknown content_type (quick win, 5 lines)
+2. **Evaluate `continue_on_error: true` on wait steps** — arguably unnecessary given the downstream guards
+3. **Explicit `wait.completed` check** — improves readability but the current guard pattern works
+
+All three can be batched into a single BUILD-mode session if desired.

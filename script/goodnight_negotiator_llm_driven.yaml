@@ -26,7 +26,7 @@ blueprint:
       name: "① Persona & Prompts"
       icon: mdi:robot-outline
       description: "Conversation agent selection and optional prompt overrides."
-      collapsed: true
+      collapsed: false
       input:
         persona_agent_id:
           name: Persona (Conversation Agent)

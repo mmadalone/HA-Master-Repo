@@ -18,6 +18,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v2:** Audit remediation — removed `continue_on_error` from JSON-RPC
+    waits, replaced implicit `wait.trigger` guards with explicit
+    `wait.completed` checks, added `default:` branch for unknown
+    content_type routing
+
     - **v1:** Initial blueprint — extracted from voice_play_bedtime_kodi script'
   domain: script
   homeassistant:
@@ -199,15 +204,13 @@ sequence:
                   result_ok: true
             timeout:
               seconds: "{{ jsonrpc_timeout | int(10) }}"
-            continue_on_error: true
 
           - alias: "Continue: extract tvshowid from result"
             variables:
               resolved_tvshowid: >-
-                {% if wait.trigger is defined
-                   and wait.trigger.event is defined
-                   and wait.trigger.event.data is defined %}
-                  {{ (wait.trigger.event.data.result.tvshows | default([{}]))[0].tvshowid | default(0) }}
+                {% if wait.completed | default(false) %}
+                  {{ (wait.trigger.event.data.result.tvshows
+                      | default([{}]))[0].tvshowid | default(0) }}
                 {% else %}
                   0
                 {% endif %}
@@ -251,15 +254,13 @@ sequence:
                       result_ok: true
                 timeout:
                   seconds: "{{ jsonrpc_timeout | int(10) }}"
-                continue_on_error: true
 
               - alias: "Continue: extract episode file path from result"
                 variables:
                   resolved_episode_file: >-
-                    {% if wait.trigger is defined
-                       and wait.trigger.event is defined
-                       and wait.trigger.event.data is defined %}
-                      {{ (wait.trigger.event.data.result.episodes | default([{}]))[0].file | default('') }}
+                    {% if wait.completed | default(false) %}
+                      {{ (wait.trigger.event.data.result.episodes
+                          | default([{}]))[0].file | default('') }}
                     {% else %}
                       
                     {% endif %}
@@ -324,3 +325,16 @@ sequence:
                       name: "{{ log_name }}"
                       message: >-
                         Could not find TV show "{{ _content_id }}" in Kodi library.
+
+    # =================================================================
+    # DEFAULT — unknown content_type
+    # =================================================================
+    default:
+      - alias: "Unknown content_type — log warning for trace visibility"
+        action: logbook.log
+        data:
+          name: "{{ log_name }}"
+          message: >-
+            Unknown content_type "{{ _content_type }}" for content_id
+            "{{ _content_id }}". Expected: movie, episode, favourite,
+            or tvshow_continue.
