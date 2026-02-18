@@ -15,7 +15,6 @@ blueprint:
   author: madalone
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/voice_play_bedtime_audiobook.yaml
   domain: script
-  icon: mdi:book-music
   homeassistant:
     min_version: "2024.10.0"
 
@@ -24,7 +23,7 @@ blueprint:
     section_defaults:
       name: "1️⃣ Playback defaults"
       icon: mdi:tune
-      collapsed: true
+      collapsed: false
       input:
         default_volume:
           name: Default volume

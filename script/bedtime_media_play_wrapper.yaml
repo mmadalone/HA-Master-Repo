@@ -26,13 +26,15 @@ blueprint:
     playback:
       name: "① Playback"
       icon: mdi:book-music
+      collapsed: false
       description: "Media content and target player configuration."
       input:
         media_player:
           name: "Target player (Music Assistant)"
           description: >-
             The MA media_player your bedtime blueprint selects and passes into
-            this script.
+            this script. Required — select your bedtime MA player.
+          default: ""
           selector:
             entity:
               filter:
@@ -59,7 +61,8 @@ blueprint:
           name: "Media ID (name or URI)"
           description: >-
             Can be a name (e.g. "Bedtime Stories for Cynics") or a URI
-            (e.g. "library://audiobook/86").
+            (e.g. "library://audiobook/86"). Required.
+          default: ""
           selector:
             text:
 
@@ -79,6 +82,7 @@ blueprint:
     volume_behavior:
       name: "② Volume & behavior"
       icon: mdi:volume-medium
+      collapsed: true
       description: "Optional volume and shuffle settings applied around playback."
       input:
         volume:
@@ -134,6 +138,7 @@ sequence:
     then:
       - alias: "Apply volume level before playback"
         action: media_player.volume_set
+        continue_on_error: true
         data:
           volume_level: "{{ _volume | float(0.35) }}"
         target: "{{ target_data }}"
@@ -150,6 +155,7 @@ sequence:
     then:
       - alias: "Enable shuffle on target player"
         action: media_player.shuffle_set
+        continue_on_error: true
         data:
           shuffle: true
         target: "{{ target_data }}"
