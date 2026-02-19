@@ -70,11 +70,9 @@ blueprint:
     zones (e.g. kitchen → workshop speaker).
 
     ### Recent changes
+    - **v6:** Added post-play verification with logbook warning on failure, explicit defaults on all optional entity inputs (AP-17, AP-44)
     - **v5:** Added optional Follow-Me interlock — disables Follow-Me during room detection, re-enables after playback starts so radio follows the user
     - **v4:** Folded trigger_entity into Stage 1, de-duplicated zone slot descriptions
-    - **v3:** Renamed input sections to Stage N pattern, added pause-instead-of-stop option for other players
-    - **v2:** Added aliases to all actions, replaced templated data dict with choose block, added template safety guards, added author field
-    - **v1:** Initial version
 
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/alexa_presence_radio.yaml
   homeassistant:
@@ -106,7 +104,7 @@ blueprint:
             Helpers → Toggle. Expose it to Alexa via HA Cloud, then
             create a single Alexa Routine with your voice phrase
             (e.g. "Radio Klara") that turns this toggle ON.
-          default:
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -153,7 +151,7 @@ blueprint:
             If no presence is detected in any configured room or zone,
             play on this speaker instead. Leave empty to skip playback
             when no presence is detected.
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -185,7 +183,7 @@ blueprint:
         extra_sensor_1:
           name: "Extra zone 1 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -193,7 +191,7 @@ blueprint:
         extra_player_1:
           name: "Extra zone 1 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -205,7 +203,7 @@ blueprint:
         extra_sensor_2:
           name: "Extra zone 2 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -213,7 +211,7 @@ blueprint:
         extra_player_2:
           name: "Extra zone 2 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -225,7 +223,7 @@ blueprint:
         extra_sensor_3:
           name: "Extra zone 3 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -233,7 +231,7 @@ blueprint:
         extra_player_3:
           name: "Extra zone 3 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -245,7 +243,7 @@ blueprint:
         extra_sensor_4:
           name: "Extra zone 4 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -253,7 +251,7 @@ blueprint:
         extra_player_4:
           name: "Extra zone 4 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -265,7 +263,7 @@ blueprint:
         extra_sensor_5:
           name: "Extra zone 5 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -273,7 +271,7 @@ blueprint:
         extra_player_5:
           name: "Extra zone 5 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -285,7 +283,7 @@ blueprint:
         extra_sensor_6:
           name: "Extra zone 6 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -293,7 +291,7 @@ blueprint:
         extra_player_6:
           name: "Extra zone 6 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -305,7 +303,7 @@ blueprint:
         extra_sensor_7:
           name: "Extra zone 7 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -313,7 +311,7 @@ blueprint:
         extra_player_7:
           name: "Extra zone 7 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -325,7 +323,7 @@ blueprint:
         extra_sensor_8:
           name: "Extra zone 8 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -333,7 +331,7 @@ blueprint:
         extra_player_8:
           name: "Extra zone 8 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -345,7 +343,7 @@ blueprint:
         extra_sensor_9:
           name: "Extra zone 9 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -353,7 +351,7 @@ blueprint:
         extra_player_9:
           name: "Extra zone 9 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -365,7 +363,7 @@ blueprint:
         extra_sensor_10:
           name: "Extra zone 10 — Presence sensor"
           description: "Binary sensor for this zone. Leave empty if unused."
-          default:
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -373,7 +371,7 @@ blueprint:
         extra_player_10:
           name: "Extra zone 10 — Music Assistant player"
           description: "Target speaker — can reuse a primary room speaker."
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -585,7 +583,7 @@ blueprint:
             The input_boolean that controls your Music Follow-Me
             automation. Only used when "Disable Follow-Me when radio
             starts" is enabled above. Leave empty if unused.
-          default:
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -632,7 +630,7 @@ blueprint:
 
 
             Leave empty to disable this guard.
-          default:
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -876,7 +874,6 @@ actions:
         sequence:
           - alias: "Play media with radio_mode true"
             action: music_assistant.play_media
-            continue_on_error: true
             target:
               entity_id: "{{ target_player }}"
             data:
@@ -891,7 +888,6 @@ actions:
         sequence:
           - alias: "Play media with radio_mode false"
             action: music_assistant.play_media
-            continue_on_error: true
             target:
               entity_id: "{{ target_player }}"
             data:
@@ -902,13 +898,36 @@ actions:
     default:
       - alias: "Play media with player default radio mode"
         action: music_assistant.play_media
-        continue_on_error: true
         target:
           entity_id: "{{ target_player }}"
         data:
           media_id: "{{ media_id_value }}"
           media_type: "{{ media_type_value }}"
           enqueue: "{{ enqueue_mode_value }}"
+
+  - alias: "Post-play verification — wait for player to settle"
+    delay:
+      seconds: 3
+
+  - alias: "Log warning if playback failed to start on target speaker"
+    choose:
+      - alias: "Target speaker not playing — playback may have failed"
+        conditions:
+          - condition: template
+            value_template: >
+              {{ states(target_player) | default('unknown')
+                 not in ['playing', 'buffering'] }}
+        sequence:
+          - alias: "Write playback-failure entry to logbook for troubleshooting"
+            action: logbook.log
+            data:
+              name: "Alexa Presence Radio"
+              message: >
+                Playback failed to start on
+                {{ state_attr(target_player, 'friendly_name')
+                   | default(target_player) }}.
+                Media: {{ media_id_value }} ({{ media_type_value }}).
+              entity_id: "{{ target_player }}"
 
   - alias: "Re-enable Follow-Me after playback starts (optional interlock restore)"
     choose:

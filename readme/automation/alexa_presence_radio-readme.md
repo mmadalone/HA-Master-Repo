@@ -1,136 +1,222 @@
 # Alexa Presence-Aware Radio – Music Assistant
 
-![Header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/alexa_presence_radio-header.jpeg)
+![Alexa Presence Radio header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/alexa_presence_radio-header.jpeg)
 
-A blueprint that plays radio (or any media) on the Music Assistant speaker in your current room using a single voice command to any Alexa device. Say "Radio Klara" to any Echo in the house, and Home Assistant uses presence sensors to determine which room you're in and plays the station on that room's speaker.
+Say a single phrase to any Alexa device in your home. Home Assistant determines which room you're in using presence sensors and plays a configured radio station (or other media) on that room's Music Assistant speaker. One voice command, one Alexa routine, any Echo — HA handles the room detection automatically.
 
 ## How It Works
 
-The blueprint bridges Alexa to Music Assistant through an `input_boolean` helper exposed to Alexa Cloud. An Alexa Routine maps your voice phrase to turning the boolean ON. This automation triggers on that state change, scans presence sensors in priority order, resolves the first room with active presence, and plays the configured media on that room's Music Assistant speaker via `music_assistant.play_media`.
-
-The flow is: voice command → Alexa Routine → `input_boolean` ON → auto-reset boolean → scan presence sensors (primary rooms first, then extra zones) → resolve target player (or fallback) → optional stop/pause other players → optional volume set → play media → optional Follow-Me re-enable.
+```
+ ┌─────────────────────────────────────────────────┐
+ │  "Alexa, turn on Radio Klara" (from ANY Echo)   │
+ └──────────────────────┬──────────────────────────┘
+                        ▼
+ ┌──────────────────────────────────────────────────┐
+ │  input_boolean.radio_klara → ON                  │
+ │  (Alexa sees it as a smart switch)               │
+ └──────────────────────┬───────────────────────────┘
+                        ▼
+ ┌──────────────────────────────────────────────────┐
+ │  Auto-reset boolean → OFF (ready for re-trigger) │
+ │  Runs BEFORE any condition can abort              │
+ └──────────────────────┬───────────────────────────┘
+                        ▼
+          ┌─────────────────────────┐
+          │  Person home gate?      │──── No ──→ STOP
+          │  Voice guard active?    │──── Yes ─→ STOP
+          └────────────┬────────────┘
+                       ▼
+ ┌──────────────────────────────────────────────────┐
+ │  Scan presence sensors in priority order:        │
+ │  1. Primary rooms (sensors ↔ players 1:1)        │
+ │  2. Extra zones (sensor → reused speaker)        │
+ │  3. Fallback player (if no presence detected)    │
+ └──────────────────────┬───────────────────────────┘
+                        ▼
+          ┌─────────────────────────┐
+          │  Target resolved?       │──── No ──→ STOP
+          │  Already playing?       │──── Yes ─→ STOP (optional)
+          └────────────┬────────────┘
+                       ▼
+ ┌──────────────────────────────────────────────────┐
+ │  Optional: Disable Follow-Me interlock           │
+ │  Optional: Stop/pause other configured players   │
+ │  Optional: Set volume                            │
+ └──────────────────────┬───────────────────────────┘
+                        ▼
+ ┌──────────────────────────────────────────────────┐
+ │  music_assistant.play_media on target speaker    │
+ │  (radio mode: player default / always / never)   │
+ └──────────────────────┬───────────────────────────┘
+                        ▼
+ ┌──────────────────────────────────────────────────┐
+ │  Post-play verification (3s settle + state check)│
+ │  Logbook warning if playback did not start       │
+ └──────────────────────┬───────────────────────────┘
+                        ▼
+ ┌──────────────────────────────────────────────────┐
+ │  Optional: Re-enable Follow-Me                   │
+ │  (radio now follows user between rooms)          │
+ └──────────────────────────────────────────────────┘
+```
 
 ## Key Design Decisions
 
-### Priority-Ordered Presence Detection
+### Auto-reset before conditions
 
-Presence sensors are checked in list order, and the first sensor that's ON wins. This is the priority system: if you're detected in both the living room and the hallway (because you just walked through), the room listed first takes precedence. This replaces complex "most recent" or "longest occupied" logic with a simple, predictable ordering that the user controls directly.
+The input_boolean is turned OFF as the very first action, before any condition can abort the run. This ensures the boolean is always ready for the next voice command, even if a later condition (person gate, voice guard, no presence) stops execution. Without this, a failed run would leave the boolean ON and block the next trigger (AP-34 compliance).
 
-### Minimum Presence Duration
+### Priority-ordered presence detection
 
-The `min_presence_time` input adds a duration requirement before a room counts as valid. The blueprint checks each sensor's `last_changed` attribute and computes elapsed time. A sensor that just turned ON 5 seconds ago won't qualify if the minimum is set to 30 seconds. This filters out walk-through rooms and prevents the "it picked the hallway because I triggered the sensor on my way to the living room" problem.
+Sensors are evaluated in the order configured by the user. The first room with active presence wins. This gives the user deterministic control over room priority — if the living room and bathroom both detect presence, whichever is listed first takes precedence. The minimum presence time filter prevents picking a room you just walked through.
 
-The duration computation handles the HA `duration` selector format, converting hours/minutes/seconds to total seconds via `h * 3600 + m * 60 + s`. A value of 0 disables the check entirely for instant detection.
+### Extra zones as overflow slots
 
-### Extra Zone Slots (10 Individual Dropdowns)
+Rather than forcing all zones into a single multi-select (which would require a second parallel list for speakers), extra zones use individual sensor + player dropdown pairs. This lets the same speaker be selected multiple times across different zones — a common pattern where rooms share audio hardware (e.g., kitchen and pantry both route to the workshop speaker).
 
-The blueprint provides 10 additional zone mapping slots, each with its own sensor/player dropdown pair. This is intentionally not a list — it uses individual entity selectors so the same speaker can be reused across multiple zones (e.g., kitchen → workshop speaker, pantry → workshop speaker). A list selector would prevent selecting the same entity twice.
+### Post-play verification
 
-Extra zones are checked after primary room mappings. The `extra_pairs` variable filters out empty slots (both sensor and player must be set) and merges the valid ones with the primary lists into unified `presence_list` and `player_list` arrays.
+Instead of masking failures with `continue_on_error: true`, the automation waits 3 seconds for the player to settle, then checks whether playback actually started. A logbook entry is written on failure, giving the user a visible trail for troubleshooting Music Assistant issues.
 
-### Reset-First Ordering
+### Follow-Me interlock
 
-The auto-reset of the trigger boolean happens before any condition that could abort the automation. This is the same pattern used in the companion stop blueprint — if person gating, voice guard, or target resolution fails, the boolean is already OFF and ready for the next voice command. Without this, any abort condition would leave the boolean stuck ON.
+When enabled, the automation temporarily disables Follow-Me before room detection to prevent the two automations from fighting over player control. After playback starts, Follow-Me is re-enabled so the radio stream follows the user as they move between rooms.
 
-### Follow-Me Interlock
+## Features
 
-The `disable_follow_me` option temporarily turns off the Follow-Me automation toggle when the radio dispatcher fires, then re-enables it after playback starts. This prevents a race condition: without the interlock, the Follow-Me automation might detect the new playback and immediately try to transfer it to a different room based on its own presence logic, fighting the dispatcher for player control.
+- **Any-Echo voice trigger** — single Alexa routine works from every Echo device in the home
+- **Priority-based room detection** — scans presence sensors in user-defined order; first match wins
+- **Up to 10 extra zone mappings** — overflow zones with reusable speaker assignments
+- **Fallback player** — optional default speaker when no presence is detected
+- **Minimum presence time** — configurable dwell filter to avoid transit rooms
+- **Music Assistant native playback** — uses `music_assistant.play_media` with queue control (replace, add, play next)
+- **Radio mode control** — player default, always-on, or never — all user-configurable
+- **Volume override** — optionally set target speaker volume before playback starts
+- **Active playback protection** — skip if the target speaker is already playing something
+- **Stop/pause other players** — clear or pause other configured speakers before starting
+- **Follow-Me interlock** — disable/re-enable Follow-Me automation to prevent player contention
+- **Person home gate** — optional check that at least one person is home before playing
+- **Voice assistant guard** — block execution while a voice pipeline is active
+- **Post-play verification** — 3-second settle check with logbook warning on failure
+- **Auto-reset trigger** — input_boolean resets before conditions, always ready for next command
 
-The sequence is: disable Follow-Me → start playback → re-enable Follow-Me. Once re-enabled, Follow-Me picks up the active player and will transfer the queue if you move rooms — which is the desired behavior after the initial room selection.
+## Prerequisites
 
-### Fallback Player
+- **Home Assistant** 2024.10.0 or later
+- **Music Assistant** integration with at least one configured speaker
+- **Presence sensors** — Aqara FP2, PIR sensors, or any `binary_sensor` where ON = presence
+- **Alexa integration** — Home Assistant Cloud (Nabu Casa) or manual Alexa Smart Home setup
+- **input_boolean helper** — one per radio station / media trigger
+- **Alexa routine** — one per voice phrase, turning the input_boolean ON
 
-When no presence sensor reports ON (or none meets the minimum duration), the blueprint falls back to a configurable default player rather than doing nothing. This handles the "sensors are asleep" or "I'm in a room without a sensor" case. If no fallback is configured either, the automation aborts cleanly after the boolean reset.
+## Installation
 
-### Active Playback Protection
+1. Copy `alexa_presence_radio.yaml` to your `config/blueprints/automation/madalone/` directory.
+2. Reload automations: **Developer Tools → YAML → Reload Automations**.
+3. Create a new automation from the blueprint: **Settings → Automations → + Create Automation → Use Blueprint**.
+4. Configure the inputs per the sections below.
 
-The `protect_active_playback` option prevents the blueprint from interrupting a speaker that's already playing something. If you're listening to an audiobook on the bedroom speaker and trigger the radio, the blueprint will skip that speaker and the next room in priority order will be checked — or the fallback will be used. This prevents the "I was listening to something and the radio stomped on it" scenario.
+Alternatively, import via the blueprint URL:
+```
+https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/alexa_presence_radio.yaml
+```
 
-### Other Player Management
 
-The `stop_other_players` option stops (or pauses, via `pause_instead_of_stop`) all other configured Music Assistant players before starting playback on the detected room's speaker. The `other_players` variable deduplicates the player list using `| unique` and excludes the target player, so a player that appears in multiple zone mappings is only stopped once.
+## Inputs Reference
 
-## Setup
+### ① Trigger & Room Mapping
 
-The setup follows the same three-step Alexa bridge pattern as the companion stop blueprint:
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| **Trigger entity** | `entity` (input_boolean) | — | The input_boolean that fires the automation when turned ON. Create one per station, expose to Alexa via HA Cloud. |
+| **Presence sensors** | `entity` (binary_sensor, multi) | `[]` | Presence sensors in priority order — first match wins. Supports Aqara FP2, PIR, mmWave, or any binary_sensor where ON = presence. |
+| **Music Assistant players** | `entity` (media_player, multi) | `[]` | MA speakers mapped 1:1 with presence sensors. Order must exactly match the sensor list. |
+| **Fallback player** | `entity` (media_player) | none | Speaker used when no presence is detected anywhere. Leave empty to skip playback. |
 
-**1. Create an input_boolean helper** — Name it after your station (e.g., "Radio Klara") to create `input_boolean.radio_klara`.
+### ② Additional Zone Mappings
 
-**2. Expose to Alexa** — Settings → Home Assistant Cloud → Alexa → enable the toggle.
+Ten extra zone slots, each with an independent presence sensor and speaker dropdown. Use for zones that share a speaker with another room (e.g., kitchen → workshop speaker). Checked after primary room mappings. Leave unused slots empty.
 
-**3. Create one Alexa Routine** — When = Voice → "Radio Klara", From = All devices, Action = Smart Home → toggle ON the helper.
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| **Extra zone N — Presence sensor** | `entity` (binary_sensor) | none | Binary sensor for the extra zone. |
+| **Extra zone N — Music Assistant player** | `entity` (media_player) | none | Target speaker — can reuse a primary room speaker. |
 
-For multiple stations, create one blueprint instance per station, each with its own `input_boolean` and Alexa Routine.
+### ③ Media & Playback
 
-## Blueprint Inputs
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| **Radio station or media** | `text` | `""` | Name or content ID as it appears in Music Assistant library. |
+| **Media type** | `select` | `radio` | Options: radio, playlist, album, track, artist. |
+| **Enqueue mode** | `select` | `replace` | Replace (clear queue), Add (append), Play next (insert after current). |
+| **Radio mode** | `select` | `Use player settings` | Player default, Always (force continuous), or Never (stop when content ends). |
 
-**Stage 1 — Trigger & Room Mapping** — The trigger boolean, presence sensors in priority order, matching Music Assistant players, and optional fallback player.
+### ④ Volume Settings
 
-**Stage 2 — Additional Zone Mappings** (collapsed) — Up to 10 extra sensor/player pairs for zones that share speakers with other rooms.
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| **Set volume before playback** | `boolean` | `false` | Enable to override speaker volume before playback starts. |
+| **Volume level** | `number` (0–100, step 5) | `25` | Target volume percentage. Only applied when volume override is enabled. |
 
-**Stage 3 — Media & Playback** — The media ID (station name as it appears in Music Assistant library), media type (radio/playlist/album/track/artist), enqueue mode (replace/add/next), and radio mode (player settings/always/never).
+### ⑤ Behaviour & Safety
 
-**Stage 4 — Volume Settings** (collapsed) — Optional volume override before playback starts (0–100%).
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| **Auto turn off trigger** | `boolean` | `true` | Resets the input_boolean after playback, ready for the next voice command. |
+| **Skip if already playing** | `boolean` | `false` | Prevents interrupting an active session on the target speaker. |
+| **Minimum presence time** | `duration` | `0s` | How long a sensor must be continuously ON before the room counts. Filters transit rooms. |
+| **Stop other players** | `boolean` | `false` | Stops all other configured MA players before starting playback. |
+| **Pause instead of stop** | `boolean` | `false` | Pauses other players (preserving queues) instead of stopping them. |
+| **Disable Follow-Me** | `boolean` | `false` | Turns off the Follow-Me toggle when radio starts, re-enables after playback. |
+| **Follow-Me toggle entity** | `entity` (input_boolean) | none | The input_boolean controlling your Follow-Me automation. |
 
-**Stage 5 — Behaviour & Safety** (collapsed) — Auto-reset trigger, active playback protection, minimum presence time, stop/pause other players, and Follow-Me interlock with toggle entity.
+### ⑥ Advanced Options
 
-**Stage 6 — Advanced Options** (collapsed) — Person-home gating (requires at least one configured person to be home), voice assistant guard entity (blocks automation while a voice pipeline is active).
-
-## Condition and Action Sequence
-
-1. **Auto-reset trigger** — Boolean OFF before any condition can abort.
-2. **Person home gate** (optional) — At least one configured person must be `home`.
-3. **Voice assistant guard** (optional) — Blocks if the guard boolean is ON.
-4. **Target resolved** — A target player must have been found (presence or fallback).
-5. **Active playback check** (optional) — Target must not already be playing/buffering.
-6. **Disable Follow-Me** (optional) — Turn off Follow-Me toggle.
-7. **Stop/pause other players** (optional) — Clear other rooms.
-8. **Set volume** (optional) — Override target speaker volume.
-9. **Play media** — Three-branch choose for radio mode (Always/Never/player default).
-10. **Re-enable Follow-Me** (optional) — Turn Follow-Me back on so radio follows the user.
-
-## Template Logic
-
-The `detected_index` variable iterates through the merged `presence_list` using a `namespace` pattern. For each sensor that's ON, it checks the minimum presence duration by comparing `last_changed` against `now().timestamp()`. The `| default('unknown')` on `states()` and `| default(0)` on timestamp conversion prevent template errors for unavailable entities.
-
-The `extra_pairs` variable builds merged sensor/player lists from the 10 individual slots, filtering out any slot where either sensor or player is empty. This uses a `namespace` with list concatenation rather than dictionary mutation.
-
-The `other_players` template uses `| unique` to deduplicate (since the same player can appear in multiple zone mappings) and `| reject('eq', target_player)` to exclude the target.
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| **Require person home** | `boolean` | `false` | Only fires when at least one selected person has state "home". |
+| **Persons** | `entity` (person, multi) | `[]` | Person entities to check. Empty list with gate enabled = never fires. |
+| **Voice assistant guard** | `entity` (input_boolean) | none | Blocks execution while a voice pipeline is active. |
 
 ## Companion Blueprints
 
-This blueprint is the play half of a voice-controlled radio system. The **Alexa Presence-Aware Radio Stop** blueprint provides the stop half, using the same sensor/player index mapping for presence-aware stopping. The **Music Assistant Follow-Me** blueprint handles queue transfer when you move between rooms after playback starts. The **Alexa ↔ Music Assistant Volume Sync** blueprint keeps Echo and MA speaker volumes in sync.
+This blueprint is the **play** half of a voice-controlled radio system. Pair it with:
+
+- **[Alexa Presence Radio Stop](alexa_presence_radio_stop-readme.md)** — The stop companion. Same presence-aware room detection in reverse: says "stop" to the right speaker, or stops all. Uses the same sensor/player index mapping for consistent configuration.
+- **[Music Assistant Follow-Me](music_assistant_follow_me_multi_room_advanced-readme.md)** — Once playback starts, Follow-Me transfers the queue when you move between rooms. The Follow-Me interlock feature (§⑤) coordinates the handoff so the two automations don't fight over player control.
+- **[Alexa ↔ MA Volume Sync](alexa_ma_volume_sync-readme.md)** — Bidirectional volume sync between paired Echo and MA speakers, so Alexa volume commands affect the MA player and vice versa.
 
 ## Version History
 
-**v5** — Added optional Follow-Me interlock: disables Follow-Me during room detection, re-enables after playback starts so radio follows the user.
+**v6** — Post-play verification: removed `continue_on_error: true` from all `music_assistant.play_media` calls, added 3-second settle delay + state check with `logbook.log` warning on playback failure. Explicit `default: ""` on all optional entity inputs (AP-17, AP-44 compliance).
 
-**v4** — Folded trigger_entity into Stage 1, de-duplicated zone slot descriptions.
+**v5** — Follow-Me interlock: optionally disables Follow-Me toggle during room detection, re-enables after playback starts so radio follows the user between rooms.
 
-**v3** — Renamed input sections to Stage N pattern, added pause-instead-of-stop option for other players.
+**v4** — Folded `trigger_entity` into Stage ① section, de-duplicated zone slot descriptions across 10 extra zone pairs.
 
-**v2** — Added aliases to all actions, replaced templated data dict with choose block, added template safety guards, added author field.
+**v3** — Renamed input sections to Stage N pattern (① ② ③…), added pause-instead-of-stop option for other players.
+
+**v2** — Added aliases to all action steps, replaced templated data dict with choose block for radio mode, added template safety guards (`| default()` on all `states()` calls), added `author` field.
 
 **v1** — Initial version.
 
 ## Technical Notes
 
-- Mode: `single` with `max_exceeded: silent` — duplicate triggers during processing are silently dropped.
-- The `music_assistant.play_media` action uses a three-branch `choose` for radio mode rather than a templated `data:` dict. This avoids the HA limitation where template-rendered data dictionaries can produce unexpected types for boolean fields.
-- The volume level is divided by 100 (`volume_level_value | float / 100.0`) because the UI input is 0–100% but `media_player.volume_set` expects 0.0–1.0.
-- The person gate checks `persons_list | select('is_state', 'home') | list | length > 0` rather than iterating, and returns `false` if the list is empty when the requirement is enabled (fail-closed).
-- The voice assistant guard uses `| default('off')` on `states()` to treat missing entities as "not active" rather than erroring.
-- Extra zone inputs use individual `default:` (empty) selectors rather than a list, because HA's multi-entity selector doesn't allow selecting the same entity twice — which is required when multiple zones share a speaker.
+- **Mode:** `single` with `max_exceeded: silent` — if the automation is already running (e.g., from a double-tap), the second invocation is silently dropped.
+- All `!input` values are resolved into `variables:` at the top of the action sequence, keeping templates readable and avoiding repeated `!input` references deep in action blocks.
+- The `extra_pairs` variable uses a Jinja namespace loop to filter out empty zone slots and merge them into the primary sensor/player lists. This avoids 10 separate conditional branches.
+- The `detected_index` template uses `loop.index0` with a namespace guard (`ns.idx == -1`) to implement first-match-wins priority logic in a single pass.
+- The `states(sensor) | default('unknown')` pattern treats unavailable or unknown sensors as "no presence" rather than raising template errors.
+- Volume is divided by 100 in the service call (`volume_level_value | float / 100.0`) because HA's `media_player.volume_set` expects 0.0–1.0, not 0–100.
 
 ## Requirements
 
 - Home Assistant 2024.10.0+
-- Music Assistant integration with configured media players and radio stations in the library
+- Music Assistant integration with configured media players
 - Home Assistant Cloud (Nabu Casa) for Alexa integration, or manual Alexa Smart Home skill
-- An `input_boolean` helper per station, exposed to Alexa
-- One Alexa Routine per station
-- Presence sensors (Aqara FP2, mmWave, PIR, or any `binary_sensor` where ON = occupied)
-- For Follow-Me interlock: the Follow-Me blueprint and its control `input_boolean`
+- An `input_boolean` helper per radio station / media trigger
+- One Alexa Routine per voice phrase, turning the corresponding boolean ON
+- Binary sensor presence detectors (Aqara FP2, mmWave, PIR, etc.)
 
 ## Author
 
