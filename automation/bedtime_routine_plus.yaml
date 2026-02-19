@@ -1,4 +1,4 @@
-# bedtime_routine_plus.yaml — v5.4.12
+# bedtime_routine_plus.yaml — v5.4.13
 blueprint:
   name: "Bedtime routine Plus – LLM-driven goodnight (Kodi)"
   author: madalone
@@ -23,6 +23,11 @@ blueprint:
     *Bedtime Routine* blueprint (`bedtime_routine.yaml`).
 
     ### Recent changes
+
+    - **v5.4.13:** Audit fix — added nested `| int(4)` guard to bare
+    `int(default_countdown)` fallback in conversational mode countdown
+    delay, matching the defensive pattern used in all other countdown
+    references (BRP-AUDIT-001).
 
     - **v5.4.12:** Audit fix — added `| bool(false)` guards to bare
     `enable_negotiation` and `is_preset_mode` in bedtime prompt
@@ -937,7 +942,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.12"
+  blueprint_version: "5.4.13"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -2184,7 +2189,7 @@ actions:
       # --- Countdown — wait the negotiated duration ---
       - alias: "Wait the negotiated countdown — lamp stays on, user goes to bed"
         delay:
-          minutes: "{{ final_countdown | int(default_countdown) }}"
+          minutes: "{{ final_countdown | int(default_countdown | int(4)) }}"
 
       # --- Bathroom guard (conversational modes) ---
       # NOTE: Bathroom guard logic is duplicated ×2 (preset + conversational).
