@@ -1,4 +1,4 @@
-# bedtime_routine_plus.yaml — v5.4.11
+# bedtime_routine_plus.yaml — v5.4.12
 blueprint:
   name: "Bedtime routine Plus – LLM-driven goodnight (Kodi)"
   author: madalone
@@ -23,6 +23,15 @@ blueprint:
     *Bedtime Routine* blueprint (`bedtime_routine.yaml`).
 
     ### Recent changes
+
+    - **v5.4.12:** Audit fix — added `| bool(false)` guards to bare
+    `enable_negotiation` and `is_preset_mode` in bedtime prompt
+    template. Fixed `final_countdown` to guard empty `countdown_helper`
+    and use nested `| int(4)` fallback. Hardened `kodi_now_playing`
+    S/E formatting for empty season/episode. Added TV sleep timer
+    entity guard with logbook fallthrough. Added logbook entries for
+    TV sleep timer fire/off and conversational media path completion.
+    Added `| default([])` to 4 sensor-list `for` loops.
 
     - **v5.4.11:** Audit fix — added `| default(''DIRECTORY'')` guard to 2
     bare `kodi_content_type` comparisons in `kodi_safe_content_type`.
@@ -928,7 +937,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.11"
+  blueprint_version: "5.4.12"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1126,7 +1135,7 @@ variables:
     {% set episode = state_attr(kodi_entity, 'media_episode') | default('') %}
     {% set content_type = state_attr(kodi_entity, 'media_content_type') | default('unknown') %}
     {% if series %}
-      {{ series }} S{{ season }}E{{ episode }} "{{ title }}"
+      {{ series }}{% if season %} S{{ season }}{% endif %}{% if episode %}E{{ episode }}{% endif %} "{{ title }}"
     {% else %}
       {{ title }} ({{ content_type }})
     {% endif %}
@@ -1282,7 +1291,7 @@ actions:
       agent_id: "{{ conversation_agent }}"
       text: >-
         {{ bedtime_prompt_tpl }}
-        {% if not enable_negotiation or is_preset_mode %}
+        {% if not (enable_negotiation | bool(false)) or (is_preset_mode | bool(false)) %}
         IMPORTANT: Do NOT ask if the user wants more time. Countdown is fixed at {{ default_countdown }} minutes — just announce bedtime.
         {% endif %}
 
@@ -1480,7 +1489,7 @@ actions:
                     variables:
                       settling_sensor_context: >-
                         {% set ns = namespace(lines=[]) %}
-                        {% for eid in settling_sensor_list %}
+                        {% for eid in settling_sensor_list | default([]) %}
                           {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                         {% endfor %}
                         {{ ns.lines | join('\n') }}
@@ -1628,7 +1637,7 @@ actions:
                     variables:
                       gn_sensor_context: >-
                         {% set ns = namespace(lines=[]) %}
-                        {% for eid in gn_sensor_list %}
+                        {% for eid in gn_sensor_list | default([]) %}
                           {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                         {% endfor %}
                         {{ ns.lines | join('\n') }}
@@ -1699,7 +1708,11 @@ actions:
       - alias: "Re-read countdown helper — the agent may have negotiated a different value"
         variables:
           final_countdown: >-
-            {{ (states(countdown_helper) | default('')) | int(default_countdown) }}
+            {% if countdown_helper | default('') | length > 0 %}
+              {{ states(countdown_helper) | default('') | int(default_countdown | int(4)) }}
+            {% else %}
+              {{ default_countdown | int(4) }}
+            {% endif %}
 
       # --- Sleepy TV check — skip media offer if already playing ---
       - alias: "Sleepy TV gate — check if bedtime content is already playing"
@@ -2025,6 +2038,14 @@ actions:
                     delay:
                       seconds: "{{ media_settle_delay | int(30) }}"
 
+                  - alias: "Log media conversation completed — content should be playing"
+                    continue_on_error: true
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine Plus"
+                      message: >-
+                        Media conversation settled. Kodi now playing: {{ kodi_now_playing }}.
+
                   # --- Post-conversation settling-in TTS ---
                   - alias: "Settling-in TTS — optional contextual announcement after content starts"
                     choose:
@@ -2037,7 +2058,7 @@ actions:
                             variables:
                               settling_sensor_context: >-
                                 {% set ns = namespace(lines=[]) %}
-                                {% for eid in settling_sensor_list %}
+                                {% for eid in settling_sensor_list | default([]) %}
                                   {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                                 {% endfor %}
                                 {{ ns.lines | join('\n') }}
@@ -2238,7 +2259,7 @@ actions:
                 variables:
                   gn_sensor_context: >-
                     {% set ns = namespace(lines=[]) %}
-                    {% for eid in gn_sensor_list %}
+                    {% for eid in gn_sensor_list | default([]) %}
                       {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                     {% endfor %}
                     {{ ns.lines | join('\n') }}
@@ -2324,11 +2345,23 @@ actions:
 
   # --- TV Sleep Timer (fires after main routine cleanup) ----------------------
 
-  - alias: "TV sleep timer: check if enabled"
+  - alias: "TV sleep timer: check if enabled and target entity is configured"
     if:
       - condition: template
-        value_template: "{{ sleep_timer_enabled | bool(false) }}"
+        value_template: >-
+          {{ sleep_timer_enabled | bool(false)
+             and (((sleep_timer_method | default('cec')) == 'cec' and tv_entity | default('') | length > 0)
+                  or ((sleep_timer_method | default('cec')) == 'script' and tv_off_script | default('') | length > 0)) }}
     then:
+      - alias: "TV sleep timer: log timer start"
+        continue_on_error: true
+        action: logbook.log
+        data:
+          name: "Bedtime Routine Plus"
+          message: >-
+            TV sleep timer started: {{ sleep_timer_minutes | int(60) }} minutes.
+            Method: {{ sleep_timer_method | default('cec') }}.
+
       - alias: "TV sleep timer: wait configured minutes"
         delay:
           minutes: "{{ sleep_timer_minutes | int(60) }}"
@@ -2345,6 +2378,14 @@ actions:
                 target:
                   entity_id: "{{ tv_entity }}"
                 continue_on_error: true
+
+              - alias: "TV sleep timer: log CEC power-off sent"
+                continue_on_error: true
+                action: logbook.log
+                data:
+                  name: "Bedtime Routine Plus"
+                  message: "TV sleep timer: CEC power-off sent to {{ tv_entity }}."
+
           - alias: "TV sleep timer: custom script"
             conditions:
               - condition: template
@@ -2355,6 +2396,23 @@ actions:
                 target:
                   entity_id: "{{ tv_off_script }}"
                 continue_on_error: true
+
+              - alias: "TV sleep timer: log script power-off fired"
+                continue_on_error: true
+                action: logbook.log
+                data:
+                  name: "Bedtime Routine Plus"
+                  message: "TV sleep timer: custom script {{ tv_off_script }} fired."
+
+        default:
+          - alias: "TV sleep timer: unknown method fallthrough — log warning"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine Plus"
+              message: >-
+                TV sleep timer: unknown method '{{ sleep_timer_method | default('?') }}'.
+                No power-off action taken.
 
 # ═══════════════════════════════════════════════════════════════════════
 # Mode — single, no overlapping bedtime runs
