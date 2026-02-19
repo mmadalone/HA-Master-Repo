@@ -23,6 +23,12 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.9:** Audit fix — added `| bool(false)` guard to bare
+    `presence_require_all_val` in presence gate template. Added routine-start
+    logbook entry surfacing version, trigger type, mode, and weekend status
+    for trace debugging. Added audit note comments on duplicated bathroom
+    guard blocks (×2) documenting intentional duplication rationale.
+
     - **v5.4.8:** Audit fix — added `| bool(false)` type-safety filter to 8
     bare boolean variables in condition templates (`enable_negotiation`,
     `enable_media`, `library_fetch_enabled`, `enable_settling` ×2,
@@ -908,7 +914,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.8"
+  blueprint_version: "5.4.9"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -949,7 +955,7 @@ variables:
           {% set ns.results = ns.results + [false] %}
         {% endif %}
       {% endfor %}
-      {% if presence_require_all_val %}
+      {% if presence_require_all_val | bool(false) %}
         {{ ns.results | reject('eq', true) | list | length == 0 }}
       {% else %}
         {{ ns.results | select('eq', true) | list | length > 0 }}
@@ -1209,6 +1215,16 @@ actions:
     continue_on_error: true
     action: homeassistant.turn_on
     target: !input temporary_switches
+
+  - alias: "Log routine start — version, trigger, and mode for debugging"
+    continue_on_error: true
+    action: logbook.log
+    data:
+      name: "Bedtime Routine Plus"
+      message: >-
+        v{{ blueprint_version }} started. Trigger: {{ trigger.id | default('unknown') }}.
+        Mode: {{ bedtime_media_mode }}. Countdown: {{ default_countdown }}min.
+        Weekend profile: {{ 'active' if weekend_profile_active | bool(false) else 'inactive' }}.
 
   - alias: "Reset speakers — power-cycle to clear stale connections (skipped if no switches configured)"
     choose:
@@ -1522,6 +1538,9 @@ actions:
               minutes: "{{ default_countdown | int(4) }}"
 
           # --- Bathroom guard (preset mode) ---
+          # NOTE: Bathroom guard logic is duplicated ×2 (preset + conversational).
+          # Same reasoning as the TTS voice-profile pattern — no blueprint subroutine
+          # mechanism. Grep for "Bathroom guard" to find both instances. — v5.4.9 audit note
           - alias: "Bathroom guard — check occupancy if sensor configured"
             choose:
               - alias: "No bathroom sensor configured — skip guard entirely"
@@ -2129,6 +2148,9 @@ actions:
           minutes: "{{ final_countdown | int(default_countdown) }}"
 
       # --- Bathroom guard (conversational modes) ---
+      # NOTE: Bathroom guard logic is duplicated ×2 (preset + conversational).
+      # Same reasoning as the TTS voice-profile pattern — no blueprint subroutine
+      # mechanism. Grep for "Bathroom guard" to find both instances. — v5.4.9 audit note
       - alias: "Bathroom guard — check occupancy if sensor configured"
         choose:
           - alias: "No bathroom sensor configured — skip guard entirely"
