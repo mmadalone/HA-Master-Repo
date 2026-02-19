@@ -18,6 +18,10 @@ blueprint:
     remain ON until the new run completes its cleanup.
 
     ### Recent changes
+    - **v4.8:** Audit fix — fixed leading whitespace in `person_name` template
+      (switched to `{%- -%}` whitespace control), added `choose` guards on
+      `conversation.process` and `assist_satellite.start_conversation` to match
+      the defensive pattern used for switch entities.
     - **v4.7:** Audit fix — added "Required." to `entrance_sensor` and
       `conversation_agent` descriptions for clarity (advisory, §3.3).
     - **v4.6:** Audit fix — bumped `min_version` from 2024.10.0 to 2025.4.0
@@ -230,15 +234,17 @@ variables:
   person_names_raw: !input person_names
   reset_switches_list: !input reset_switches
   arrival_switches_list: !input arrival_switches
+  conversation_agent_id: !input conversation_agent
+  assist_satellites_target: !input assist_satellites
   person_name: >-
-    {% set custom = person_names_raw | string | trim %}
-    {% if custom != '' %}
+    {%- set custom = person_names_raw | string | trim -%}
+    {%- if custom != '' -%}
       {{ custom.split('\n') | map('trim') | reject('equalto', '') | join(' and ') }}
-    {% elif trigger is defined and trigger.entity_id is defined %}
+    {%- elif trigger is defined and trigger.entity_id is defined -%}
       {{ state_attr(trigger.entity_id, 'friendly_name') | default('someone') }}
-    {% else %}
+    {%- else -%}
       someone
-    {% endif %}
+    {%- endif -%}
 
 triggers:
   - alias: "Person arrives home — GPS state changes to home"
@@ -358,13 +364,20 @@ actions:
                       entity_id: "{{ arrival_switches_list }}"
           - stop: "Entrance never cleared — aborting and cleaning up."
 
-  - alias: "Generate AI greeting via conversation agent"
-    action: conversation.process
-    response_variable: ai_greeting
-    data:
-      agent_id: !input conversation_agent
-      text: !input ai_greeting_prompt
-    continue_on_error: true
+  - alias: "Generate AI greeting via conversation agent (optional, skipped if no agent configured)"
+    choose:
+      - alias: "Conversation agent is configured"
+        conditions:
+          - condition: template
+            value_template: "{{ conversation_agent_id | default('') | string | length > 0 }}"
+        sequence:
+          - alias: "Generate AI greeting via conversation agent"
+            action: conversation.process
+            response_variable: ai_greeting
+            data:
+              agent_id: "{{ conversation_agent_id }}"
+              text: !input ai_greeting_prompt
+            continue_on_error: true
 
   - alias: "Extract greeting text with fallback if LLM failed"
     variables:
@@ -374,17 +387,24 @@ actions:
         {% set speech_obj = resp.get('response', {}).get('speech', {}).get('plain', {}) %}
         {{ speech_obj.get('speech', '') | default(fallback, true) }}
 
-  - alias: "Start Assist conversation on satellites — agent handles the rest"
-    action: assist_satellite.start_conversation
-    target: !input assist_satellites
-    data:
-      preannounce: true
-      start_message: "{{ welcome_line }}"
-      extra_system_prompt: >-
-        {{ person_name }} just arrived home and heard: "{{ welcome_line }}".
-        This is an arrival conversation. Help them set up their lights, TV,
-        and music as per your rules.
-    continue_on_error: true
+  - alias: "Start Assist conversation on satellites (optional, skipped if no satellites configured)"
+    choose:
+      - alias: "Assist satellites are configured"
+        conditions:
+          - condition: template
+            value_template: "{{ assist_satellites_target | default({}) | length > 0 }}"
+        sequence:
+          - alias: "Start Assist conversation on satellites — agent handles the rest"
+            action: assist_satellite.start_conversation
+            target: !input assist_satellites
+            data:
+              preannounce: true
+              start_message: "{{ welcome_line }}"
+              extra_system_prompt: >-
+                {{ person_name }} just arrived home and heard: "{{ welcome_line }}".
+                This is an arrival conversation. Help them set up their lights, TV,
+                and music as per your rules.
+            continue_on_error: true
 
   - alias: "Log greeting attempt for troubleshooting silent satellite failures"
     action: logbook.log
