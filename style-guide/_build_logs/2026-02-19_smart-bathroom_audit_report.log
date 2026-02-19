@@ -1,11 +1,12 @@
-[SESSION] 2026-02-19 | type: quick-pass audit | scope: smart-bathroom.yaml | style guide: v3.25 | status: complete
-[ISSUE] smart-bathroom.yaml | AP-44 | ⚠️ WARNING | L50 | use_door_sensor default: "" — wrong type for boolean selector, should be default: false | change to default: false
-[ISSUE] smart-bathroom.yaml | AP-44 | ⚠️ WARNING | L89 | shower_zone_sensor has bare default: (YAML null) — breaks collapsible section rendering | change to default: ""
-[ISSUE] smart-bathroom.yaml | AP-44 | ⚠️ WARNING | L115 | light_entity has bare default: (YAML null) — breaks collapsible section rendering | change to default: ""
-[ISSUE] smart-bathroom.yaml | AP-44 | ⚠️ WARNING | L130 | helper_entity has bare default: (YAML null) — breaks collapsible section rendering | change to default: ""
-[ISSUE] smart-bathroom.yaml | AP-08 | ⚠️ WARNING | L233-445 | actions block ~212 lines (>200 limit) and nesting depth 5 in Branch 5 (>4 limit via actions→choose→sequence→choose→sequence→if/then) | consider extracting Branch 5 exit logic into a helper script
-[ISSUE] smart-bathroom.yaml | AP-20 | ℹ️ INFO | L270 | Branch 5 wait_for_trigger on motion "off" won't fire if motion already cleared before wait starts — timeout handles it but adds unnecessary delay | added if(motion==on) pre-check guard | FIXED
-[INTERPRETATION] AP-08 on actions block: 212 lines is barely over the 200-line threshold. The nesting depth of 5 is a bigger concern — Branch 5's nested choose-within-choose-with-if pattern is the complexity hotspot. Splitting Branch 5 into a called script would fix both issues but adds cross-file maintenance. Flagged WARNING, not ERROR — the logic is correct and well-aliased.
-[INTERPRETATION] AP-20 on Branch 5 motion wait: The timeout path handles this correctly (forces cleanup after exit_timeout minutes). In practice, the door opening likely happens while motion is still active, so the transition to "off" occurs naturally. Edge case only — flagged INFO.
-[SUMMARY] 28 checks executed | 22 PASS | 3 FAIL (6 findings) | 3 N/A | 4x ⚠️ AP-44 FIXED, 1x ⚠️ AP-08 OPEN, 1x ℹ️ AP-20 FIXED
-[ACTION] Findings ready for user review. AP-44 fixes are quick (default value corrections). AP-08 is architectural — user decides. AP-20 is informational. Fixes require BUILD-mode escalation with build log.
+[SESSION] 2026-02-19 | type: audit | scope: smart-bathroom.yaml (quick-pass) | status: complete
+
+[FINDING] AP-08 | ⚠️ WARNING | smart-bathroom.yaml | Actions block is ~262 lines (threshold: 200). Branch 3 (door opened + occupied → wait for exit) accounts for most of the complexity with nested if/then + choose + if/then reaching ~5-6 nesting levels (threshold: 4).
+
+[INTERPRETATION] AP-08 on smart-bathroom.yaml — The 262-line actions block is borderline. The complexity is inherent to the problem domain (7 branches covering all combinations of door/motion/shower/helper states). Branch 3 is the deepest at ~5-6 levels due to sequential motion-wait → shower-wait logic with timeout handling at each stage. Refactoring into a separate script would reduce nesting but add indirection. Marking WARNING not ERROR because the logic is well-aliased and each nested block has clear purpose. User should decide if extraction is worth the trade-off.
+
+[NOTE] Consistency observation (not an AP violation): Branch 6 light-off action lacks continue_on_error: true, while all other light-off/on actions in Branches 1, 3, 4, 7 have it. Branch 6 is a single-action branch so there's no subsequent step to protect, but for pattern consistency it could be added.
+
+[NOTE] Duplicate trigger_variables + variables blocks (lines 158-165) — This is correct HA practice: template triggers need variables at evaluation time (trigger_variables), while actions need them at runtime (variables). Not a finding, just documenting the review.
+
+[SUMMARY] 27 checks executed | 26 PASS | 1 FAIL (1 finding, ⚠️ WARNING) | 0 SKIP | 2 advisory notes
+[ACTION] Findings ready for user review. Fixes require BUILD-mode escalation with build log.

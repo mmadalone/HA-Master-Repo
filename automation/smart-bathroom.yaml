@@ -12,6 +12,8 @@ blueprint:
 
     ### Recent changes
 
+    - **v6:** AP-08 audit exemption note (accepted complexity), Branch 6 continue_on_error consistency fix
+
     - **v5:** Added continue_on_error on paired light actions (6 locations), source_url, shower zone debounce (5s), sequential branch renumbering
 
     - **v4:** Fixed AP-44 default values (collapsible sections), added motion pre-check to Branch 5 exit (AP-20)
@@ -230,6 +232,10 @@ triggers:
 conditions: []
 
 actions:
+  # AP-08 exemption (audited 2026-02-19): actions block exceeds 200-line /
+  # 4-level nesting thresholds. Accepted — complexity is intrinsic to
+  # 7-branch door/motion/shower state machine. Branch 3 is deepest at ~5-6
+  # levels due to sequential wait cascades with timeout handling.
   - choose:
       # ── Branch 1: Motion stopped, room empty, no shower → lights off ────────
       - alias: "Motion stopped + (no door or door open) + occupied + no shower → turn off"
@@ -430,6 +436,7 @@ actions:
             action: homeassistant.turn_off
             target:
               entity_id: !input light_entity
+            continue_on_error: true
 
       # ── Branch 7: Shower cleared + occupied + motion off → turn off ─────────
       - alias: "Shower zone cleared + occupied + motion off + (no door or door open) → turn off"
