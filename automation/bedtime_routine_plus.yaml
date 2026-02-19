@@ -27,50 +27,7 @@ blueprint:
     - **v5.4.13:** Audit fix — added nested `| int(4)` guard to bare
     `int(default_countdown)` fallback in conversational mode countdown
     delay, matching the defensive pattern used in all other countdown
-    references (BRP-AUDIT-001).
-
-    - **v5.4.12:** Audit fix — added `| bool(false)` guards to bare
-    `enable_negotiation` and `is_preset_mode` in bedtime prompt
-    template. Fixed `final_countdown` to guard empty `countdown_helper`
-    and use nested `| int(4)` fallback. Hardened `kodi_now_playing`
-    S/E formatting for empty season/episode. Added TV sleep timer
-    entity guard with logbook fallthrough. Added logbook entries for
-    TV sleep timer fire/off and conversational media path completion.
-    Added `| default([])` to 4 sensor-list `for` loops.
-
-    - **v5.4.11:** Audit fix — added `| default(''DIRECTORY'')` guard to 2
-    bare `kodi_content_type` comparisons in `kodi_safe_content_type`.
-    Added `| default(''media_title_contains'')` to 4 bare
-    `sleepytv_detection` comparisons in `is_sleepytv_active`. Added
-    `| default(''cec'')` to 2 bare `sleep_timer_method` comparisons
-    in TV sleep timer. Added `| default('''')` to bare
-    `kodi_bedtime_mood` in catalog string. Added `| int(4)` to bare
-    `default_countdown` in routine-start logbook message. Added
-    `| float(0.15)` to bare `kodi_volume` in volume_set action.
-
-    - **v5.4.10:** Audit fix — added `| bool(false)` and `| int(0)` guards
-    to bare `presence_require_all_val` and `presence_min_minutes` in
-    presence gate failure logbook message. Guarded `countdown_minutes`
-    variable against empty `countdown_helper` entity with length check.
-    Added `| default(\u0027curated\u0027)` to 8 bare `bedtime_media_mode`
-    comparisons in templates. Added top-of-file version comment.
-
-    - **v5.4.9:** Audit fix — added `| bool(false)` guard to bare
-    `presence_require_all_val` in presence gate template. Added routine-start
-    logbook entry surfacing version, trigger type, mode, and weekend status
-    for trace debugging. Added audit note comments on duplicated bathroom
-    guard blocks (×2) documenting intentional duplication rationale.
-
-    - **v5.4.8:** Audit fix — added `| bool(false)` type-safety filter to 8
-    bare boolean variables in condition templates (`enable_negotiation`,
-    `enable_media`, `library_fetch_enabled`, `enable_settling` ×2,
-    `enable_gn_context` ×2, `sleep_timer_enabled`). Added `| int(4)` guard
-    on 3 bare `default_countdown` usages in numeric contexts (helper init,
-    preset delay, helper reset). Fulfills the type-safety promise from v5.4.7.
-
-    - **v5.4.7:** Audit fixes — presence gate now covers weekend scheduled triggers,
-    genre split strings use defensive `| default(\u0027\u0027)` guards, all boolean-ish
-    variables in conditions use explicit `| bool(false)` for type safety.'
+    references (BRP-AUDIT-001).'
   domain: automation
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/bedtime_routine_plus.yaml
   homeassistant:
