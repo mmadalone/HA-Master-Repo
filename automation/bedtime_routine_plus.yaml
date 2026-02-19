@@ -23,6 +23,14 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.0:** Audit remediation — fixed TV sleep timer targeting Kodi instead
+    of TV entity (C-1), fixed broken presence duration gate using wrong API for
+    last_changed (C-2), added continue_on_error on 8 non-critical service calls
+    (H-1), documented empty-entity trigger limitation on manual_trigger (H-2),
+    fixed §① collapsed: false → true (M-1), added max_exceeded: silent (M-3),
+    added blueprint_version variable, documented noon threshold in effective_day_key,
+    fixed whitespace fallbacks in settling-in extraction.
+
     - **v5.3.3:** Fix collapsed sections — bare `default:` (null) on entity/time
     selectors prevents HA from honoring `collapsed: true`. Changed 11 inputs
     to `default: ""` across §①②③④⑨⑪. Fixed §① `collapsed: false` → `true`.
@@ -55,7 +63,7 @@ blueprint:
     trigger_settings:
       name: "① Trigger"
       icon: mdi:play-circle-outline
-      collapsed: false
+      collapsed: true
       description: >
         How the bedtime routine starts. Enable scheduled, manual, or both.
       input:
@@ -73,7 +81,9 @@ blueprint:
           description: >
             An input_boolean entity exposed to voice assistants (e.g. Alexa).
             Toggling it ON triggers the bedtime routine. Leave empty to disable
-            manual triggering.
+            manual triggering. Note: HA instantiates the state trigger even when
+            empty — this generates harmless log warnings on reload. No workaround
+            exists for blueprint conditional triggers.
           default: ""
           selector:
             entity:
@@ -897,6 +907,9 @@ blueprint:
 # Variables
 # ═══════════════════════════════════════════════════════════════════════
 variables:
+  # --- Blueprint version ---
+  blueprint_version: "5.4.0"
+
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
   manual_trigger_val: !input manual_trigger
@@ -919,11 +932,11 @@ variables:
           {% if presence_min_minutes | int(0) == 0 %}
             {% set ns.results = ns.results + [true] %}
           {% else %}
-            {% set changed = state_attr(sensor, 'last_changed') | default(none) %}
+            {% set changed = states[sensor].last_changed | default(none) %}
             {% if changed is none %}
               {% set ns.results = ns.results + [true] %}
             {% else %}
-              {% set elapsed = (now() - changed).total_seconds() / 60 %}
+              {% set elapsed = (now() - as_datetime(changed)).total_seconds() / 60 %}
               {% set ns.results = ns.results + [(elapsed >= presence_min_minutes | int(0))] %}
             {% endif %}
           {% endif %}
@@ -956,6 +969,9 @@ variables:
     {% endif %}
 
   effective_day_key: >-
+    {# Cross-midnight day attribution: scheduled times before noon belong
+       to the previous calendar day (e.g. 01:00 Sunday = Saturday night).
+       Noon is the cutoff — bedtime routines never fire between 12:00–17:59. #}
     {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
     {% set sched_ts = today_at(trigger_scheduled_time) %}
     {% set noon = today_at('12:00:00') %}
@@ -1170,6 +1186,7 @@ actions:
           - stop: "Presence gate failed — nobody detected, routine aborted."
 
   - alias: "Initialize countdown helper to default minutes — agent may override via exposed script"
+    continue_on_error: true
     action: input_number.set_value
     target:
       entity_id: !input countdown_helper
@@ -1177,6 +1194,7 @@ actions:
       value: "{{ default_countdown }}"
 
   - alias: "Activate temporary switches — bedtime_active indicator, etc."
+    continue_on_error: true
     action: homeassistant.turn_on
     target: !input temporary_switches
 
@@ -1290,10 +1308,12 @@ actions:
   # --- Lights off except lamp (TV stays ON) -----------------------------------
 
   - alias: "Turn off targeted lights/switches — lamp stays on for the countdown"
+    continue_on_error: true
     action: homeassistant.turn_off
     target: !input lights_off_target
 
   - alias: "Ensure the living room lamp is ON — nightlight during the countdown"
+    continue_on_error: true
     action: homeassistant.turn_on
     target:
       entity_id: "{{ living_room_lamp }}"
@@ -1324,6 +1344,7 @@ actions:
   # --- Set Kodi volume to bedtime level ---------------------------------------
 
   - alias: "Lower Kodi volume to bedtime target"
+    continue_on_error: true
     action: media_player.volume_set
     target:
       entity_id: "{{ kodi_entity }}"
@@ -1429,7 +1450,7 @@ actions:
                           {{ settling_response.response.speech.plain.speech
                              | default('') }}
                         {% else %}
-
+                          {{ '' }}
                         {% endif %}
 
                   - alias: "Deliver settling-in TTS if agent produced a message"
@@ -1969,7 +1990,7 @@ actions:
                                   {{ settling_response.response.speech.plain.speech
                                      | default('') }}
                                 {% else %}
-
+                                  {{ '' }}
                                 {% endif %}
 
                           - alias: "Deliver settling-in TTS if agent produced a message"
@@ -2191,15 +2212,18 @@ actions:
   # --- Common tail (both modes) — lamp off + cleanup ----------------------------
 
   - alias: "Lights out — turn off the living room lamp"
+    continue_on_error: true
     action: homeassistant.turn_off
     target:
       entity_id: "{{ living_room_lamp }}"
 
   - alias: "Cleanup — turn off temporary switches"
+    continue_on_error: true
     action: homeassistant.turn_off
     target: !input temporary_switches
 
   - alias: "Reset countdown helper to default for next run"
+    continue_on_error: true
     action: input_number.set_value
     target:
       entity_id: !input countdown_helper
@@ -2227,7 +2251,7 @@ actions:
               - alias: "TV sleep timer: send CEC power-off via media_player.turn_off"
                 action: media_player.turn_off
                 target:
-                  entity_id: "{{ kodi_entity }}"
+                  entity_id: "{{ tv_entity }}"
                 continue_on_error: true
           - alias: "TV sleep timer: custom script"
             conditions:
@@ -2244,6 +2268,7 @@ actions:
 # Mode — single, no overlapping bedtime runs
 # ═══════════════════════════════════════════════════════════════════════
 mode: single
+max_exceeded: silent
 
 trace:
   stored_traces: 15
