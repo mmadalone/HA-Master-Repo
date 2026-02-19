@@ -23,11 +23,17 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.1:** Audit remediation — fixed Jinja2 scoping bug where curated_items
+    list was always empty due to {% set %} inside {% for %} loop (C-1), fixed
+    identical scoping bug on genre-filtered movies list (C-2), added
+    continue_on_error on manual trigger boolean reset (M-2), added
+    continue_on_error on all 8 logbook.log calls (L-1).
+
     - **v5.4.0:** Audit remediation — fixed TV sleep timer targeting Kodi instead
     of TV entity (C-1), fixed broken presence duration gate using wrong API for
     last_changed (C-2), added continue_on_error on 8 non-critical service calls
     (H-1), documented empty-entity trigger limitation on manual_trigger (H-2),
-    fixed §① collapsed: false → true (M-1), added max_exceeded: silent (M-3),
+    added max_exceeded: silent (M-3),
     added blueprint_version variable, documented noon threshold in effective_day_key,
     fixed whitespace fallbacks in settling-in extraction.
 
@@ -908,7 +914,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.0"
+  blueprint_version: "5.4.1"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1151,6 +1157,7 @@ actions:
             id: manual
         sequence:
           - alias: "Turn off the manual trigger boolean"
+            continue_on_error: true
             action: input_boolean.turn_off
             target:
               entity_id: !input manual_trigger
@@ -1170,6 +1177,7 @@ actions:
             value_template: "{{ not (presence_gate_passed | bool(true)) }}"
         sequence:
           - alias: "Log presence gate failure — routine skipped"
+            continue_on_error: true
             action: logbook.log
             data:
               name: "Bedtime Routine Plus"
@@ -1372,6 +1380,7 @@ actions:
                     value_template: "{{ is_sleepytv_active }}"
                 sequence:
                   - alias: "Log sleepy TV detection — content already playing"
+                    continue_on_error: true
                     action: logbook.log
                     data:
                       name: "Bedtime Routine Plus"
@@ -1401,6 +1410,7 @@ actions:
                          not in ['playing', 'paused', 'buffering'] }}
                 then:
                   - alias: "Log preset play_media failure — content may not have started"
+                    continue_on_error: true
                     action: logbook.log
                     data:
                       name: "Bedtime Routine Plus"
@@ -1517,6 +1527,7 @@ actions:
                         value_template: "{{ not wait.completed }}"
                     then:
                       - alias: "Bathroom guard timed out — proceeding with lamp off anyway"
+                        continue_on_error: true
                         action: logbook.log
                         data:
                           name: "Bedtime Routine Plus"
@@ -1537,6 +1548,7 @@ actions:
                         for: !input bathroom_grace_period
                     sequence:
                       - alias: "Grace period already satisfied — proceed to lamp off"
+                        continue_on_error: true
                         action: logbook.log
                         data:
                           name: "Bedtime Routine Plus"
@@ -1637,6 +1649,7 @@ actions:
                 value_template: "{{ is_sleepytv_active }}"
             sequence:
               - alias: "Log sleepy TV detection — content already playing, skipping media offer"
+                continue_on_error: true
                 action: logbook.log
                 data:
                   name: "Bedtime Routine Plus"
@@ -1816,30 +1829,32 @@ actions:
                         {% set preferred = kodi_preferred_genres.split(',') | map('trim') | map('lower') | reject('eq', '') | list %}
 
                         {# ---- Curated content (if curated or both mode) ---- #}
-                        {% set curated_items = [] %}
+                        {% set ns_curated = namespace(items=[]) %}
                         {% if bedtime_media_mode in ['curated', 'both'] and kodi_curated_text | default('') | length > 0 %}
                           {% set lines = kodi_curated_text.split('\n') | reject('eq', '') | list %}
                           {% for line in lines %}
                             {% set parts = line.split('=', 1) %}
                             {% if parts | length == 2 %}
-                              {% set curated_items = curated_items + [{'name': parts[0] | trim, 'content_id': parts[1] | trim}] %}
+                              {% set ns_curated.items = ns_curated.items + [{'name': parts[0] | trim, 'content_id': parts[1] | trim}] %}
                             {% endif %}
                           {% endfor %}
                         {% endif %}
+                        {% set curated_items = ns_curated.items %}
 
                         {# ---- In-progress TV shows (NO genre filtering) ---- #}
                         {% set in_progress = prefetch_inprogress.tvshows | default([]) if prefetch_inprogress is defined else [] %}
 
                         {# ---- Movies (genre filtered) ---- #}
                         {% set all_movies = prefetch_movies.movies | default([]) if prefetch_movies is defined else [] %}
-                        {% set movies = [] %}
+                        {% set ns_movies = namespace(items=[]) %}
                         {% for m in all_movies %}
                           {% set movie_genres = m.genre | default([]) | map('lower') | list %}
                           {% set dominated = movie_genres | select('in', excluded) | list %}
                           {% if not dominated %}
-                            {% set movies = movies + [m] %}
+                            {% set ns_movies.items = ns_movies.items + [m] %}
                           {% endif %}
                         {% endfor %}
+                        {% set movies = ns_movies.items %}
 
                         {# ---- Recent episodes ---- #}
                         {% set recent_eps = prefetch_recent.episodes | default([]) if prefetch_recent is defined else [] %}
@@ -2108,6 +2123,7 @@ actions:
                     value_template: "{{ not wait.completed }}"
                 then:
                   - alias: "Bathroom guard timed out — proceeding with lamp off anyway"
+                    continue_on_error: true
                     action: logbook.log
                     data:
                       name: "Bedtime Routine Plus"
@@ -2128,6 +2144,7 @@ actions:
                     for: !input bathroom_grace_period
                 sequence:
                   - alias: "Grace period already satisfied — proceed to lamp off"
+                    continue_on_error: true
                     action: logbook.log
                     data:
                       name: "Bedtime Routine Plus"

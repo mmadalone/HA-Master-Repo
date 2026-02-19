@@ -1,0 +1,31 @@
+[SESSION] 2026-02-19 | type: quick-pass audit | scope: smart-bathroom.yaml | style guide: v3.25
+[ESTIMATE] target: ~5K tokens (smart-bathroom.yaml, 472 lines) | headroom: adequate
+[CHECK] AP-01 | PASS | No LLM prompts in blueprint
+[CHECK] AP-02 | PASS | All entity_ids from !input
+[CHECK] AP-03 | PASS | No device_id usage
+[CHECK] AP-04 | PASS | Both wait_for_trigger blocks have timeout + continue_on_timeout + wait.completed handling
+[CHECK] AP-06 | PASS | helper_entity cleanup on all exit paths (B1,B3,B6,B7 turn off; B2 already off; B4/B5 turn on)
+[CHECK] AP-08 | PASS | Exemption documented inline (7-branch state machine, accepted complexity)
+[CHECK] AP-09 | PASS | 3 collapsible input sections
+[CHECK] AP-09a | PASS | All 9 inputs have explicit defaults
+[CHECK] AP-10 | PASS | No legacy service:/platform:/data_template: syntax
+[CHECK] AP-11 | PASS | All action steps have alias: fields
+[CHECK] AP-13 | PASS | No free-text selectors where dropdowns would work
+[CHECK] AP-15 | PASS | Header image exists at HEADER_IMG (smart-bathroom-header.jpeg), URL matches
+[CHECK] AP-16 | PASS | Uses is_state() with pre-check guards (door_entity not in [none,'',{}]), no unguarded states()/state_attr()
+[CHECK] AP-17 | PASS | continue_on_error: true only on light actions (paired with unguarded helper updates) — valid pattern
+[CHECK] AP-20 | PASS | Branch 3 motion wait guarded by if/state check; shower zone wait guarded by choose/template condition
+[CHECK] AP-21 | PASS | No raw secrets
+[CHECK] AP-22 | PASS | min_version: "2024.10.0" set under homeassistant:
+[CHECK] AP-23 | PASS | mode: single (not restart)
+[CHECK] AP-24 | PASS | No conversation agent selectors
+[CHECK] AP-42 | PASS | All blueprint: keys in whitelist (name, author, description, domain, source_url, homeassistant, input)
+[CHECK] AP-44 | PASS | All defaults explicit; §① collapsed:false, §②③ collapsed:true
+[CHECK] S1 | PASS | No sensitive data
+[CHECK] S2 | PASS | Selectors constrain all input types
+[CHECK] S3 | PASS | No template injection vectors
+[CHECK] S4 | PASS | All service calls have explicit entity_id targets from !input
+[CHECK] S5-S8 | PASS | N/A (no agents, logging, APIs, or exposed scripts)
+[CHECK] SYNTAX | PASS | Modern plural forms (triggers/conditions/actions), action: not service:, trigger: not platform:
+[CHECK] TRIGGERS | PASS | All 5 triggers have id: fields
+[CHECK] README | PASS | smart-bathroom-readme.md exists in README_AUTO_DIR (currency not verified — quick-pass scope)
