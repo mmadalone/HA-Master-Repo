@@ -63,7 +63,7 @@ blueprint:
     trigger_settings:
       name: "① Trigger"
       icon: mdi:play-circle-outline
-      collapsed: true
+      collapsed: false
       description: >
         How the bedtime routine starts. Enable scheduled, manual, or both.
       input:

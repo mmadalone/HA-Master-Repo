@@ -35,6 +35,10 @@ blueprint:
     * **Music Assistant** integration must be installed
 
     ### Recent changes
+    - **v5:** Fixed AP-44 — added `default: []` to `alexa_players` and
+      `ma_players` entity inputs in Section ① for collapsed section stability.
+      Added unavailability guard to prevent phantom sync-to-zero when a
+      device goes unavailable or unknown.
     - **v4:** Fixed AP-16 — added `| default()` guards to all `states()` calls
       in ducking flag and playing-state conditions. Fixed AP-09a — added
       `default:` to ducking flag input for collapsed section stability.
@@ -60,6 +64,7 @@ blueprint:
       input:
         alexa_players:
           name: Alexa media players
+          default: []
           description: >
             The Alexa Echo devices exposed via the Alexa Media Player
             integration. Order must match the MA players list below.
@@ -73,6 +78,7 @@ blueprint:
 
         ma_players:
           name: Music Assistant players (same order as Alexa players)
+          default: []
           description: >
             The Music Assistant speakers to sync volume with.
             First MA player pairs with first Alexa player, etc.
@@ -274,6 +280,13 @@ actions:
   - condition: template
     alias: "Valid pair found"
     value_template: "{{ target_entity | trim != '' }}"
+
+  # 0b) Skip sync if either device is unavailable/unknown
+  - condition: template
+    alias: "Both devices are available"
+    value_template: >-
+      {{ states(source_entity) | default('unavailable') not in ['unavailable', 'unknown']
+         and states(target_entity) | default('unavailable') not in ['unavailable', 'unknown'] }}
 
   # 1) Skip sync while Voice PE is ducking volumes
   - condition: template
