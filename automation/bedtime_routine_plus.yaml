@@ -26,9 +26,9 @@ blueprint:
     - **v5.4.5:** Audit remediation — wrapped both bathroom guard blocks (preset +
     conversational) in config check so empty `bathroom_sensor` input skips the guard
     cleanly instead of evaluating `condition: state` against an empty entity_id (M-1, ×2),
-    added explicit `| default('')` on `states(countdown_helper)` in both `countdown_minutes`
+    added explicit `| default('''')` on `states(countdown_helper)` in both `countdown_minutes`
     and `final_countdown` variables (L-1, ×2), added clarifying comment on intentional
-    `trigger.id | default('scheduled')` in presence gate (L-2), documented intentional
+    `trigger.id | default(''scheduled'')` in presence gate (L-2), documented intentional
     TTS voice-profile choose duplication ×6 as design decision (L-3).
 
     - **v5.4.4:** Audit remediation — added explicit parentheses on `states(eid) | default()`
