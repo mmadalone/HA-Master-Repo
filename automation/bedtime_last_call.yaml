@@ -12,9 +12,16 @@ blueprint:
     Speaks a single, AI-generated 'last call' message when presence is detected
     in an area during an allowed time window. Optionally runs an external script
     after the announcement (e.g. turn off lights, TV, start audio, etc.).
-    No questions, no repeats, no cooldowns.
+
+    **Note:** This automation intentionally has no once-per-window cooldown.
+    If presence is lost and re-detected within the same time window, the
+    announcement fires again. Use minimum presence duration to reduce
+    false triggers from brief walk-throughs.
 
     ### Recent changes
+    - **v2.2:** Audit remediation — added user_name input (removed hardcoded name),
+      TTS empty-entity guards, continue_on_error on TTS actions, follow-up script
+      empty-entity guard, sensor_context whitespace cleanup
     - **v2.1:** Cross-midnight day attribution fix — effective_day_key
       shifts post-midnight hours to the previous day's run_days entry
     - **v2:** Style guide compliance — collapsible sections, aliases, error handling
@@ -42,6 +49,7 @@ blueprint:
           description: >
             One or more binary sensors indicating presence in this area.
             The automation triggers when ANY of these turns ON.
+            At least one sensor is required for the automation to function.
           default: []
           selector:
             entity:
@@ -63,6 +71,15 @@ blueprint:
                 - Workshop
                 - Bathroom
               custom_value: true
+
+        user_name:
+          name: User name (spoken context)
+          description: >
+            First name or nickname the AI should use when speaking to the user.
+          default: friend
+          selector:
+            text:
+              multiline: false
 
     # ===========================================================================
     # ② SCHEDULE
@@ -382,6 +399,7 @@ actions:
       tts_mode: !input tts_mode
       tts_entity: !input tts_entity
       area_name: !input area_name
+      user_name: !input user_name
       voice_profile: !input elevenlabs_voice_profile
       llm_prompt: !input llm_prompt
       context_entities: !input context_entities
@@ -390,11 +408,11 @@ actions:
         {% set entities = context_entities | default([]) %}
         {% if entities | length == 0 %}
           none
-        {% else %}
-          {% set expanded = expand(entities) %}
-          {% for e in expanded %}
+        {%- else %}
+          {%- set expanded = expand(entities) %}
+          {%- for e in expanded %}
           - {{ e.entity_id }} ({{ e.name }}): {{ e.state }}{% if e.attributes.unit_of_measurement is defined %} {{ e.attributes.unit_of_measurement }}{% endif %}
-          {% endfor %}
+          {%- endfor %}
         {% endif %}
 
   - alias: "Generate last-call message via LLM"
@@ -413,7 +431,7 @@ actions:
 
         task:
         respond with ONE short, natural sentence you would say out loud
-        to Miquel right now. maximum 220 characters. do not include
+        to {{ user_name }} right now. maximum 220 characters. do not include
         quotation marks or any surrounding formatting.
     response_variable: ai_result
 
@@ -421,7 +439,7 @@ actions:
     variables:
       last_call_message: >-
         {% set resp = ai_result.response if ai_result is defined else none %}
-        {% set fallback = "Last call, " ~ area_name ~ ". Time to wrap it up." %}
+        {% set fallback = "Last call, " ~ user_name ~ ". Time to wrap it up in the " ~ area_name ~ "." %}
         {% if resp is not none
               and resp.speech is defined
               and resp.speech.plain is defined
@@ -432,35 +450,43 @@ actions:
           {{ fallback }}
         {% endif %}
 
-  - alias: "Route TTS — ElevenLabs or standard"
-    choose:
-      - alias: "ElevenLabs custom service"
-        conditions:
-          - condition: template
-            value_template: "{{ tts_mode == 'elevenlabs_custom_service' }}"
-        sequence:
-          - alias: "Speak via ElevenLabs with voice profile"
+  - alias: "Route TTS — ElevenLabs or standard (skip if unconfigured)"
+    if:
+      - condition: template
+        alias: "TTS entity and media player are both configured"
+        value_template: "{{ tts_entity | default('') != '' and player | default('') != '' }}"
+    then:
+      - alias: "Route TTS — ElevenLabs or standard"
+        choose:
+          - alias: "ElevenLabs custom service"
+            conditions:
+              - condition: template
+                value_template: "{{ tts_mode == 'elevenlabs_custom_service' }}"
+            sequence:
+              - alias: "Speak via ElevenLabs with voice profile"
+                action: tts.speak
+                continue_on_error: true
+                target:
+                  entity_id: "{{ tts_entity }}"
+                data:
+                  message: "{{ last_call_message }}"
+                  media_player_entity_id: "{{ player }}"
+                  options:
+                    voice_profile: "{{ voice_profile }}"
+        default:
+          - alias: "Speak via standard TTS entity"
             action: tts.speak
+            continue_on_error: true
             target:
               entity_id: "{{ tts_entity }}"
             data:
               message: "{{ last_call_message }}"
               media_player_entity_id: "{{ player }}"
-              options:
-                voice_profile: "{{ voice_profile }}"
-    default:
-      - alias: "Speak via standard TTS entity"
-        action: tts.speak
-        target:
-          entity_id: "{{ tts_entity }}"
-        data:
-          message: "{{ last_call_message }}"
-          media_player_entity_id: "{{ player }}"
 
   - alias: "Run follow-up script if enabled"
     if:
       - condition: template
-        value_template: "{{ enable_followup_script }}"
+        value_template: "{{ enable_followup_script and followup_script | default('') != '' }}"
     then:
       - alias: "Post-TTS delay — let speech finish before script runs"
         delay:
