@@ -1,4 +1,0 @@
-[SESSION] 2026-02-19 | type: audit | scope: alexa_presence_radio.yaml | style guide: v3.25
-[ISSUE] alexa_presence_radio.yaml | AP-17 | ⚠️ WARNING | L901,L912,L921 | continue_on_error: true on music_assistant.play_media | ALREADY FIXED in v6 — post-play verification added
-[ISSUE] alexa_presence_radio.yaml | AP-44 | ℹ️ INFO | inputs | bare default: on optional entity selectors | acceptable — no action needed
-[ISSUE] alexa_presence_radio.yaml | no-AP | ℹ️ INFO | N/A | missing README | FIXED — completed from crash recovery (227 lines)

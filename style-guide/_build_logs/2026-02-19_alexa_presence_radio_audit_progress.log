@@ -1,6 +1,0 @@
-[SESSION] 2026-02-19 | type: audit | scope: alexa_presence_radio.yaml | style guide: v3.25
-[SCANNED] alexa_presence_radio.yaml | issues: 3 (0 ❌, 1 ⚠️, 2 ℹ️)
-[NOTE] AP-17 fix already applied in v6 (continue_on_error removed, post-play verification added)
-[NOTE] AP-44 bare defaults — acceptable for optional entity selectors, no action needed
-[NOTE] README completed — recovered from crash, appended missing sections (inputs, changelog, companions, tech notes)
-[COMPLETE]

@@ -1,3 +1,0 @@
-[SESSION] 2026-02-19 | type: audit | scope: coming_home.yaml | style guide: v3.25
-[ISSUE] coming_home.yaml | no-AP (§11.3) | ⚠️ WARNING | header | Description changelog has 7 version entries (v4.6–v1); §11.3 step 2 says "last 3 changes" — trim to v4.6/v4.5/v4.4 and move older history to README | Remove v4.3 through v1 entries from blueprint description
-[COMPLETED] 2026-02-19 | 1 finding (0 ERROR, 1 WARNING, 0 INFO)
