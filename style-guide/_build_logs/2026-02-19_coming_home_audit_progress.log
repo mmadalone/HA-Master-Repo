@@ -1,0 +1,28 @@
+[2026-02-19T10:00:00] AUDIT_START | scope=coming_home.yaml | tier=quick-pass
+[2026-02-19T10:00:01] FILE_START | coming_home.yaml | 383 lines
+[2026-02-19T10:00:02] CHECK | AP-01 | PASS | No large system prompts baked in
+[2026-02-19T10:00:02] CHECK | AP-02 | PASS | No hardcoded entity_ids
+[2026-02-19T10:00:02] CHECK | AP-03 | PASS | No device_id usage
+[2026-02-19T10:00:02] CHECK | AP-04 | PASS | Both wait_for_trigger have timeout + wait.completed handling
+[2026-02-19T10:00:02] CHECK | AP-06 | PASS | Arrival switches have cleanup on all explicit exit paths
+[2026-02-19T10:00:02] CHECK | AP-08 | PASS | Action block ~100 lines, nesting ≤3
+[2026-02-19T10:00:02] CHECK | AP-09 | PASS | 4 collapsible input sections
+[2026-02-19T10:00:02] CHECK | AP-09a | PASS | All inputs have defaults
+[2026-02-19T10:00:02] CHECK | AP-10 | PASS | Uses modern action: syntax
+[2026-02-19T10:00:02] CHECK | AP-10a | PASS | Uses trigger: not platform:
+[2026-02-19T10:00:02] CHECK | AP-10b | PASS | No data_template: usage
+[2026-02-19T10:00:03] CHECK | AP-11 | FAIL | 2 action steps inside choose sequences missing alias:
+[2026-02-19T10:00:03] CHECK | AP-13 | PASS | Text selectors appropriate for free-form input
+[2026-02-19T10:00:03] CHECK | AP-15 | PASS | Header image exists on disk, README exists
+[2026-02-19T10:00:03] CHECK | AP-16 | PASS | state_attr uses | default()
+[2026-02-19T10:00:03] CHECK | AP-17 | INFO | continue_on_error on assist_satellite.start_conversation — main deliverable
+[2026-02-19T10:00:03] CHECK | AP-20 | FAIL | First wait_for_trigger won't fire if entrance sensor already on
+[2026-02-19T10:00:03] CHECK | AP-21 | PASS | No raw secrets
+[2026-02-19T10:00:03] CHECK | AP-22 | PASS | min_version set
+[2026-02-19T10:00:03] CHECK | AP-23 | FAIL | mode: restart with no cleanup failsafe for interrupted runs
+[2026-02-19T10:00:03] CHECK | AP-24 | PASS | Uses conversation_agent: selector
+[2026-02-19T10:00:03] CHECK | AP-42 | PASS | blueprint: keys all valid
+[2026-02-19T10:00:03] CHECK | AP-44 | PASS | All sections have correct collapsed state and all inputs have defaults
+[2026-02-19T10:00:03] CHECK | S1-S8 | PASS | Security checklist clear
+[2026-02-19T10:00:04] FILE_COMPLETE | coming_home.yaml | 3 findings (1 ❌, 2 ⚠️) + 1 ℹ️
+[2026-02-19T10:00:04] AUDIT_COMPLETE | total_findings=3+1info

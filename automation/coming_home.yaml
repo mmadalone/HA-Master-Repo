@@ -18,6 +18,11 @@ blueprint:
     remain ON until the new run completes its cleanup.
 
     ### Recent changes
+    - **v4.3:** Audit remediation — fixed entrance sensor race condition where
+      wait_for_trigger missed already-on state (AP-20), added restart-safe
+      cleanup preamble to handle stale switches from interrupted runs (AP-23),
+      added missing aliases on 2 switch.turn_off actions (AP-11), added
+      logbook entry after satellite greeting for troubleshooting (AP-17).
     - **v4.2:** Added defaults to person_entities, entrance_sensor,
       conversation_agent, and assist_satellites so all four sections render
       as collapsible in the HA UI. Inputs are technically optional but the
@@ -264,20 +269,40 @@ conditions:
          .total_seconds() > (cooldown_seconds | int(900)) }}
 
 actions:
-  - alias: "Wait for entrance occupancy — GPS alone isn't reliable enough"
-    wait_for_trigger:
-      - trigger: state
-        entity_id: !input entrance_sensor
-        to: "on"
-    timeout: !input entrance_wait_timeout
-    continue_on_timeout: true
+  - alias: "Restart-safe cleanup — turn off stale arrival switches from interrupted runs"
+    choose:
+      - alias: "Arrival switches are configured"
+        conditions:
+          - condition: template
+            value_template: "{{ arrival_switches_list | length > 0 }}"
+        sequence:
+          - alias: "Turn off stale temporary switches from previous interrupted run"
+            action: switch.turn_off
+            target:
+              entity_id: "{{ arrival_switches_list }}"
+            continue_on_error: true
 
-  - alias: "Handle entrance timeout — clean up if nobody physically arrived"
+  - alias: "Check if entrance sensor is already triggered (skip wait if so)"
     if:
-      - condition: template
-        value_template: "{{ not wait.completed }}"
-    then:
-      - stop: "Entrance sensor timed out — nobody showed up. Aborting."
+      - condition: state
+        entity_id: !input entrance_sensor
+        state: "on"
+    then: []
+    else:
+      - alias: "Wait for entrance occupancy — GPS alone isn't reliable enough"
+        wait_for_trigger:
+          - trigger: state
+            entity_id: !input entrance_sensor
+            to: "on"
+        timeout: !input entrance_wait_timeout
+        continue_on_timeout: true
+
+      - alias: "Handle entrance timeout — clean up if nobody physically arrived"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - stop: "Entrance sensor timed out — nobody showed up. Aborting."
 
   - alias: "Reset speakers — power-cycle to clear stale connections (optional, skipped if no switches configured)"
     choose:
@@ -333,7 +358,8 @@ actions:
               - condition: template
                 value_template: "{{ arrival_switches_list | length > 0 }}"
             sequence:
-              - action: switch.turn_off
+              - alias: "Turn off temporary arrival switches before aborting"
+                action: switch.turn_off
                 target:
                   entity_id: "{{ arrival_switches_list }}"
       - stop: "Entrance never cleared — aborting and cleaning up."
@@ -366,6 +392,13 @@ actions:
         and music as per your rules.
     continue_on_error: true
 
+  - alias: "Log greeting attempt for troubleshooting silent satellite failures"
+    action: logbook.log
+    data:
+      name: "Coming Home"
+      message: "Arrival greeting sent for {{ person_name }}: {{ welcome_line[:80] }}"
+      entity_id: !input entrance_sensor
+
   - alias: "Post-conversation cooldown before cleanup"
     delay: !input post_conversation_delay
 
@@ -376,7 +409,8 @@ actions:
           - condition: template
             value_template: "{{ arrival_switches_list | length > 0 }}"
         sequence:
-          - action: switch.turn_off
+          - alias: "Turn off temporary arrival switches (final cleanup)"
+            action: switch.turn_off
             target:
               entity_id: "{{ arrival_switches_list }}"
 

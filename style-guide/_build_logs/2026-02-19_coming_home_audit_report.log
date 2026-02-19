@@ -1,0 +1,25 @@
+# Audit Report — coming_home.yaml
+# Date: 2026-02-19
+# Scope: Single-file quick-pass audit against §10 anti-patterns + §10.5 security
+# Blueprint: coming_home.yaml (383 lines, v4.2)
+# Progress log: 2026-02-19_coming_home_audit_progress.log
+
+## Findings
+
+[ISSUE] coming_home.yaml | AP-20 | ❌ ERROR | ~L219 | First wait_for_trigger (entrance sensor → "on") will never fire if the sensor is already "on" when the automation starts. wait_for_trigger watches for state CHANGES, not current state. If the person is already at the entrance when GPS triggers, the wait times out and the automation aborts — false negative. | FIX: Add a pre-check template condition before the wait: if entrance sensor is already "on", skip the wait entirely. Alternatively, use wait_template instead of wait_for_trigger (wait_template resolves immediately if already true).
+
+[ISSUE] coming_home.yaml | AP-23 | ⚠️ WARNING | L383 | mode: restart with no cleanup failsafe for interrupted runs. If arrival_switches are ON and a second person triggers a restart, the first run's switches stay ON until the new run's cleanup phase. The description documents this gap (v4 changelog) but no mitigation is implemented. | FIX: Add an idempotent cleanup block as the first action (before waiting for entrance sensor): turn off any arrival_switches that are currently ON. This makes the restart self-healing — the new run cleans up the old run's state before proceeding.
+
+[ISSUE] coming_home.yaml | AP-11 | ⚠️ WARNING | ~L289, ~L349 | Two switch.turn_off actions inside choose→sequence blocks are missing alias: fields. (1) Inside "Handle entrance-clear timeout" cleanup. (2) Inside final "Clean up" choose sequence. | FIX: Add descriptive alias: to both, e.g., "Turn off temporary arrival switches (cleanup)"
+
+[INFO] coming_home.yaml | AP-17 | ℹ️ INFO | ~L333 | continue_on_error: true on assist_satellite.start_conversation — this is the primary deliverable of the automation (speaking the greeting). If it fails silently, the user gets no greeting but the flow continues to cleanup. Consider whether this should be a hard failure with cleanup instead. | RECOMMENDATION: Keep continue_on_error but add a logbook entry or persistent_notification on failure so the user knows something went wrong.
+
+## Summary
+- Total checks: 26 (AP table) + 8 (security checklist)
+- ❌ ERROR: 1 (AP-20)
+- ⚠️ WARNING: 2 (AP-23, AP-11)
+- ℹ️ INFO: 1 (AP-17)
+- PASS: 30
+- Header image: ✅ exists (coming_home-header.jpeg)
+- README: ✅ exists (coming_home-readme.md)
+- Security: ✅ all S1–S8 clear
