@@ -23,6 +23,13 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.8:** Audit fix — added `| bool(false)` type-safety filter to 8
+    bare boolean variables in condition templates (`enable_negotiation`,
+    `enable_media`, `library_fetch_enabled`, `enable_settling` ×2,
+    `enable_gn_context` ×2, `sleep_timer_enabled`). Added `| int(4)` guard
+    on 3 bare `default_countdown` usages in numeric contexts (helper init,
+    preset delay, helper reset). Fulfills the type-safety promise from v5.4.7.
+
     - **v5.4.7:** Audit fixes — presence gate now covers weekend scheduled triggers,
     genre split strings use defensive `| default(\u0027\u0027)` guards, all boolean-ish
     variables in conditions use explicit `| bool(false)` for type safety.
@@ -901,7 +908,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.7"
+  blueprint_version: "5.4.8"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1196,7 +1203,7 @@ actions:
     target:
       entity_id: !input countdown_helper
     data:
-      value: "{{ default_countdown }}"
+      value: "{{ default_countdown | int(4) }}"
 
   - alias: "Activate temporary switches — bedtime_active indicator, etc."
     continue_on_error: true
@@ -1263,7 +1270,7 @@ actions:
       - alias: "Countdown negotiation enabled AND not preset mode — start interactive conversation"
         conditions:
           - condition: template
-            value_template: "{{ enable_negotiation and not (is_preset_mode | bool(false)) }}"
+            value_template: "{{ enable_negotiation | bool(false) and not (is_preset_mode | bool(false)) }}"
         sequence:
           - alias: "Start conversation on satellites — agent can negotiate countdown"
             continue_on_error: true
@@ -1433,7 +1440,7 @@ actions:
               - alias: "Settling-in TTS is enabled — generate and deliver"
                 conditions:
                   - condition: template
-                    value_template: "{{ enable_settling }}"
+                    value_template: "{{ enable_settling | bool(false) }}"
                 sequence:
                   - alias: "Build sensor context string for settling-in prompt"
                     variables:
@@ -1512,7 +1519,7 @@ actions:
           # --- Countdown (non-negotiable in preset mode) ---
           - alias: "Wait the default countdown — lamp stays on, user settles in"
             delay:
-              minutes: "{{ default_countdown }}"
+              minutes: "{{ default_countdown | int(4) }}"
 
           # --- Bathroom guard (preset mode) ---
           - alias: "Bathroom guard — check occupancy if sensor configured"
@@ -1578,7 +1585,7 @@ actions:
               - alias: "Final goodnight TTS is enabled — generate and deliver"
                 conditions:
                   - condition: template
-                    value_template: "{{ enable_gn_context }}"
+                    value_template: "{{ enable_gn_context | bool(false) }}"
                 sequence:
                   - alias: "Build sensor context string for goodnight prompt"
                     variables:
@@ -1680,7 +1687,7 @@ actions:
               - alias: "Media offer enabled — proceed with mode-specific flow"
                 conditions:
                   - condition: template
-                    value_template: "{{ enable_media }}"
+                    value_template: "{{ enable_media | bool(false) }}"
                 sequence:
                   # =========================================================
                   # JSON-RPC LIBRARY PRE-FETCH ENGINE
@@ -1691,7 +1698,7 @@ actions:
                         conditions:
                           - condition: template
                             value_template: >-
-                              {{ library_fetch_enabled
+                              {{ library_fetch_enabled | bool(false)
                                  and bedtime_media_mode in ['freeform', 'both'] }}
                         sequence:
                           # --- Call 1: In-Progress TV Shows ---
@@ -1987,7 +1994,7 @@ actions:
                       - alias: "Settling-in TTS is enabled — generate and deliver"
                         conditions:
                           - condition: template
-                            value_template: "{{ enable_settling }}"
+                            value_template: "{{ enable_settling | bool(false) }}"
                         sequence:
                           - alias: "Build sensor context string for settling-in prompt"
                             variables:
@@ -2185,7 +2192,7 @@ actions:
           - alias: "Final goodnight TTS is enabled — generate and deliver"
             conditions:
               - condition: template
-                value_template: "{{ enable_gn_context }}"
+                value_template: "{{ enable_gn_context | bool(false) }}"
             sequence:
               - alias: "Build sensor context string for goodnight prompt"
                 variables:
@@ -2273,14 +2280,14 @@ actions:
     target:
       entity_id: !input countdown_helper
     data:
-      value: "{{ default_countdown }}"
+      value: "{{ default_countdown | int(4) }}"
 
   # --- TV Sleep Timer (fires after main routine cleanup) ----------------------
 
   - alias: "TV sleep timer: check if enabled"
     if:
       - condition: template
-        value_template: "{{ sleep_timer_enabled }}"
+        value_template: "{{ sleep_timer_enabled | bool(false) }}"
     then:
       - alias: "TV sleep timer: wait configured minutes"
         delay:
