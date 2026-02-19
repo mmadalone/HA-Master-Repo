@@ -23,6 +23,12 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.3:** Audit remediation — removed `| default(0)` sentinel from
+    countdown_minutes and final_countdown templates that caused 0-minute fallback
+    instead of default_countdown when helper unavailable (M-1), added `| float(0)`
+    safety on `as_timestamp()` comparisons in effective_day_key (L-1), added
+    `| default(false)` guard on both `wait.completed` checks in bathroom guard (L-2).
+
     - **v5.4.2:** Audit remediation — added continue_on_error on all 12 tts.speak
     actions (H-1), added continue_on_error on speaker reset switch.turn_off/turn_on
     (M-1). TTS and speaker reset failures no longer abort the routine.
@@ -918,7 +924,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.2"
+  blueprint_version: "5.4.3"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -985,7 +991,7 @@ variables:
     {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
     {% set sched_ts = today_at(trigger_scheduled_time) %}
     {% set noon = today_at('12:00:00') %}
-    {% if as_timestamp(sched_ts) < as_timestamp(noon) %}
+    {% if (as_timestamp(sched_ts) | float(0)) < (as_timestamp(noon) | float(0)) %}
       {{ days[(now().weekday() - 1) % 7] }}
     {% else %}
       {{ days[now().weekday()] }}
@@ -1065,7 +1071,7 @@ variables:
   # --- Derived ---
   is_preset_mode: "{{ bedtime_media_mode == 'preset' }}"
   countdown_minutes: >-
-    {{ states(countdown_helper) | default(0) | int(default_countdown) }}
+    {{ states(countdown_helper) | int(default_countdown) }}
   kodi_safe_content_type: >-
     {% set cid = kodi_preset_content_id | default('') %}
     {% if kodi_content_type == 'CHANNEL' and ('://' in cid or '/' in cid) %}
@@ -1534,7 +1540,7 @@ actions:
                   - alias: "Handle bathroom guard timeout — lights off regardless"
                     if:
                       - condition: template
-                        value_template: "{{ not wait.completed }}"
+                        value_template: "{{ not (wait.completed | default(false)) }}"
                     then:
                       - alias: "Bathroom guard timed out — proceeding with lamp off anyway"
                         continue_on_error: true
@@ -1650,7 +1656,7 @@ actions:
       - alias: "Re-read countdown helper — the agent may have negotiated a different value"
         variables:
           final_countdown: >-
-            {{ states(countdown_helper) | default(0) | int(default_countdown) }}
+            {{ states(countdown_helper) | int(default_countdown) }}
 
       # --- Sleepy TV check — skip media offer if already playing ---
       - alias: "Sleepy TV gate — check if bedtime content is already playing"
@@ -2136,7 +2142,7 @@ actions:
               - alias: "Handle bathroom guard timeout — lights off regardless, can't wait forever"
                 if:
                   - condition: template
-                    value_template: "{{ not wait.completed }}"
+                    value_template: "{{ not (wait.completed | default(false)) }}"
                 then:
                   - alias: "Bathroom guard timed out — proceeding with lamp off anyway"
                     continue_on_error: true
