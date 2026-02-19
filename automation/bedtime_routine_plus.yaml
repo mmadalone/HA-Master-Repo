@@ -23,6 +23,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.7:** Audit fixes — presence gate now covers weekend scheduled triggers,
+    genre split strings use defensive `| default(\u0027\u0027)` guards, all boolean-ish
+    variables in conditions use explicit `| bool(false)` for type safety.
+
     - **v5.4.6:** Made hardcoded 30-second media conversation settle delay
     user-configurable via new `media_conversation_settle_delay` input in §④
     (default: 30s, range: 10–120s). Added descriptive alias on delay step.'
@@ -897,7 +901,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.6"
+  blueprint_version: "5.4.7"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1122,11 +1126,11 @@ conditions:
     value_template: >
       {% if trigger.id | default('') == 'manual' %}
         true
-      {% elif weekend_blocked %}
+      {% elif weekend_blocked | bool(false) %}
         false
-      {% elif trigger.id | default('') == 'scheduled_weekend' and not weekend_profile_active %}
+      {% elif trigger.id | default('') == 'scheduled_weekend' and not (weekend_profile_active | bool(false)) %}
         false
-      {% elif trigger.id | default('') == 'scheduled' and weekend_profile_active %}
+      {% elif trigger.id | default('') == 'scheduled' and (weekend_profile_active | bool(false)) %}
         false
       {% else %}
         {{ effective_day_key in (run_days | default([])) }}
@@ -1160,7 +1164,8 @@ actions:
             # NOTE: default('scheduled') is intentional here — differs from default('')
             # elsewhere. If trigger.id is missing/undefined, we want the presence gate
             # to APPLY (treat as scheduled), not be bypassed (treat as manual).
-            value_template: "{{ trigger.id | default('scheduled') == 'scheduled' }}"
+            # Both 'scheduled' and 'scheduled_weekend' are gated — v5.4.7 fix.
+            value_template: "{{ trigger.id | default('scheduled') in ['scheduled', 'scheduled_weekend'] }}"
           - condition: template
             alias: "Presence sensors are configured"
             value_template: "{{ presence_sensors_val | default([]) | length > 0 }}"
@@ -1258,7 +1263,7 @@ actions:
       - alias: "Countdown negotiation enabled AND not preset mode — start interactive conversation"
         conditions:
           - condition: template
-            value_template: "{{ enable_negotiation and not is_preset_mode }}"
+            value_template: "{{ enable_negotiation and not (is_preset_mode | bool(false)) }}"
         sequence:
           - alias: "Start conversation on satellites — agent can negotiate countdown"
             continue_on_error: true
@@ -1372,7 +1377,7 @@ actions:
       - alias: "Preset mode — streamlined flow with direct Kodi play"
         conditions:
           - condition: template
-            value_template: "{{ is_preset_mode }}"
+            value_template: "{{ is_preset_mode | bool(false) }}"
         sequence:
           # --- Sleepy TV check — skip content switch if already playing ---
           - alias: "Sleepy TV gate — check if bedtime content is already playing"
@@ -1380,7 +1385,7 @@ actions:
               - alias: "Bedtime content detected — skip content switch, just lower volume"
                 conditions:
                   - condition: template
-                    value_template: "{{ is_sleepytv_active }}"
+                    value_template: "{{ is_sleepytv_active | bool(false) }}"
                 sequence:
                   - alias: "Log sleepy TV detection — content already playing"
                     continue_on_error: true
@@ -1658,7 +1663,7 @@ actions:
           - alias: "Bedtime content detected — skip media conversation"
             conditions:
               - condition: template
-                value_template: "{{ is_sleepytv_active }}"
+                value_template: "{{ is_sleepytv_active | bool(false) }}"
             sequence:
               - alias: "Log sleepy TV detection — content already playing, skipping media offer"
                 continue_on_error: true
@@ -1837,8 +1842,8 @@ actions:
                   - alias: "Build Kodi catalog string — genre-filtered, structured for LLM injection"
                     variables:
                       kodi_catalog: >-
-                        {% set excluded = kodi_excluded_genres.split(',') | map('trim') | map('lower') | reject('eq', '') | list %}
-                        {% set preferred = kodi_preferred_genres.split(',') | map('trim') | map('lower') | reject('eq', '') | list %}
+                        {% set excluded = (kodi_excluded_genres | default('')).split(',') | map('trim') | map('lower') | reject('eq', '') | list %}
+                        {% set preferred = (kodi_preferred_genres | default('')).split(',') | map('trim') | map('lower') | reject('eq', '') | list %}
 
                         {# ---- Curated content (if curated or both mode) ---- #}
                         {% set ns_curated = namespace(items=[]) %}
