@@ -1,9 +1,0 @@
-[SESSION] 2026-02-14 | type: sanity | scope: style guide v3.14
-[CHECK] SEC-1 | PASS | 0 findings (hits in secrets.yaml examples and QA checklist pedagogical blocks — correct placement)
-[CHECK] AIR-6 | FAIL | 1 finding (master index §1 token claim ~8.9K inconsistent with core_philosophy internal claim ~7.9K — fix required in 00_core_philosophy.md lines 149/159)
-[CHECK] CQ-6 | PASS | 0 findings (all legacy syntax in exempt # ❌ OLD blocks)
-[CHECK] CQ-5 | PASS | 124 YAML blocks validated; 14 INFO-level multi-snippet doc patterns, 10 exempt marked-bad blocks
-[CHECK] VER-1 | PASS | 7/9 confirmed via release notes; 2 unverified (MCP 2025.9 improvements, ESPHome sub-devices 2025.7)
-[CHECK] VER-3 | PASS | 1 INFO finding (QA checklist VER-1 table/example claims data_template removal 2025.12 but guide §11.3 says "no removal date announced" — QA checklist internal inconsistency)
-[CHECK] ARCH-4 | PASS | 0 dangling references. §X.X refs: all resolve. File refs: all exist. AP codes: AP-01..AP-41 verified. Check-IDs: SEC/VER/AIR/CQ/ARCH/INT/ZONE/MAINT all defined in §15.1.
-[CHECK] ARCH-5 | PASS | 1 INFO finding (09_qa_audit_checklist.md has no explicit routing entry in any mode table — reachable via "sanity check" trigger phrase and user commands but not formally routed)

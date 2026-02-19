@@ -1,7 +1,0 @@
-[SESSION] 2026-02-15 | type: audit | scope: room_wrapper_scripts.yaml | style guide: v3.15
-[CHECK] §10 anti-pattern scan | FAIL | 2 findings
-[CHECK] §10.5 security checklist | PASS | 0 findings
-[CHECK] §4 script standards | PASS | 0 findings
-[CHECK] §11.14 README check | FAIL | 1 finding
-[CHECK] dependency validation | FAIL | 1 finding (CRITICAL)
-[RESOLUTION] File deleted — all scripts depended on deleted play_radio_station.yaml, entire use case superseded by alexa_presence_radio.yaml

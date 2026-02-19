@@ -1,4 +1,0 @@
-[SESSION] 2026-02-14 | type: audit | scope: proactive_llm_sensors.yaml | style guide: v3.14 | status: complete
-[ISSUE] proactive_llm_sensors.yaml | AP-16 | ❌ ERROR | conditions | states(player_entity) without | default() in "Not speaking over active media" guard | add | default('idle') or similar after states() call
-[SUMMARY] 1 file scanned | 1 issue found (1 ❌ ERROR) | 0 ⚠️ WARNING | 0 ℹ️ INFO
-[ACTION] Findings ready for user review. Fix requires BUILD-mode escalation with build log.

@@ -1,8 +1,0 @@
-[SESSION] 2026-02-15 | type: audit | scope: announce_music_follow_me_llm.yaml | style guide: v3.15
-[CHECK] §10 anti-pattern scan | FAIL | 1 finding
-[CHECK] §10.5 security checklist | PASS | 0 findings
-[CHECK] §3/§4 blueprint+script standards | PASS | 0 findings
-[CHECK] §3.2 input section formatting | PASS (minor style note)
-[CHECK] §3.6 template safety | PASS | 0 findings
-[CHECK] §11.14 README check | FAIL | 1 finding
-[CHECK] AP-15 header image | PASS | file exists on disk
