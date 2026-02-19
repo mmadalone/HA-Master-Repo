@@ -1,0 +1,33 @@
+[SESSION] 2026-02-19 | type: quick-pass audit | scope: smart-bathroom.yaml | style guide: v3.25
+[ESTIMATE] target: ~4.5K tokens (smart-bathroom.yaml, 445 lines) | heaviest check: AP scan table | headroom: adequate
+[CHECK] AP-01 | PASS | no LLM prompts in blueprint
+[CHECK] AP-02 | PASS | all entity refs from !input
+[CHECK] AP-03 | PASS | no device_id usage
+[CHECK] AP-04 | PASS | all wait_for_trigger have timeout + continue_on_timeout + wait.completed handling
+[CHECK] AP-06 | PASS | helper_entity cleaned up on all exit paths (Branch 1, 5, 6, 7)
+[CHECK] AP-08 | FAIL | 1 finding — actions block ~212 lines (>200) and nesting depth 5 (>4 limit)
+[CHECK] AP-09 | PASS | 3 collapsible input sections
+[CHECK] AP-09a | PASS | covered by AP-44
+[CHECK] AP-10 | PASS | no legacy service: keyword
+[CHECK] AP-10a | PASS | uses trigger: prefix
+[CHECK] AP-10b | PASS | no data_template:
+[CHECK] AP-11 | PASS | all action steps have aliases
+[CHECK] AP-13 | PASS | no text selectors
+[CHECK] AP-15 | PASS | header image exists on disk at HEADER_IMG
+[CHECK] AP-16 | PASS | no states()/state_attr() calls — uses is_state() throughout (inherently safe)
+[CHECK] AP-17 | PASS | no continue_on_error usage
+[CHECK] AP-20 | FAIL | 1 finding — Branch 5 motion wait may not fire if sensor already off
+[CHECK] AP-22 | PASS | min_version present, no Labs features
+[CHECK] AP-42 | PASS | only valid keys under blueprint:
+[CHECK] AP-44 | FAIL | 4 findings — bare defaults and wrong-type boolean default
+[CHECK] S1 | PASS | no secrets/keys
+[CHECK] S2 | PASS | inputs constrained by selectors, is_state() safe
+[CHECK] S3 | PASS | no template injection risk
+[CHECK] S4 | PASS | all service calls have explicit entity targets
+[CHECK] S5 | N/A | no conversation agent
+[CHECK] S6 | PASS | no sensitive data in stop messages
+[CHECK] S7 | N/A | no external API calls
+[CHECK] S8 | N/A | no exposed scripts
+[CHECK] SYNTAX | PASS | modern syntax throughout (triggers/conditions/actions plural, action: not service:)
+[CHECK] README | PASS | smart-bathroom-readme.md exists in README_AUTO_DIR
+[CHECK] CHANGELOG | PASS | v1/v2/v3 entries in description

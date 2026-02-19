@@ -12,6 +12,8 @@ blueprint:
 
     ### Recent changes
 
+    - **v4:** Fixed AP-44 default values (collapsible sections), added motion pre-check to Branch 5 exit (AP-20)
+
     - **v3:** Fixed stale variable race condition, consolidated choose blocks, inlined state checks
 
     - **v2:** Full style guide compliance — modern syntax, timeouts, aliases, collapsible inputs
@@ -48,7 +50,7 @@ blueprint:
           description: >-
             Enable if you have a door/contact sensor. When off, door state
             is ignored in all logic.
-          default: ""
+          default: false
           selector:
             boolean: {}
 
@@ -83,7 +85,7 @@ blueprint:
             Presence zone sensor for the shower area. Only evaluated when
             "Use Shower Zone Sensor?" is enabled — safe to leave empty
             if disabled.
-          default:
+          default: ""
           selector:
             entity:
               domain:
@@ -108,7 +110,7 @@ blueprint:
           description: >-
             The light (or switch/input_boolean) to control. Turned on when
             occupancy is detected, off when the room empties.
-          default:
+          default: ""
           selector:
             entity:
               filter:
@@ -124,7 +126,7 @@ blueprint:
             An input_boolean that tracks whether the bathroom is currently
             occupied. Must be a dedicated helper — create one in
             Settings → Helpers if you don't have one.
-          default:
+          default: ""
           selector:
             entity:
               domain:
@@ -282,33 +284,39 @@ actions:
             entity_id: !input helper_entity
             state: "on"
         sequence:
-          - alias: "Wait for motion to stop — person leaving bathroom"
-            wait_for_trigger:
-              - trigger: state
-                entity_id: !input motion_sensor
-                to: "off"
-                for:
-                  seconds: !input delay_before_motion_check
-            timeout:
-              minutes: "{{ exit_timeout }}"
-            continue_on_timeout: true
-
-          - alias: "Handle motion wait timeout — clean up if sensor never cleared"
+          - alias: "Wait for motion to clear (skip if sensor already off)"
             if:
-              - condition: template
-                value_template: "{{ not wait.completed }}"
+              - condition: state
+                entity_id: !input motion_sensor
+                state: "on"
             then:
-              - alias: "Turn off light — motion wait timed out, forcing cleanup"
-                action: homeassistant.turn_off
-                target:
-                  entity_id: !input light_entity
+              - alias: "Wait for motion to stop — person leaving bathroom"
+                wait_for_trigger:
+                  - trigger: state
+                    entity_id: !input motion_sensor
+                    to: "off"
+                    for:
+                      seconds: !input delay_before_motion_check
+                timeout:
+                  minutes: "{{ exit_timeout }}"
+                continue_on_timeout: true
 
-              - alias: "Clear occupancy helper — timeout cleanup"
-                action: input_boolean.turn_off
-                target:
-                  entity_id: !input helper_entity
+              - alias: "Handle motion wait timeout — clean up if sensor never cleared"
+                if:
+                  - condition: template
+                    value_template: "{{ not wait.completed }}"
+                then:
+                  - alias: "Turn off light — motion wait timed out, forcing cleanup"
+                    action: homeassistant.turn_off
+                    target:
+                      entity_id: !input light_entity
 
-              - stop: "Motion sensor timed out after door opened — forced cleanup."
+                  - alias: "Clear occupancy helper — timeout cleanup"
+                    action: input_boolean.turn_off
+                    target:
+                      entity_id: !input helper_entity
+
+                  - stop: "Motion sensor timed out after door opened — forced cleanup."
 
           - alias: "Check if shower zone needs to clear before turning off"
             choose:
