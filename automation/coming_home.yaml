@@ -18,6 +18,8 @@ blueprint:
     remain ON until the new run completes its cleanup.
 
     ### Recent changes
+    - **v4.4:** Audit fix — added `continue_on_error: true` to logbook.log
+      action that was blocking the cleanup path on failure (AP-06).
     - **v4.3:** Audit remediation — fixed entrance sensor race condition where
       wait_for_trigger missed already-on state (AP-20), added restart-safe
       cleanup preamble to handle stale switches from interrupted runs (AP-23),
@@ -398,6 +400,7 @@ actions:
       name: "Coming Home"
       message: "Arrival greeting sent for {{ person_name }}: {{ welcome_line[:80] }}"
       entity_id: !input entrance_sensor
+    continue_on_error: true
 
   - alias: "Post-conversation cooldown before cleanup"
     delay: !input post_conversation_delay
