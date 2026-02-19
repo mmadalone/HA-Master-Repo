@@ -23,7 +23,6 @@ blueprint:
     - **v1:** Initial version.
 
   domain: script
-  version: "2.1.0"
   homeassistant:
     min_version: "2024.10.0"
 

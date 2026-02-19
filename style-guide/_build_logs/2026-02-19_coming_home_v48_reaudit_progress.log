@@ -1,0 +1,36 @@
+[SESSION] 2026-02-19 | type: audit | scope: coming_home.yaml v4.8 (re-audit) | style guide: v3.25
+[CHECK] AP-01 | PASS | No baked-in LLM system prompts — ai_greeting_prompt is user-configurable input
+[CHECK] AP-02 | PASS | All entity_id references derive from !input or variables
+[CHECK] AP-03 | PASS | No device_id usage
+[CHECK] AP-04 | PASS | Both wait_for_trigger blocks have timeout + continue_on_timeout + wait.completed handling
+[CHECK] AP-06 | PASS | arrival_switches cleaned on all exit paths (restart preamble, entrance-clear timeout, final cleanup)
+[CHECK] AP-08 | PASS | ~170 action lines, max nesting depth 4
+[CHECK] AP-09 | PASS | 4 collapsible input sections (①②③④)
+[CHECK] AP-09a | PASS | All 12 inputs have explicit defaults
+[CHECK] AP-10 | PASS | All calls use action: not service:
+[CHECK] AP-10a | PASS | trigger: state (not platform:)
+[CHECK] AP-10b | PASS | No data_template: usage
+[CHECK] AP-11 | PASS | All action steps have alias: fields
+[CHECK] AP-13 | PASS | Free-text selectors appropriate for prompt and names inputs
+[CHECK] AP-15 | PASS | Header image exists at HEADER_IMG (671KB), URL matches description
+[CHECK] AP-16 | PASS | state_attr() | default('someone'), this.attributes | default(), ai_greeting | default({})
+[CHECK] AP-17 | PASS | continue_on_error only on non-critical paths (switch resets, LLM call, satellite, logbook)
+[CHECK] AP-20 | PASS | Both entrance waits wrapped with if pre-check for already-true state
+[CHECK] AP-21 | PASS | No raw secrets
+[CHECK] AP-22 | PASS | min_version: 2025.4.0 (required for assist_satellite.start_conversation)
+[CHECK] AP-23 | PASS | Restart-safe cleanup preamble as first action handles stale switches
+[CHECK] AP-24 | PASS | Uses conversation_agent: selector (correct)
+[CHECK] AP-42 | PASS | All keys under blueprint: in whitelist (name, author, description, domain, source_url, homeassistant, input)
+[CHECK] AP-44 | PASS | All inputs have defaults, §① collapsed: false, §②③④ collapsed: true
+[CHECK] S1-secrets | PASS | No raw API keys, passwords, or tokens
+[CHECK] S2-input-validation | PASS | All templated inputs have | default() guards, selectors constrain types
+[CHECK] S3-template-injection | PASS | No unsanitized user input in action calls — prompt flows through conversation.process safely
+[CHECK] S4-target-constraints | PASS | All service calls have explicit entity targets from inputs/variables
+[CHECK] S5-agent-permissions | PASS | N/A — references external agent, does not define permissions inline
+[CHECK] S6-log-hygiene | PASS | Logbook truncates greeting to 80 chars, uses friendly name only
+[CHECK] S7-rate-limiting | PASS | GPS cooldown_seconds condition + physical entrance sensor gate prevents rapid firing
+[CHECK] S8-exposed-scripts | PASS | N/A — automation, not an exposed script
+[CHECK] modern-syntax | PASS | triggers:/conditions:/actions: (plural), action: (not service:), trigger: (not platform:)
+[CHECK] asset-verification | PASS | Header image on disk (671KB JPEG), source_url present, README exists
+[CHECK] changelog-length | FAIL | 4 entries (v4.8/v4.7/v4.6/v4.5) — rule says last 3; drop v4.5
+[COMPLETED] 2026-02-19 | total findings: 1 (0 ERROR, 1 WARNING, 0 INFO)
