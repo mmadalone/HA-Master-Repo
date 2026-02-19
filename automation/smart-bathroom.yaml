@@ -12,14 +12,17 @@ blueprint:
 
     ### Recent changes
 
+    - **v5:** Added continue_on_error on paired light actions (6 locations), source_url, shower zone debounce (5s), sequential branch renumbering
+
     - **v4:** Fixed AP-44 default values (collapsible sections), added motion pre-check to Branch 5 exit (AP-20)
 
     - **v3:** Fixed stale variable race condition, consolidated choose blocks, inlined state checks
 
     - **v2:** Full style guide compliance — modern syntax, timeouts, aliases, collapsible inputs
 
-    - **v1:** Initial version (Murat Çeşmecioğlu, modified by Madalone & Miquel)'
+    - **v1:** Initial version (Murat Çeşmecioğlu, modified by Madalone)'
   domain: automation
+  source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/smart-bathroom.yaml"
   homeassistant:
     min_version: "2024.10.0"
 
@@ -160,7 +163,7 @@ blueprint:
           name: Exit Wait Timeout
           description: >-
             Maximum time to wait for motion to stop and shower zone to clear
-            after the door opens (branch 5). Prevents the automation from
+            after the door opens (branch 3). Prevents the automation from
             hanging indefinitely if a sensor fails. Default 30 minutes.
           default: 30
           selector:
@@ -221,6 +224,8 @@ triggers:
     value_template: >-
       {{ has_shower_zone and shower_zone not in [none, '', {}]
          and is_state(shower_zone, 'off') }}
+    for:
+      seconds: 5
 
 conditions: []
 
@@ -249,6 +254,7 @@ actions:
             action: homeassistant.turn_off
             target:
               entity_id: !input light_entity
+            continue_on_error: true
 
           - alias: "Clear occupancy helper"
             action: input_boolean.turn_off
@@ -271,8 +277,8 @@ actions:
             target:
               entity_id: !input light_entity
 
-      # ── Branch 5: Door opened while occupied → wait for exit ────────────────
-      # (before Branch 3/4 — door_opened trigger must match here first when
+      # ── Branch 3: Door opened while occupied → wait for exit ────────────────
+      # (before Branches 4/5 — door_opened trigger must match here first when
       #  helper is on, otherwise Branch 4's motion_detected would never conflict)
       - alias: "Door opened + occupied → wait for exit (motion stop + shower clear)"
         conditions:
@@ -310,6 +316,7 @@ actions:
                     action: homeassistant.turn_off
                     target:
                       entity_id: !input light_entity
+                    continue_on_error: true
 
                   - alias: "Clear occupancy helper — timeout cleanup"
                     action: input_boolean.turn_off
@@ -350,6 +357,7 @@ actions:
                         action: homeassistant.turn_off
                         target:
                           entity_id: !input light_entity
+                        continue_on_error: true
 
                       - alias: "Clear occupancy helper — shower timeout cleanup"
                         action: input_boolean.turn_off
@@ -362,6 +370,7 @@ actions:
             action: homeassistant.turn_off
             target:
               entity_id: !input light_entity
+            continue_on_error: true
 
           - alias: "Clear occupancy helper — exit complete"
             action: input_boolean.turn_off
@@ -369,7 +378,7 @@ actions:
               entity_id: !input helper_entity
 
       # ── Branch 4: Motion + door open/no door → light on + mark occupied ─────
-      # (before Branch 3 — more specific: handles light AND helper. Branch 3
+      # (before Branch 5 — more specific: handles light AND helper. Branch 5
       #  only fires when this doesn't match, i.e. door is closed)
       - alias: "Motion detected + (no door or door open) → light on and mark occupied"
         conditions:
@@ -385,13 +394,14 @@ actions:
             action: homeassistant.turn_on
             target:
               entity_id: !input light_entity
+            continue_on_error: true
 
           - alias: "Set occupancy helper on"
             action: input_boolean.turn_on
             target:
               entity_id: !input helper_entity
 
-      # ── Branch 3: Motion + helper off → mark occupied (door closed case) ────
+      # ── Branch 5: Motion + helper off → mark occupied (door closed case) ────
       - alias: "Motion detected + helper off → mark room as occupied"
         conditions:
           - condition: trigger
@@ -442,6 +452,7 @@ actions:
             action: homeassistant.turn_off
             target:
               entity_id: !input light_entity
+            continue_on_error: true
 
           - alias: "Clear occupancy helper — shower exit complete"
             action: input_boolean.turn_off
