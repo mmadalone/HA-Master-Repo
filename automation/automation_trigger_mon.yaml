@@ -1,6 +1,7 @@
 blueprint:
   name: Automation trigger monitor (multi)
   author: madalone
+  source_url: https://github.com/mmadalone/HA-Master-Repo/
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/automation_trigger_mon-header.jpeg)
 
@@ -10,9 +11,13 @@ blueprint:
 
     ### Recent changes
 
-    - **v2:** Style guide compliance — modern syntax, template safety, header image
+    - **v2.1 (2026-02-19):** Audit fixes — bounded queue, changelog dates,
+      source_url, cleaner log output
 
-    - **v1:** Initial version
+    - **v2 (2025-02-17):** Style guide compliance — modern syntax, template
+      safety, header image
+
+    - **v1 (2025-02-17):** Initial version
   domain: automation
   homeassistant:
     min_version: "2024.10.0"
@@ -39,6 +44,7 @@ blueprint:
           multiple: true
 
 mode: queued
+max: 10
 
 variables:
   v_automations: !input monitored_automations
@@ -60,13 +66,13 @@ actions:
     action: system_log.write
     data:
       level: info
-      message: >
-        [Automation monitor] {{ now() }} - {{ trigger.event.data.entity_id }}
+      message: >-
+        [Automation monitor] {{ trigger.event.data.entity_id }}
         ({{ trigger.event.data.name | default('Unnamed automation') }})
         triggered via {{ trigger.event.data.source | default('unknown') }}.
-        {% if v_entities | count > 0 %}
+        {%- if v_entities %}
         States at trigger time:
-        {% for e in v_entities %}
+        {%- for e in v_entities %}
         {{ e }}={{ states(e) | default('unavailable') }}
-        {% endfor %}
-        {% endif %}
+        {%- endfor %}
+        {%- endif %}
