@@ -1,4 +1,4 @@
-# bedtime_routine_plus.yaml — v5.4.10
+# bedtime_routine_plus.yaml — v5.4.11
 blueprint:
   name: "Bedtime routine Plus – LLM-driven goodnight (Kodi)"
   author: madalone
@@ -23,6 +23,16 @@ blueprint:
     *Bedtime Routine* blueprint (`bedtime_routine.yaml`).
 
     ### Recent changes
+
+    - **v5.4.11:** Audit fix — added `| default(''DIRECTORY'')` guard to 2
+    bare `kodi_content_type` comparisons in `kodi_safe_content_type`.
+    Added `| default(''media_title_contains'')` to 4 bare
+    `sleepytv_detection` comparisons in `is_sleepytv_active`. Added
+    `| default(''cec'')` to 2 bare `sleep_timer_method` comparisons
+    in TV sleep timer. Added `| default('''')` to bare
+    `kodi_bedtime_mood` in catalog string. Added `| int(4)` to bare
+    `default_countdown` in routine-start logbook message. Added
+    `| float(0.15)` to bare `kodi_volume` in volume_set action.
 
     - **v5.4.10:** Audit fix — added `| bool(false)` and `| int(0)` guards
     to bare `presence_require_all_val` and `presence_min_minutes` in
@@ -918,7 +928,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.10"
+  blueprint_version: "5.4.11"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1078,10 +1088,10 @@ variables:
     {% endif %}
   kodi_safe_content_type: >-
     {% set cid = kodi_preset_content_id | default('') %}
-    {% if kodi_content_type == 'CHANNEL' and ('://' in cid or '/' in cid) %}
+    {% if (kodi_content_type | default('DIRECTORY')) == 'CHANNEL' and ('://' in cid or '/' in cid) %}
       video
     {% else %}
-      {{ kodi_content_type }}
+      {{ kodi_content_type | default('DIRECTORY') }}
     {% endif %}
 
   # --- Sleepy TV detection template ---
@@ -1093,13 +1103,13 @@ variables:
       {% set kodi_state = states(kodi_entity) | default('unknown') %}
       {% set kodi_title = state_attr(kodi_entity, 'media_title') | default('') %}
       {% set kodi_content_id = state_attr(kodi_entity, 'media_content_id') | default('') %}
-      {% if sleepytv_detection == 'media_title_contains' %}
+      {% if (sleepytv_detection | default('media_title_contains')) == 'media_title_contains' %}
         {{ match in kodi_title }}
-      {% elif sleepytv_detection == 'media_content_id_matches' %}
+      {% elif (sleepytv_detection | default('media_title_contains')) == 'media_content_id_matches' %}
         {{ kodi_content_id == kodi_preset_content_id }}
-      {% elif sleepytv_detection == 'state_playing_and_title' %}
+      {% elif (sleepytv_detection | default('media_title_contains')) == 'state_playing_and_title' %}
         {{ kodi_state == 'playing' and match in kodi_title }}
-      {% elif sleepytv_detection == 'pvr_channel_matches' %}
+      {% elif (sleepytv_detection | default('media_title_contains')) == 'pvr_channel_matches' %}
         {% set pvr_ch = states(sleepytv_pvr_entity) | default('') %}
         {{ pvr_ch not in ['off', 'not_pvr', 'unknown', 'unavailable', '']
            and match | lower in pvr_ch | lower }}
@@ -1231,7 +1241,7 @@ actions:
       name: "Bedtime Routine Plus"
       message: >-
         v{{ blueprint_version }} started. Trigger: {{ trigger.id | default('unknown') }}.
-        Mode: {{ bedtime_media_mode | default('curated') }}. Countdown: {{ default_countdown }}min.
+        Mode: {{ bedtime_media_mode | default('curated') }}. Countdown: {{ default_countdown | int(4) }}min.
         Weekend profile: {{ 'active' if weekend_profile_active | bool(false) else 'inactive' }}.
 
   - alias: "Reset speakers — power-cycle to clear stale connections (skipped if no switches configured)"
@@ -1396,7 +1406,7 @@ actions:
     target:
       entity_id: "{{ kodi_entity }}"
     data:
-      volume_level: "{{ kodi_volume }}"
+      volume_level: "{{ kodi_volume | float(0.15) }}"
 
   # --- Mode branch — preset vs conversational ---------------------------------
 
@@ -1953,7 +1963,7 @@ actions:
                         {% endif %}
 
                         === SELECTION INSTRUCTIONS ===
-                        User mood: {{ kodi_bedtime_mood }}
+                        User mood: {{ kodi_bedtime_mood | default('') }}
                         {% if preferred %}Preferred genres: {{ preferred | join(', ') }}{% endif %}
                         {% if excluded %}NEVER suggest: {{ excluded | join(', ') }}{% endif %}
                         Prioritize in-progress shows (offer to continue watching).
@@ -2328,7 +2338,7 @@ actions:
           - alias: "TV sleep timer: CEC standby"
             conditions:
               - condition: template
-                value_template: "{{ sleep_timer_method == 'cec' }}"
+                value_template: "{{ (sleep_timer_method | default('cec')) == 'cec' }}"
             sequence:
               - alias: "TV sleep timer: send CEC power-off via media_player.turn_off"
                 action: media_player.turn_off
@@ -2338,7 +2348,7 @@ actions:
           - alias: "TV sleep timer: custom script"
             conditions:
               - condition: template
-                value_template: "{{ sleep_timer_method == 'script' }}"
+                value_template: "{{ (sleep_timer_method | default('cec')) == 'script' }}"
             sequence:
               - alias: "TV sleep timer: fire custom TV off script"
                 action: script.turn_on
