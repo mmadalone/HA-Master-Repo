@@ -16,6 +16,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v7.2:** Audit fixes — nag tick interval /1→/5 to reduce event bus
+      load, gender-neutral default bedtime prompt, min_presence_seconds
+      anchors to earliest ON sensor (| min), added source_url
+
     - **v7.1:** Cross-midnight day attribution fix — effective_day_key
       shifts post-midnight hours to the previous day''s run_days entry,
       preventing unwanted evening activations on the next calendar day
@@ -30,6 +34,7 @@ blueprint:
     - **v5:** Weekday controls + weekend profile with separate schedule,
       cooldown, prompt overrides, and bedtime behavior per weekend days'
   domain: automation
+  source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/proactive_llm_sensors.yaml"
   homeassistant:
     min_version: "2024.10.0"
 
@@ -483,7 +488,7 @@ blueprint:
             about going to bed, receiving the extra sensor context.
           default: >
             You are a smart home assistant speaking to a user at bedtime. Ask ONE short yes/no
-            question to check if he wants to go to bed now or start his
+            question to check if they want to go to bed now or start their
             bedtime routine. Maximum 200 characters, no quotation marks.
           selector:
             text:
@@ -698,7 +703,7 @@ triggers:
   # Repeated nags: periodic tick, filtered by conditions below
   - trigger: time_pattern
     id: nag_tick
-    minutes: "/1"
+    minutes: "/5"
 
 conditions:
   # Day-of-week gating (weekday selection + optional weekend behavior)
@@ -750,7 +755,7 @@ conditions:
         {% if on_sensors | length == 0 %}
           false
         {% else %}
-          {% set last_change = (on_sensors | map(attribute='last_changed') | max) %}
+          {% set last_change = (on_sensors | map(attribute='last_changed') | min) %}
           {{ (as_timestamp(now()) - as_timestamp(last_change)) >= secs }}
         {% endif %}
       {% endif %}
