@@ -18,14 +18,14 @@ blueprint:
     remain ON until the new run completes its cleanup.
 
     ### Recent changes
+    - **v4.7:** Audit fix — added "Required." to `entrance_sensor` and
+      `conversation_agent` descriptions for clarity (advisory, §3.3).
     - **v4.6:** Audit fix — bumped `min_version` from 2024.10.0 to 2025.4.0
       (`assist_satellite.start_conversation` requires ≥ 2025.4) (AP-22),
       added `source_url` for GitHub "Check for updates" support.
     - **v4.5:** Audit fix — wrapped second entrance wait (entrance-clear) with
       `if` pre-check to handle sensor already off, mirroring the v4.3 fix for
       the first entrance wait (AP-20).
-    - **v4.4:** Audit fix — added `continue_on_error: true` to logbook.log
-      action that was blocking the cleanup path on failure (AP-06).
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/coming_home.yaml"
   homeassistant:
@@ -71,9 +71,9 @@ blueprint:
         entrance_sensor:
           name: Entrance occupancy sensor
           description: >-
-            Binary sensor that confirms physical presence at the entrance.
-            The automation won't proceed on GPS alone — it waits for this
-            sensor to trigger before resetting speakers or greeting.
+            Required. Binary sensor that confirms physical presence at the
+            entrance. The automation won't proceed on GPS alone — it waits
+            for this sensor to trigger before resetting speakers or greeting.
           default: ""
           selector:
             entity:
@@ -164,11 +164,12 @@ blueprint:
         conversation_agent:
           name: Conversation / LLM agent
           description: >-
-            Conversation agent that generates the arrival greeting and handles
-            the follow-up interaction. Can be Extended OpenAI Conversation,
-            OpenAI Conversation, or any agent supporting conversation.process.
-            The agent's own system prompt handles personality and device
-            permissions — this blueprint only passes dynamic arrival context.
+            Required. Conversation agent that generates the arrival greeting
+            and handles the follow-up interaction. Can be Extended OpenAI
+            Conversation, OpenAI Conversation, or any agent supporting
+            conversation.process. The agent's own system prompt handles
+            personality and device permissions — this blueprint only passes
+            dynamic arrival context.
           default: ""
           selector:
             conversation_agent:
