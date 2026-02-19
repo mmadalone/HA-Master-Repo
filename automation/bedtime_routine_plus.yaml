@@ -23,66 +23,9 @@ blueprint:
 
     ### Recent changes
 
-    - **v5.4.5:** Audit remediation — wrapped both bathroom guard blocks (preset +
-    conversational) in config check so empty `bathroom_sensor` input skips the guard
-    cleanly instead of evaluating `condition: state` against an empty entity_id (M-1, ×2),
-    added explicit `| default('''')` on `states(countdown_helper)` in both `countdown_minutes`
-    and `final_countdown` variables (L-1, ×2), added clarifying comment on intentional
-    `trigger.id | default(''scheduled'')` in presence gate (L-2), documented intentional
-    TTS voice-profile choose duplication ×6 as design decision (L-3).
-
-    - **v5.4.4:** Audit remediation — added explicit parentheses on `states(eid) | default()`
-    in all 4 sensor context builder templates to resolve Jinja2 operator precedence
-    ambiguity (L-2, ×4), fixed bathroom guard alias from "remaining" to "full" grace
-    period to match actual behavior (L-3, ×2), added `states[sensor] is defined` guard
-    on presence gate `last_changed` access to prevent KeyError on missing entities (M-1),
-    added parentheses on `presence_min_minutes | int(0)` in elapsed comparison.
-
-    - **v5.4.3:** Audit remediation — removed `| default(0)` sentinel from
-    countdown_minutes and final_countdown templates that caused 0-minute fallback
-    instead of default_countdown when helper unavailable (M-1), added `| float(0)`
-    safety on `as_timestamp()` comparisons in effective_day_key (L-1), added
-    `| default(false)` guard on both `wait.completed` checks in bathroom guard (L-2).
-
-    - **v5.4.2:** Audit remediation — added continue_on_error on all 12 tts.speak
-    actions (H-1), added continue_on_error on speaker reset switch.turn_off/turn_on
-    (M-1). TTS and speaker reset failures no longer abort the routine.
-
-    - **v5.4.1:** Audit remediation — fixed Jinja2 scoping bug where curated_items
-    list was always empty due to {% set %} inside {% for %} loop (C-1), fixed
-    identical scoping bug on genre-filtered movies list (C-2), added
-    continue_on_error on manual trigger boolean reset (M-2), added
-    continue_on_error on all 8 logbook.log calls (L-1).
-
-    - **v5.4.0:** Audit remediation — fixed TV sleep timer targeting Kodi instead
-    of TV entity (C-1), fixed broken presence duration gate using wrong API for
-    last_changed (C-2), added continue_on_error on 8 non-critical service calls
-    (H-1), documented empty-entity trigger limitation on manual_trigger (H-2),
-    added max_exceeded: silent (M-3),
-    added blueprint_version variable, documented noon threshold in effective_day_key,
-    fixed whitespace fallbacks in settling-in extraction.
-
-    - **v5.3.3:** Fix collapsed sections — bare `default:` (null) on entity/time
-    selectors prevents HA from honoring `collapsed: true`. Changed 11 inputs
-    to `default: ""` across §①②③④⑨⑪.
-    Time selectors use real defaults (23:00, 00:30) — empty string crashes `at:` triggers.
-
-    - **v5.3.2:** Audit remediation — removed duplicate source_url key,
-    collapsed: true on §①–② (all sections now collapsible), Kodi playback
-    verification with logbook fallback in preset mode (AP-17), explicit
-    continue_on_timeout on pre-fetch wait_for_trigger blocks (AP-04)
-
-    - **v5.3.1:** Audit fixes — collapsed: true on §③–⑩, source_url added,
-    continue_on_error on Kodi pre-fetch calls, response_type guard on
-    conversational goodnight extraction
-
-    - **v5.3.0:** Weekend overrides — run_days day-of-week gate, optional
-    weekend profile with separate bedtime schedule, cross-midnight day
-    attribution via effective_day_key. Manual triggers bypass all gates.
-    Full port from proactive_llm_sensors.yaml weekend logic.
-
-    - **v5.2.0:** Sleepy TV — added PVR channel detection method using REST sensor.
-    New input: PVR channel sensor entity. Genres now optional when PVR detection active.'
+    - **v5.4.6:** Made hardcoded 30-second media conversation settle delay
+    user-configurable via new `media_conversation_settle_delay` input in §④
+    (default: 30s, range: 10–120s). Added descriptive alias on delay step.'
   domain: automation
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/bedtime_routine_plus.yaml
   homeassistant:
@@ -508,6 +451,21 @@ blueprint:
             number:
               min: 1
               max: 15
+              unit_of_measurement: seconds
+
+        media_conversation_settle_delay:
+          name: Media conversation settle delay (seconds)
+          description: >
+            How long to wait after the satellite media-selection conversation
+            ends before continuing the routine. Gives the satellite time to
+            complete the full exchange and the LLM tool call to fire Kodi
+            playback. Increase if content isn't playing when the settling-in
+            TTS fires.
+          default: 30
+          selector:
+            number:
+              min: 10
+              max: 120
               unit_of_measurement: seconds
 
     # ===========================================================================
@@ -939,7 +897,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.5"
+  blueprint_version: "5.4.6"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1052,6 +1010,7 @@ variables:
   kodi_content_type: !input kodi_media_content_type
   kodi_tts_player: !input kodi_tts_player
   post_play_delay: !input bedtime_media_post_play_delay
+  media_settle_delay: !input media_conversation_settle_delay
 
   # --- Sleepy TV inputs ---
   sleepytv_detection: !input sleepytv_detection_method
@@ -2013,9 +1972,9 @@ actions:
 
                         {{ kodi_catalog }}
 
-                  - alias: "Wait for media conversation to settle — satellite needs time for the full exchange"
+                  - alias: "Post-conversation settle delay — satellite needs time for the full exchange and LLM tool call"
                     delay:
-                      seconds: 30
+                      seconds: "{{ media_settle_delay | int(30) }}"
 
                   # --- Post-conversation settling-in TTS ---
                   - alias: "Settling-in TTS — optional contextual announcement after content starts"
