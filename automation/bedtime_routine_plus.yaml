@@ -23,6 +23,14 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.5:** Audit remediation — wrapped both bathroom guard blocks (preset +
+    conversational) in config check so empty `bathroom_sensor` input skips the guard
+    cleanly instead of evaluating `condition: state` against an empty entity_id (M-1, ×2),
+    added explicit `| default('')` on `states(countdown_helper)` in both `countdown_minutes`
+    and `final_countdown` variables (L-1, ×2), added clarifying comment on intentional
+    `trigger.id | default('scheduled')` in presence gate (L-2), documented intentional
+    TTS voice-profile choose duplication ×6 as design decision (L-3).
+
     - **v5.4.4:** Audit remediation — added explicit parentheses on `states(eid) | default()`
     in all 4 sensor context builder templates to resolve Jinja2 operator precedence
     ambiguity (L-2, ×4), fixed bathroom guard alias from "remaining" to "full" grace
@@ -931,7 +939,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.4"
+  blueprint_version: "5.4.5"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1083,7 +1091,7 @@ variables:
   # --- Derived ---
   is_preset_mode: "{{ bedtime_media_mode == 'preset' }}"
   countdown_minutes: >-
-    {{ states(countdown_helper) | int(default_countdown) }}
+    {{ (states(countdown_helper) | default('')) | int(default_countdown) }}
   kodi_safe_content_type: >-
     {% set cid = kodi_preset_content_id | default('') %}
     {% if kodi_content_type == 'CHANNEL' and ('://' in cid or '/' in cid) %}
@@ -1190,6 +1198,9 @@ actions:
         conditions:
           - condition: template
             alias: "Trigger is scheduled (manual bypasses gate)"
+            # NOTE: default('scheduled') is intentional here — differs from default('')
+            # elsewhere. If trigger.id is missing/undefined, we want the presence gate
+            # to APPLY (treat as scheduled), not be bypassed (treat as manual).
             value_template: "{{ trigger.id | default('scheduled') == 'scheduled' }}"
           - condition: template
             alias: "Presence sensors are configured"
@@ -1308,6 +1319,13 @@ actions:
               seconds: "{{ post_tts_delay_val }}"
 
     default:
+      # NOTE: The TTS voice-profile choose pattern (check voice_profile_val →
+      # speak with options → default: speak without) is repeated ×6 across this
+      # blueprint. This is INTENTIONAL — blueprint YAML has no subroutine
+      # mechanism, and extracting to a script would add latency + failure points
+      # for every TTS call. Duplication is the lesser cost here. If the TTS
+      # delivery pattern ever changes, grep for "voice_profile_val" to find
+      # all instances. — v5.4.5 audit note
       - alias: "Negotiation disabled or preset mode — one-shot TTS announcement"
         choose:
           - alias: "TTS with voice profile (ElevenLabs)"
@@ -1533,8 +1551,13 @@ actions:
               minutes: "{{ default_countdown }}"
 
           # --- Bathroom guard (preset mode) ---
-          - alias: "Bathroom guard — check if bathroom is currently occupied"
+          - alias: "Bathroom guard — check occupancy if sensor configured"
             choose:
+              - alias: "No bathroom sensor configured — skip guard entirely"
+                conditions:
+                  - condition: template
+                    value_template: "{{ (bathroom_sensor | default('')) | length == 0 }}"
+                sequence: []
               - alias: "Bathroom occupied — wait for it to clear before turning off lamp"
                 conditions:
                   - condition: state
@@ -1668,7 +1691,7 @@ actions:
       - alias: "Re-read countdown helper — the agent may have negotiated a different value"
         variables:
           final_countdown: >-
-            {{ states(countdown_helper) | int(default_countdown) }}
+            {{ (states(countdown_helper) | default('')) | int(default_countdown) }}
 
       # --- Sleepy TV check — skip media offer if already playing ---
       - alias: "Sleepy TV gate — check if bedtime content is already playing"
@@ -2135,8 +2158,13 @@ actions:
           minutes: "{{ final_countdown | int(default_countdown) }}"
 
       # --- Bathroom guard (conversational modes) ---
-      - alias: "Bathroom guard — check if bathroom is currently occupied"
+      - alias: "Bathroom guard — check occupancy if sensor configured"
         choose:
+          - alias: "No bathroom sensor configured — skip guard entirely"
+            conditions:
+              - condition: template
+                value_template: "{{ (bathroom_sensor | default('')) | length == 0 }}"
+            sequence: []
           - alias: "Bathroom occupied — wait for it to clear before turning off lamp"
             conditions:
               - condition: state
