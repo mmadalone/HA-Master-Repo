@@ -1,5 +1,0 @@
-[SESSION] 2026-02-19 | type: audit | scope: coming_home.yaml v4.8 (re-audit) | style guide: v3.25 | status: complete
-[FINDING] changelog-length | ⚠️ WARNING | coming_home.yaml description | 4 changelog entries (v4.8, v4.7, v4.6, v4.5) — §11.3 step 2 says "last 3 changes"; drop v4.5 | Trivial fix: remove v4.5 entry from description
-[INTERPRETATION] changelog-length — this is a recurring drift issue: the earlier audit today trimmed from 7 to 3 (v4.6/v4.5/v4.4), then v4.7 and v4.8 remediations each correctly added their changelog entry, pushing count to 4. Mechanically correct behavior creating a minor violation. Suggest trimming v4.5 and accepting that any future version bump will need to drop the oldest entry.
-[SUMMARY] 34 checks executed | 33 PASS | 1 FAIL (1 finding) | 0 SKIP
-[ACTION] Findings ready for user review. Fix requires BUILD-mode escalation with build log.
