@@ -18,6 +18,12 @@ blueprint:
     remain ON until the new run completes its cleanup.
 
     ### Recent changes
+    - **v4.6:** Audit fix — bumped `min_version` from 2024.10.0 to 2025.4.0
+      (`assist_satellite.start_conversation` requires ≥ 2025.4) (AP-22),
+      added `source_url` for GitHub "Check for updates" support.
+    - **v4.5:** Audit fix — wrapped second entrance wait (entrance-clear) with
+      `if` pre-check to handle sensor already off, mirroring the v4.3 fix for
+      the first entrance wait (AP-20).
     - **v4.4:** Audit fix — added `continue_on_error: true` to logbook.log
       action that was blocking the cleanup path on failure (AP-06).
     - **v4.3:** Audit remediation — fixed entrance sensor race condition where
@@ -44,8 +50,9 @@ blueprint:
     - **v2:** Full style guide compliance — collapsible sections, modern syntax, aliases, variable scope fix
     - **v1:** Initial version
   domain: automation
+  source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/coming_home.yaml"
   homeassistant:
-    min_version: "2024.10.0"
+    min_version: "2025.4.0"
   input:
     # ===========================================================================
     # ① DETECTION & TRIGGERS
@@ -340,31 +347,38 @@ actions:
             target:
               entity_id: "{{ arrival_switches_list }}"
 
-  - alias: "Wait for entrance to clear — person moved past the door"
-    wait_for_trigger:
-      - trigger: state
-        entity_id: !input entrance_sensor
-        to: "off"
-    timeout: !input entrance_wait_timeout
-    continue_on_timeout: true
-
-  - alias: "Handle entrance-clear timeout — clean up and abort"
+  - alias: "Check if entrance already cleared (skip wait if so)"
     if:
-      - condition: template
-        value_template: "{{ not wait.completed }}"
-    then:
-      - alias: "Clean up temporary switches before aborting"
-        choose:
-          - alias: "Arrival switches are configured"
-            conditions:
-              - condition: template
-                value_template: "{{ arrival_switches_list | length > 0 }}"
-            sequence:
-              - alias: "Turn off temporary arrival switches before aborting"
-                action: switch.turn_off
-                target:
-                  entity_id: "{{ arrival_switches_list }}"
-      - stop: "Entrance never cleared — aborting and cleaning up."
+      - condition: state
+        entity_id: !input entrance_sensor
+        state: "off"
+    then: []
+    else:
+      - alias: "Wait for entrance to clear — person moved past the door"
+        wait_for_trigger:
+          - trigger: state
+            entity_id: !input entrance_sensor
+            to: "off"
+        timeout: !input entrance_wait_timeout
+        continue_on_timeout: true
+
+      - alias: "Handle entrance-clear timeout — clean up and abort"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - alias: "Clean up temporary switches before aborting"
+            choose:
+              - alias: "Arrival switches are configured"
+                conditions:
+                  - condition: template
+                    value_template: "{{ arrival_switches_list | length > 0 }}"
+                sequence:
+                  - alias: "Turn off temporary arrival switches before aborting"
+                    action: switch.turn_off
+                    target:
+                      entity_id: "{{ arrival_switches_list }}"
+          - stop: "Entrance never cleared — aborting and cleaning up."
 
   - alias: "Generate AI greeting via conversation agent"
     action: conversation.process
