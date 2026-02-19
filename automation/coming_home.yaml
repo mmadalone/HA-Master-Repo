@@ -26,29 +26,6 @@ blueprint:
       the first entrance wait (AP-20).
     - **v4.4:** Audit fix — added `continue_on_error: true` to logbook.log
       action that was blocking the cleanup path on failure (AP-06).
-    - **v4.3:** Audit remediation — fixed entrance sensor race condition where
-      wait_for_trigger missed already-on state (AP-20), added restart-safe
-      cleanup preamble to handle stale switches from interrupted runs (AP-23),
-      added missing aliases on 2 switch.turn_off actions (AP-11), added
-      logbook entry after satellite greeting for troubleshooting (AP-17).
-    - **v4.2:** Added defaults to person_entities, entrance_sensor,
-      conversation_agent, and assist_satellites so all four sections render
-      as collapsible in the HA UI. Inputs are technically optional but the
-      automation will not function without them.
-    - **v4.1:** Section structure — moved `person_entities` and `person_names`
-      into Section ① (detection), added explicit `collapsed: false` to
-      Section ① header per §3.2.
-    - **v4:** Audit remediation — fixed person identification bug (greets
-      triggering person, not all configured), hardened LLM response parsing
-      with chained `.get()` guards, made person_entities required, converted
-      arrival_switches to optional entity selector with choose guards,
-      added `collapsed: true` to sections ②③④, added `continue_on_error`
-      to reset switch actions, documented restart-mode cleanup gap.
-    - **v3:** Multi-person support — person selector accepts multiple entities,
-      new multiline text field for custom arrival names (overrides entity
-      friendly names). Reset switches now optional (empty = skip power-cycle).
-    - **v2:** Full style guide compliance — collapsible sections, modern syntax, aliases, variable scope fix
-    - **v1:** Initial version
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/coming_home.yaml"
   homeassistant:

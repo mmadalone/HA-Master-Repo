@@ -1,12 +1,3 @@
-[SESSION] 2026-02-19 | type: audit | scope: coming_home.yaml (single blueprint) | status: complete
-
-[FINDING] AP-06 | ⚠️ WARNING | coming_home.yaml:L383 | logbook.log action missing continue_on_error: true — if logbook service errors, post-conversation delay and final switch cleanup never execute, breaking the "guaranteed cleanup on every exit path" contract for arrival_switches
-
-[INTERPRETATION] AP-06 on coming_home.yaml:L383 — The logbook.log action at L383 sits between assist_satellite.start_conversation and the final cleanup delay+switch.turn_off sequence. It's a non-critical troubleshooting action with no fallback value. If it throws (e.g., entrance_sensor entity unavailable for entity_id field), the entire remaining sequence is blocked. The v4.3 changelog says this logbook entry was added for "troubleshooting silent satellite failures" — ironic if the troubleshooting action itself causes the failure mode it was meant to diagnose. Fix: add continue_on_error: true to the logbook.log action step.
-
-[INTERPRETATION] AP-20 on coming_home.yaml:L321 — The second wait_for_trigger (entrance to clear, to: "off") has no pre-check like the first wait does. However, at this point the sensor is definitionally "on" (just confirmed by prior logic), making an immediate "off" state astronomically unlikely. Combined with the timeout handler, this is not a practical AP-20 violation. Noted for completeness, no action recommended.
-
-[INTERPRETATION] AP-17 on coming_home.yaml:L363 — conversation.process has continue_on_error: true, which could mask LLM failures. However, the subsequent welcome_line variable provides a complete fallback chain (chained .get() guards → hardcoded fallback string), making this an intentional resilience pattern rather than an anti-pattern. The satellite call at L373 also has continue_on_error: true — defensible since there's no recovery action if the satellite is unreachable; execution must continue to cleanup regardless.
-
-[SUMMARY] 28 checks executed | 24 PASS | 1 FAIL (1 finding) | 3 SKIP | 0 ERROR
-[ACTION] Single ⚠️ WARNING finding — add continue_on_error: true to logbook.log action. Fix requires BUILD-mode escalation with build log.
+[SESSION] 2026-02-19 | type: audit | scope: coming_home.yaml | style guide: v3.25
+[ISSUE] coming_home.yaml | no-AP (§11.3) | ⚠️ WARNING | header | Description changelog has 7 version entries (v4.6–v1); §11.3 step 2 says "last 3 changes" — trim to v4.6/v4.5/v4.4 and move older history to README | Remove v4.3 through v1 entries from blueprint description
+[COMPLETED] 2026-02-19 | 1 finding (0 ERROR, 1 WARNING, 0 INFO)
