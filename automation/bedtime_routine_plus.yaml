@@ -23,6 +23,13 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.4:** Audit remediation — added explicit parentheses on `states(eid) | default()`
+    in all 4 sensor context builder templates to resolve Jinja2 operator precedence
+    ambiguity (L-2, ×4), fixed bathroom guard alias from "remaining" to "full" grace
+    period to match actual behavior (L-3, ×2), added `states[sensor] is defined` guard
+    on presence gate `last_changed` access to prevent KeyError on missing entities (M-1),
+    added parentheses on `presence_min_minutes | int(0)` in elapsed comparison.
+
     - **v5.4.3:** Audit remediation — removed `| default(0)` sentinel from
     countdown_minutes and final_countdown templates that caused 0-minute fallback
     instead of default_countdown when helper unavailable (M-1), added `| float(0)`
@@ -49,7 +56,7 @@ blueprint:
 
     - **v5.3.3:** Fix collapsed sections — bare `default:` (null) on entity/time
     selectors prevents HA from honoring `collapsed: true`. Changed 11 inputs
-    to `default: ""` across §①②③④⑨⑪. Fixed §① `collapsed: false` → `true`.
+    to `default: ""` across §①②③④⑨⑪.
     Time selectors use real defaults (23:00, 00:30) — empty string crashes `at:` triggers.
 
     - **v5.3.2:** Audit remediation — removed duplicate source_url key,
@@ -924,7 +931,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.3"
+  blueprint_version: "5.4.4"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -948,12 +955,17 @@ variables:
           {% if presence_min_minutes | int(0) == 0 %}
             {% set ns.results = ns.results + [true] %}
           {% else %}
-            {% set changed = states[sensor].last_changed | default(none) %}
-            {% if changed is none %}
-              {% set ns.results = ns.results + [true] %}
+            {% if states[sensor] is defined %}
+              {% set changed = states[sensor].last_changed | default(none) %}
+              {% if changed is none %}
+                {% set ns.results = ns.results + [true] %}
+              {% else %}
+                {% set elapsed = (now() - as_datetime(changed)).total_seconds() / 60 %}
+                {% set ns.results = ns.results + [(elapsed >= (presence_min_minutes | int(0)))] %}
+              {% endif %}
             {% else %}
-              {% set elapsed = (now() - as_datetime(changed)).total_seconds() / 60 %}
-              {% set ns.results = ns.results + [(elapsed >= presence_min_minutes | int(0))] %}
+              {# Entity missing from state machine — treat as passed #}
+              {% set ns.results = ns.results + [true] %}
             {% endif %}
           {% endif %}
         {% else %}
@@ -1446,7 +1458,7 @@ actions:
                       settling_sensor_context: >-
                         {% set ns = namespace(lines=[]) %}
                         {% for eid in settling_sensor_list %}
-                          {% set ns.lines = ns.lines + [eid ~ ': ' ~ states(eid) | default('unknown')] %}
+                          {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                         {% endfor %}
                         {{ ns.lines | join('\n') }}
 
@@ -1570,7 +1582,7 @@ actions:
                           name: "Bedtime Routine Plus"
                           message: "Bathroom clear and grace period satisfied. Turning off lamp."
                 default:
-                  - alias: "Bathroom recently cleared — wait remaining grace period"
+                  - alias: "Bathroom recently cleared — wait full grace period as safety margin"
                     delay: !input bathroom_grace_period
 
           # --- Optional final goodnight contextual TTS (preset mode) ---
@@ -1586,7 +1598,7 @@ actions:
                       gn_sensor_context: >-
                         {% set ns = namespace(lines=[]) %}
                         {% for eid in gn_sensor_list %}
-                          {% set ns.lines = ns.lines + [eid ~ ': ' ~ states(eid) | default('unknown')] %}
+                          {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                         {% endfor %}
                         {{ ns.lines | join('\n') }}
 
@@ -1995,7 +2007,7 @@ actions:
                               settling_sensor_context: >-
                                 {% set ns = namespace(lines=[]) %}
                                 {% for eid in settling_sensor_list %}
-                                  {% set ns.lines = ns.lines + [eid ~ ': ' ~ states(eid) | default('unknown')] %}
+                                  {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                                 {% endfor %}
                                 {{ ns.lines | join('\n') }}
 
@@ -2172,7 +2184,7 @@ actions:
                       name: "Bedtime Routine Plus"
                       message: "Bathroom clear and grace period satisfied. Turning off lamp."
             default:
-              - alias: "Bathroom recently cleared — wait remaining grace period"
+              - alias: "Bathroom recently cleared — wait full grace period as safety margin"
                 delay: !input bathroom_grace_period
 
       # --- Optional final goodnight contextual TTS (conversational modes) ---
@@ -2188,7 +2200,7 @@ actions:
                   gn_sensor_context: >-
                     {% set ns = namespace(lines=[]) %}
                     {% for eid in gn_sensor_list %}
-                      {% set ns.lines = ns.lines + [eid ~ ': ' ~ states(eid) | default('unknown')] %}
+                      {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
                     {% endfor %}
                     {{ ns.lines | join('\n') }}
 
