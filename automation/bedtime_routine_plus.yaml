@@ -1,3 +1,4 @@
+# bedtime_routine_plus.yaml — v5.4.10
 blueprint:
   name: "Bedtime routine Plus – LLM-driven goodnight (Kodi)"
   author: madalone
@@ -23,6 +24,13 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.10:** Audit fix — added `| bool(false)` and `| int(0)` guards
+    to bare `presence_require_all_val` and `presence_min_minutes` in
+    presence gate failure logbook message. Guarded `countdown_minutes`
+    variable against empty `countdown_helper` entity with length check.
+    Added `| default(\u0027curated\u0027)` to 8 bare `bedtime_media_mode`
+    comparisons in templates. Added top-of-file version comment.
+
     - **v5.4.9:** Audit fix — added `| bool(false)` guard to bare
     `presence_require_all_val` in presence gate template. Added routine-start
     logbook entry surfacing version, trigger type, mode, and weekend status
@@ -38,11 +46,7 @@ blueprint:
 
     - **v5.4.7:** Audit fixes — presence gate now covers weekend scheduled triggers,
     genre split strings use defensive `| default(\u0027\u0027)` guards, all boolean-ish
-    variables in conditions use explicit `| bool(false)` for type safety.
-
-    - **v5.4.6:** Made hardcoded 30-second media conversation settle delay
-    user-configurable via new `media_conversation_settle_delay` input in §④
-    (default: 30s, range: 10–120s). Added descriptive alias on delay step.'
+    variables in conditions use explicit `| bool(false)` for type safety.'
   domain: automation
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/bedtime_routine_plus.yaml
   homeassistant:
@@ -914,7 +918,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.9"
+  blueprint_version: "5.4.10"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1065,9 +1069,13 @@ variables:
   sleep_timer_method: !input tv_sleep_timer_method
 
   # --- Derived ---
-  is_preset_mode: "{{ bedtime_media_mode == 'preset' }}"
+  is_preset_mode: "{{ (bedtime_media_mode | default('curated')) == 'preset' }}"
   countdown_minutes: >-
-    {{ (states(countdown_helper) | default('')) | int(default_countdown) }}
+    {% if countdown_helper | default('') | length > 0 %}
+      {{ states(countdown_helper) | default('') | int(default_countdown | int(4)) }}
+    {% else %}
+      {{ default_countdown | int(4) }}
+    {% endif %}
   kodi_safe_content_type: >-
     {% set cid = kodi_preset_content_id | default('') %}
     {% if kodi_content_type == 'CHANNEL' and ('://' in cid or '/' in cid) %}
@@ -1194,8 +1202,8 @@ actions:
               message: >-
                 Presence gate: no presence detected. Routine skipped.
                 Sensors: {{ presence_sensors_val | join(', ') }}.
-                Mode: {{ 'require ALL' if presence_require_all_val else 'require ANY' }}.
-                Min duration: {{ presence_min_minutes }} min.
+                Mode: {{ 'require ALL' if (presence_require_all_val | bool(false)) else 'require ANY' }}.
+                Min duration: {{ presence_min_minutes | int(0) }} min.
 
           - alias: "Cleanup — turn off temporary switches before aborting"
             action: homeassistant.turn_off
@@ -1223,7 +1231,7 @@ actions:
       name: "Bedtime Routine Plus"
       message: >-
         v{{ blueprint_version }} started. Trigger: {{ trigger.id | default('unknown') }}.
-        Mode: {{ bedtime_media_mode }}. Countdown: {{ default_countdown }}min.
+        Mode: {{ bedtime_media_mode | default('curated') }}. Countdown: {{ default_countdown }}min.
         Weekend profile: {{ 'active' if weekend_profile_active | bool(false) else 'inactive' }}.
 
   - alias: "Reset speakers — power-cycle to clear stale connections (skipped if no switches configured)"
@@ -1718,7 +1726,7 @@ actions:
                           - condition: template
                             value_template: >-
                               {{ library_fetch_enabled | bool(false)
-                                 and bedtime_media_mode in ['freeform', 'both'] }}
+                                 and (bedtime_media_mode | default('curated')) in ['freeform', 'both'] }}
                         sequence:
                           # --- Call 1: In-Progress TV Shows ---
                           - alias: "Pre-fetch: get in-progress TV shows"
@@ -1873,7 +1881,7 @@ actions:
 
                         {# ---- Curated content (if curated or both mode) ---- #}
                         {% set ns_curated = namespace(items=[]) %}
-                        {% if bedtime_media_mode in ['curated', 'both'] and kodi_curated_text | default('') | length > 0 %}
+                        {% if (bedtime_media_mode | default('curated')) in ['curated', 'both'] and kodi_curated_text | default('') | length > 0 %}
                           {% set lines = kodi_curated_text.split('\n') | reject('eq', '') | list %}
                           {% for line in lines %}
                             {% set parts = line.split('=', 1) %}
@@ -1958,12 +1966,12 @@ actions:
                   - alias: "Build media selection prompt based on mode"
                     variables:
                       media_prompt: >-
-                        {% if bedtime_media_mode == 'curated' %}
+                        {% if (bedtime_media_mode | default('curated')) == 'curated' %}
                           Ask if they want bedtime content on the TV. Offer ONLY the curated options
                           from the catalog above. If they decline, say okay. If they pick one, call
                           the play_bedtime_kodi function with content_type "favourite" and the content_id
                           from the catalog. If they want none, that's fine.
-                        {% elif bedtime_media_mode == 'freeform' %}
+                        {% elif (bedtime_media_mode | default('curated')) == 'freeform' %}
                           Ask if they want bedtime content on the TV. They can request anything from
                           the library catalog above — a specific movie, continue a TV show, or pick
                           a favourite. Use the play_bedtime_kodi function with the appropriate
@@ -1988,9 +1996,9 @@ actions:
                     data:
                       preannounce: true
                       start_message: >-
-                        {% if bedtime_media_mode == 'curated' %}
+                        {% if (bedtime_media_mode | default('curated')) == 'curated' %}
                           Want something on the TV for bedtime? I've got your usual options ready.
-                        {% elif bedtime_media_mode == 'freeform' %}
+                        {% elif (bedtime_media_mode | default('curated')) == 'freeform' %}
                           Want something on the TV for bedtime? I've got your whole library to pick from.
                         {% else %}
                           Want something on the TV for bedtime? I've got your favorites — or anything from the library.
