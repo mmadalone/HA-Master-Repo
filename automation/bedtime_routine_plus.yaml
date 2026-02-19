@@ -23,6 +23,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v5.4.2:** Audit remediation — added continue_on_error on all 12 tts.speak
+    actions (H-1), added continue_on_error on speaker reset switch.turn_off/turn_on
+    (M-1). TTS and speaker reset failures no longer abort the routine.
+
     - **v5.4.1:** Audit remediation — fixed Jinja2 scoping bug where curated_items
     list was always empty due to {% set %} inside {% for %} loop (C-1), fixed
     identical scoping bug on genre-filtered movies list (C-2), added
@@ -914,7 +918,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.1"
+  blueprint_version: "5.4.2"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1218,6 +1222,7 @@ actions:
                       or reset_switches_val.get('label_id', []) | length > 0) }}
         sequence:
           - alias: "Power off reset switches"
+            continue_on_error: true
             action: switch.turn_off
             target: !input reset_switches
 
@@ -1225,6 +1230,7 @@ actions:
             delay: !input reset_switch_delay
 
           - alias: "Power on reset switches"
+            continue_on_error: true
             action: switch.turn_on
             target: !input reset_switches
 
@@ -1292,6 +1298,7 @@ actions:
                 value_template: "{{ voice_profile_val | default('') | string | length > 0 }}"
             sequence:
               - alias: "Speak bedtime announcement with custom voice profile"
+                continue_on_error: true
                 action: tts.speak
                 target:
                   entity_id: "{{ tts_engine_entity }}"
@@ -1302,6 +1309,7 @@ actions:
                     voice_profile: "{{ voice_profile_val }}"
         default:
           - alias: "Speak bedtime announcement with default TTS voice"
+            continue_on_error: true
             action: tts.speak
             target:
               entity_id: "{{ tts_engine_entity }}"
@@ -1478,6 +1486,7 @@ actions:
                                     value_template: "{{ voice_profile_val | default('') | string | length > 0 }}"
                                 sequence:
                                   - alias: "Speak settling-in with custom voice profile"
+                                    continue_on_error: true
                                     action: tts.speak
                                     target:
                                       entity_id: "{{ tts_engine_entity }}"
@@ -1488,6 +1497,7 @@ actions:
                                         voice_profile: "{{ voice_profile_val }}"
                             default:
                               - alias: "Speak settling-in with default TTS voice"
+                                continue_on_error: true
                                 action: tts.speak
                                 target:
                                   entity_id: "{{ tts_engine_entity }}"
@@ -1609,6 +1619,7 @@ actions:
                             value_template: "{{ voice_profile_val | default('') | string | length > 0 }}"
                         sequence:
                           - alias: "Speak goodnight with custom voice profile"
+                            continue_on_error: true
                             action: tts.speak
                             target:
                               entity_id: "{{ tts_engine_entity }}"
@@ -1619,6 +1630,7 @@ actions:
                                 voice_profile: "{{ voice_profile_val }}"
                     default:
                       - alias: "Speak goodnight with default TTS voice"
+                        continue_on_error: true
                         action: tts.speak
                         target:
                           entity_id: "{{ tts_engine_entity }}"
@@ -2023,6 +2035,7 @@ actions:
                                             value_template: "{{ voice_profile_val | default('') | string | length > 0 }}"
                                         sequence:
                                           - alias: "Speak settling-in with custom voice profile"
+                                            continue_on_error: true
                                             action: tts.speak
                                             target:
                                               entity_id: "{{ tts_engine_entity }}"
@@ -2033,6 +2046,7 @@ actions:
                                                 voice_profile: "{{ voice_profile_val }}"
                                     default:
                                       - alias: "Speak settling-in with default TTS voice"
+                                        continue_on_error: true
                                         action: tts.speak
                                         target:
                                           entity_id: "{{ tts_engine_entity }}"
@@ -2074,6 +2088,7 @@ actions:
                 value_template: "{{ voice_profile_val | default('') | string | length > 0 }}"
             sequence:
               - alias: "Speak goodnight message with custom voice profile"
+                continue_on_error: true
                 action: tts.speak
                 target:
                   entity_id: "{{ tts_engine_entity }}"
@@ -2084,6 +2099,7 @@ actions:
                     voice_profile: "{{ voice_profile_val }}"
         default:
           - alias: "Speak goodnight message with default TTS voice"
+            continue_on_error: true
             action: tts.speak
             target:
               entity_id: "{{ tts_engine_entity }}"
@@ -2205,6 +2221,7 @@ actions:
                         value_template: "{{ voice_profile_val | default('') | string | length > 0 }}"
                     sequence:
                       - alias: "Speak goodnight with custom voice profile"
+                        continue_on_error: true
                         action: tts.speak
                         target:
                           entity_id: "{{ tts_engine_entity }}"
@@ -2215,6 +2232,7 @@ actions:
                             voice_profile: "{{ voice_profile_val }}"
                 default:
                   - alias: "Speak goodnight with default TTS voice"
+                    continue_on_error: true
                     action: tts.speak
                     target:
                       entity_id: "{{ tts_engine_entity }}"
