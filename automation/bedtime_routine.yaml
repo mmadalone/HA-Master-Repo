@@ -18,6 +18,12 @@ blueprint:
 
     ### Recent changes
 
+    - **v4.2.1:** Audit fixes — AP-16: presence duration gate used
+    state_attr() for last_changed (non-functional, now fixed via
+    states[].last_changed); AP-16: added default() guard on states(tv)
+    in IR guard (×2); AP-44: explicit defaults on all inputs, collapsed
+    sections ②–⑦, reasonable time defaults (23:00/01:00)
+
     - **v4.2.0:** Weekend overrides — run_days day-of-week gate, optional
     weekend profile with separate bedtime schedule, cross-midnight day
     attribution via effective_day_key. Manual triggers bypass all gates.
@@ -50,7 +56,7 @@ blueprint:
           description: >
             Time to automatically trigger bedtime. Leave empty to disable
             the scheduled trigger.
-          default:
+          default: "23:00:00"
           selector:
             time: {}
 
@@ -60,7 +66,7 @@ blueprint:
             An input_boolean entity exposed to voice assistants (e.g. Alexa).
             Toggling it ON triggers the bedtime routine. Leave empty to disable
             manual triggering.
-          default:
+          default: ""
           selector:
             entity:
               domain: input_boolean
@@ -146,6 +152,7 @@ blueprint:
     devices:
       name: "② Devices"
       icon: mdi:television-off
+      collapsed: true
       description: >
         TV, lights, and speaker switches involved in the bedtime shutdown.
       input:
@@ -154,7 +161,7 @@ blueprint:
           description: >
             The TV to stop/turn off via media_player.turn_off (CEC/software).
             Leave empty if your TV is IR-only.
-          default:
+          default: ""
           selector:
             entity:
               domain: media_player
@@ -166,7 +173,7 @@ blueprint:
             sequences, multi-step power-off, or any hardware-specific logic.
             The blueprint fires it with script.turn_on; the script handles
             the rest. Leave empty if not needed.
-          default:
+          default: ""
           selector:
             entity:
               domain: script
@@ -177,7 +184,7 @@ blueprint:
             A remote entity (e.g. Broadlink, SmartIR) for sending a direct
             IR power-off command. Used with the IR command below. Leave empty
             if not needed.
-          default:
+          default: ""
           selector:
             entity:
               domain: remote
@@ -208,6 +215,7 @@ blueprint:
             Lights or switches to kill immediately. Use area or label targeting
             to auto-include future devices. The living room lamp (below) is
             excluded separately — it stays on during the countdown.
+          default: {}
           selector:
             target:
               entity:
@@ -220,6 +228,7 @@ blueprint:
           description: >
             The lamp that stays on during the countdown and is turned off last,
             after the bathroom guard clears. Can be a light or a switch (smart plug).
+          default: ""
           selector:
             entity:
               domain:
@@ -265,6 +274,7 @@ blueprint:
     conversation:
       name: "③ AI conversation"
       icon: mdi:robot-happy
+      collapsed: true
       description: >
         Conversation agent, satellite, and bedtime announcement settings.
       input:
@@ -282,6 +292,7 @@ blueprint:
           name: Assist satellites
           description: >
             Voice PE / Assist satellites that deliver the bedtime conversation.
+          default: {}
           selector:
             target:
               entity:
@@ -291,6 +302,7 @@ blueprint:
           name: TTS engine
           description: >
             Text-to-speech engine for spoken messages (e.g. ElevenLabs, Piper).
+          default: ""
           selector:
             entity:
               domain: tts
@@ -369,6 +381,7 @@ blueprint:
     audiobook:
       name: "④ Audiobook"
       icon: mdi:book-open-page-variant
+      collapsed: true
       description: >
         Audiobook playback settings. Conversational modes (curated/freeform/both)
         use an LLM satellite conversation for selection. Preset mode plays a
@@ -379,6 +392,7 @@ blueprint:
           description: >
             The MA player for audiobook playback. Must be a Music Assistant
             media_player entity.
+          default: ""
           selector:
             entity:
               filter:
@@ -462,6 +476,7 @@ blueprint:
     timing_and_guards:
       name: "⑤ Bathroom guard & timing"
       icon: mdi:timer-sand
+      collapsed: true
       description: >
         Bathroom occupancy detection, grace periods, and cleanup timing.
       input:
@@ -470,6 +485,7 @@ blueprint:
           description: >
             Binary sensor that detects bathroom occupancy. The lamp stays on
             while this sensor is occupied, with a grace period after it clears.
+          default: ""
           selector:
             entity:
               domain: binary_sensor
@@ -499,6 +515,7 @@ blueprint:
             An input_number helper that the conversation agent uses to set
             the negotiated countdown duration (via an exposed script).
             Create one with min=1, max=30, step=1.
+          default: ""
           selector:
             entity:
               domain: input_number
@@ -534,6 +551,7 @@ blueprint:
     settling_tts:
       name: "⑥ Settling-in TTS (preset mode)"
       icon: mdi:weather-night
+      collapsed: true
       description: >
         Optional contextual TTS announcement after the audiobook starts playing
         in preset mode. The LLM receives sensor states for context — e.g.
@@ -579,6 +597,7 @@ blueprint:
     goodnight_context_tts:
       name: "⑦ Final goodnight TTS (preset mode)"
       icon: mdi:moon-waning-crescent
+      collapsed: true
       description: >
         Optional contextual goodnight announcement after the bathroom guard
         clears in preset mode. The LLM receives sensor states and generates
@@ -680,7 +699,7 @@ blueprint:
             weekend profile. Can differ from the weekday schedule —
             e.g. 01:00 for late weekend nights. Leave empty to disable
             the weekend time trigger.
-          default:
+          default: "01:00:00"
           selector:
             time: {}
 
@@ -710,7 +729,7 @@ variables:
           {% if presence_min_minutes | int(0) == 0 %}
             {% set ns.results = ns.results + [true] %}
           {% else %}
-            {% set changed = state_attr(sensor, 'last_changed') | default(none) %}
+            {% set changed = states[sensor].last_changed | default(none) %}
             {% if changed is none %}
               {% set ns.results = ns.results + [true] %}
             {% else %}
@@ -1040,7 +1059,7 @@ actions:
                       {% if tv in ['', 'none', 'None'] %}
                         true
                       {% else %}
-                        {{ states(tv) not in ['off', 'standby', 'unavailable'] }}
+                        {{ states(tv) | default('off') not in ['off', 'standby', 'unavailable'] }}
                       {% endif %}
                 sequence:
                   - alias: "Send IR power-off command via remote.send_command"
@@ -1356,7 +1375,7 @@ actions:
                   {% if tv in ['', 'none', 'None'] %}
                     true
                   {% else %}
-                    {{ states(tv) not in ['off', 'standby', 'unavailable'] }}
+                    {{ states(tv) | default('off') not in ['off', 'standby', 'unavailable'] }}
                   {% endif %}
             sequence:
               - alias: "Send IR power-off command via remote.send_command"
