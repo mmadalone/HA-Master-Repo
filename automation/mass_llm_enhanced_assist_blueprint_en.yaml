@@ -3,7 +3,7 @@ blueprint:
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
-  version: '13'
+  version: '14'
   # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/mass_llm_enhanced_assist-header.jpeg)
@@ -15,6 +15,10 @@ blueprint:
     and player-based targeting with automatic fallback to default player.
 
     ### Recent changes
+
+    - **v14:** Defensive template hardening — default guards on
+    trigger.sentence in LLM prompt, area_entities() fallback filters,
+    trace comment, URI override trace-visibility note.
 
     - **v13:** Fix regex injection in fuzzy target matching, add version
     field, rename trigger input to avoid shadowing, explicit from_json
@@ -360,7 +364,7 @@ blueprint:
             album, or playlist, provide details as appropriate without assuming unspecified
             specifics.
 
-            This is the voice command query provided by the user: "{{ trigger.sentence }}"
+            This is the voice command query provided by the user: "{{ trigger.sentence | default('') }}"
 
             In "media_description", always use second-person pronouns (your, yours)
             when referring to the user's media — never first-person (my, mine).
@@ -879,7 +883,7 @@ actions:
       rescued_players: >-
         {% set ns = namespace(players=[]) %}
         {% for aid in tainted_area_ids %}
-          {% set area_players = area_entities(aid)
+          {% set area_players = area_entities(aid) | default([], true)
              | select('match', 'media_player\\.')
              | reject('in', blacklisted_players | default([], true))
              | list %}
@@ -932,6 +936,9 @@ actions:
   - alias: "5j · Apply URI override mappings"
     variables:
       uri_override_map_raw: !input uri_override_map
+      # uri_override_matched — not consumed downstream; exists solely for
+      # HA trace visibility so you can see at a glance whether a URI override
+      # was applied without expanding final_media_id logic.
       uri_override_matched: >-
         {%- set overrides = uri_override_map_raw | default('', true) | trim -%}
         {%- if overrides | length == 0 -%}
@@ -1064,7 +1071,7 @@ actions:
               {% set ns.entities = ns.entities + [eid] %}
             {% endfor %}
             {% for aid in target.get('area_id', []) %}
-              {% set ns.entities = ns.entities + (area_entities(aid)
+              {% set ns.entities = ns.entities + (area_entities(aid) | default([], true)
                  | select('match', 'media_player\\.')
                  | list) %}
             {% endfor %}
@@ -1192,4 +1199,4 @@ max: 10
 max_exceeded: silent
 
 trace:
-  stored_traces: 15
+  stored_traces: 15  # Higher than default 5 — voice automations benefit from deeper history
