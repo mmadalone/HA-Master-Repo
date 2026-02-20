@@ -3,7 +3,7 @@ blueprint:
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
-  version: '14'
+  version: '15'
   # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/mass_llm_enhanced_assist-header.jpeg)
@@ -15,6 +15,10 @@ blueprint:
     and player-based targeting with automatic fallback to default player.
 
     ### Recent changes
+
+    - **v15:** Add `| default([])` guards on all `integration_entities()`
+    calls — prevents cascade failure if Music Assistant integration is
+    temporarily unavailable when a voice command fires.
 
     - **v14:** Defensive template hardening — default guards on
     trigger.sentence in LLM prompt, area_entities() fallback filters,
@@ -623,22 +627,22 @@ variables:
   # area/player names may contain commas. Original comma-separated
   # versions are kept for LLM prompt readability.
   area_names: >-
-    {{ integration_entities('music_assistant')
+    {{ integration_entities('music_assistant') | default([])
        | map('area_name')
        | reject('none')
        | join(', ') }}
   area_names_safe: >-
-    {{ integration_entities('music_assistant')
+    {{ integration_entities('music_assistant') | default([])
        | map('area_name')
        | reject('none')
        | join('|||') }}
   player_names: >-
-    {{ integration_entities('music_assistant')
+    {{ integration_entities('music_assistant') | default([])
        | map('state_attr', 'friendly_name')
        | reject('none')
        | join(', ') }}
   player_names_safe: >-
-    {{ integration_entities('music_assistant')
+    {{ integration_entities('music_assistant') | default([])
        | map('state_attr', 'friendly_name')
        | reject('none')
        | join('|||') }}
@@ -771,7 +775,7 @@ actions:
               {% endif %}
             {% endfor %}
           {% endfor %}
-          {{ integration_entities('music_assistant')
+          {{ integration_entities('music_assistant') | default([])
              | expand
              | selectattr('name', 'in', ns.matched | unique | list)
              | map(attribute='entity_id')
@@ -889,7 +893,7 @@ actions:
              | list %}
           {# Only keep MA players (filter by integration) #}
           {% for p in area_players %}
-            {% if p in integration_entities('music_assistant') %}
+            {% if p in (integration_entities('music_assistant') | default([])) %}
               {% set ns.players = ns.players + [p] %}
             {% endif %}
           {% endfor %}
