@@ -3,7 +3,7 @@ blueprint:
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
-  # Version: 17 — tracked in description changelog, not as a key
+  # Version: 18 — tracked in description changelog, not as a key
   # (HA blueprint schema does not allow 'version' as a top-level key)
   # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
@@ -16,6 +16,10 @@ blueprint:
     and player-based targeting with automatic fallback to default player.
 
     ### Recent changes
+
+    - **v18:** Restore `| reject(''none'')` guard on `area_list` in step 9
+    response assembly for consistency with `player_list` — prevents
+    theoretical race if an area is deleted mid-execution.
 
     - **v17:** Add missing `| bool` guard on `divert_enabled` in blacklist
     divert logic (step 5i-h). Add `| bool` guards to all `expose_areas`
@@ -1120,7 +1124,7 @@ actions:
       resp_player: !input player_response
       resp_area_player: !input area_and_player_response
       area_list: >-
-        {{ target.get('area_id', []) | map('area_name') | list }}
+        {{ target.get('area_id', []) | map('area_name') | reject('none') | list }}
       area_info: >-
         {% if area_list | count == 0 %}
         {% elif area_list | count > 2 %}
