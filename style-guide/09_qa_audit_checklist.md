@@ -124,7 +124,7 @@ action:
 | Sub-devices require HA 2025.7+ | 04_esphome_patterns.md | ESPHome changelog |
 | `ask_question` full capabilities require HA 2025.7+ | 08_voice_assistant_pattern.md | HA release notes |
 | TTS streaming requires HA 2025.10+ | 08_voice_assistant_pattern.md | HA release notes |
-| MCP servers introduced HA 2025.2+, improved native support 2025.9+ | 03_conversation_agents.md | HA release notes |
+| MCP servers introduced HA 2025.2+ | 03_conversation_agents.md | HA release notes |
 | `data_template` deprecated ~HA 0.115/2020, no removal date announced | 06_anti_patterns_and_workflow.md | HA release notes |
 
 **Procedure:**
@@ -629,7 +629,7 @@ Then verify each one resolves to an actual target. Dangling references are ERROR
 
 **Checks for 03_conversation_agents.md:**
 - [ ] Dispatcher pattern has implementation skeleton
-- [ ] MCP servers documented as tool source (HA 2025.2+, improved 2025.9+)
+- [ ] MCP servers documented as tool source (HA 2025.2+)
 - [ ] Confirm-then-execute pattern included (using `ask_question` or `conversation_id`)
 - [ ] Agent naming rationale explains persona vs. scenario trade-off
 - [ ] Max token budget guidance for `extra_system_prompt`
