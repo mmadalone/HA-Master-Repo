@@ -1,8 +1,8 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.26 — 2026-02-20** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.27 — 2026-02-20** · Bump this on structural changes (new files, section renumbering, directive additions).
 
-> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~110K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
+> **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~111K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
 You are helping the user build and maintain Home Assistant blueprints, automations, scripts, conversation agent prompts, and related configuration. You have direct filesystem access to their HA config via SMB mount.
 
@@ -20,7 +20,7 @@ Every task falls into one of three modes. The mode determines which style guide 
 |------|----------------|------------|-----------------|-------------|
 | **🔨 BUILD** | "create", "build", "add X to Y", "implement", "write", "new blueprint/script/automation" | Core Philosophy (§1) + relevant pattern doc(s) + Anti-Patterns & Workflow (§10, §11) | Everything — git versioning, build log gate (AP-39, every edit), header image gate (AP-15), pre-flight, anti-pattern scan, security checklist | ~15K |
 | **🔧 TROUBLESHOOT** | "why isn't", "debug", "broken", "not working", "fix this", "error", "trace shows" | Troubleshooting (§13) + relevant domain pattern doc (optional, on demand) | Git versioning (if files are edited). Skip build logs, image gate, compliance sweep, anti-pattern scan | ~6–8K |
-| **🔍 AUDIT** | "review", "check", "audit", "scan", "sanity check", "compliance", "violations" | Anti-Patterns §10 (scan tables + security checklist §10.5) + §11.2 (review workflow) + §15.4 (audit tiers) | Security checklist (S1–S8), structured issue reporting. **Mandatory log pairs** (§11.8.2) for every check command — unconditional, even with zero findings. No file edits — report only. Fixes require BUILD escalation. **Tier selection:** quick-pass (default) or deep-pass (§15.4). Deep-pass uses sectional chunking (§11.15). | ~5–7K (quick) · ~12–15K (deep, staged) |
+| **🔍 AUDIT** | "review", "check", "audit", "scan", "sanity check", "compliance", "violations" | Anti-Patterns §10 (scan tables + security checklist §10.5) + §11.2 (review workflow) + §15.4 (audit tiers) | Security checklist (S1–S8), structured issue reporting. **Mandatory logging** — format depends on audit type: §15.2 QA commands → log pairs (§11.8.2), unconditional even with zero findings; §11.2 code reviews → audit log (§11.8.1), conditional on findings. No file edits — report only. Fixes require BUILD escalation. **Tier selection:** quick-pass (default) or deep-pass (§15.4). Deep-pass uses sectional chunking (§11.15). | ~5–7K (quick) · ~12–15K (deep, staged) |
 
 **Mode escalation — TROUBLESHOOT → BUILD:**
 When a troubleshooting session requires editing YAML to fix the issue, escalate to BUILD mode *before writing the first line*. On escalation:
@@ -98,7 +98,7 @@ The section numbers are preserved across files for cross-referencing.
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
 | [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~12.7K | QA audit checks, trigger rules, cross-reference index, audit tiers (§15.4), and user commands for guide maintenance |
 
-*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9). Total across all files: ~114K.*
+*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9). Total across all files: ~111K.*
 
 > **Note on section numbering:** Section numbers are preserved from the original unified guide and are non-sequential across files. This is intentional — it allows stable cross-references (e.g., "see §5.1") regardless of how files are reorganized.
 
@@ -126,7 +126,7 @@ The section numbers are preserved across files for cross-referencing.
   - §1.11 — Violation report severity taxonomy (ERROR / WARNING / INFO)
   - §1.12 — Directive precedence — when MANDATORYs conflict
   - §1.13 — Available tools and when to use them (MANDATORY) — §1.13.1 file ops, §1.13.2 HA ops, §1.13.3 known quirks, §1.13.4 decision rules
-  - §1.14 — Session discipline and context hygiene
+  - §1.14 — Session discipline and context hygiene — §1.14.1 ship it or lose it, §1.14.2 post-task state checkpoint, §1.14.3 reference don't repeat, §1.14.4 artifact-first, §1.14.5 trim your toolkit, §1.14.6 session scoping
 - **§2** — Git Versioning (Mandatory)
   - §2.1 — Scope — what gets versioned
   - §2.2 — Git workflow (checkpoint → edit → commit)

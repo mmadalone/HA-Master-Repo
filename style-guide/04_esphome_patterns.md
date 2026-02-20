@@ -189,7 +189,7 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-# OTA MD5 password auth was removed in 2026.1.0 (SHA256 still works) — see §6.6
+# OTA MD5 password auth deprecated in 2025.10.0, removed in 2026.1.0 (SHA256 still works) — see §6.6
 # ota:
 #   password: !secret ota_password
 
@@ -204,7 +204,7 @@ api_key_living_room: "WdHg+kIxPeedWAG19kSAtqGMF7nK57PHZ07JImVHKZw="
 **What MUST be in secrets:**
 - `api.encryption.key` — API encryption keys are basically passwords. Inline keys get exposed when sharing configs, screenshots, or asking for help on forums.
 - `wifi.ssid` and `wifi.password`
-- `ota.password` (legacy only — deprecated, removal in 2026.1.0; prefer API encryption key)
+- `ota.password` (legacy only — deprecated in 2025.10.0, removed in 2026.1.0; prefer API encryption key)
 - Any external API keys, tokens, or URLs with embedded credentials
 
 **Naming convention for per-device secrets:** `<secret_type>_<device_location>` (e.g., `api_key_workshop`, `api_key_living_room`). This keeps them identifiable without being device-hostname-specific.
@@ -286,13 +286,13 @@ wifi:
 ```yaml
 ota:
   - platform: esphome
-    # MD5 password auth was removed in 2026.1.0; passwords now require SHA256.
+    # MD5 password auth deprecated in 2025.10.0, removed in 2026.1.0; passwords now require SHA256.
     # Prefer encryption-based auth via the API encryption key for new configs.
     # Only use password if you have a specific reason:
     # password: !secret ota_password
 ```
 
-> ⚠️ **OTA auth changes (ESPHome 2026.1.0):** OTA **MD5** password authentication was removed in ESPHome 2026.1.0. OTA passwords still work but now require **SHA256** (the new default). The `api.encryption.key` already secures OTA uploads, so for new configs prefer encryption-based auth and skip the OTA password entirely. Only set `ota.password` if you have a specific reason (e.g., OTA from a device without the API key).
+> ⚠️ **OTA auth changes (ESPHome 2025.10.0 → 2026.1.0):** OTA **MD5** password authentication was deprecated in ESPHome 2025.10.0 (when SHA256 became the default) and removed in ESPHome 2026.1.0. OTA passwords still work but now require **SHA256**. The `api.encryption.key` already secures OTA uploads, so for new configs prefer encryption-based auth and skip the OTA password entirely. Only set `ota.password` if you have a specific reason (e.g., OTA from a device without the API key).
 
 **If using `web_server` for debugging**, you MUST add its OTA platform separately — since ESPHome 2025.7.0, the web_server's OTA functionality was extracted into its own platform:
 

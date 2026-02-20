@@ -143,7 +143,7 @@ To prevent runaway generation, observe these hard ceilings:
 | **Complex** | Multi-trigger, parallel actions, 3+ template conditions, state machine behavior, or cross-entity coordination. Example: bedtime negotiator with LLM conversation + multi-room lights + music duck/restore. | **Must decompose** — extract scripts, use helpers for state, discuss architecture with user before generating. |
 
 ### 1.9 Token budget management — load only what you need
-This style guide is ~110K tokens across 10 files (plus master index). **Never load all files for every task.** AI context is expensive — every token spent on irrelevant rules is a token not available for the user's actual content.
+This style guide is ~111K tokens across 10 files (plus master index). **Never load all files for every task.** AI context is expensive — every token spent on irrelevant rules is a token not available for the user's actual content.
 
 **Priority tiers — what to load and when:**
 
@@ -169,7 +169,7 @@ This style guide is ~110K tokens across 10 files (plus master index). **Never lo
 | `07_troubleshooting.md` | ~6.9K | ~3.0K (load specific §13.X on demand) |
 | `08_voice_assistant_pattern.md` | ~11.8K | ~5.3K (relevant layers only) |
 | `09_qa_audit_checklist.md` | ~12.7K | ~6.4K (check definitions only, skip grep appendix) |
-| **Total if everything loaded** | **~110K** | **Never do this** |
+| **Total if everything loaded** | **~111K** | **Never do this** |
 
 **Budget ceiling:** Aim to keep total loaded style guide content under ~15K tokens for any single task. That leaves room for the user's actual content, tool outputs, and conversation history. If a cross-domain task pushes past ~15K, apply drop rules below.
 
@@ -319,10 +319,10 @@ Claude has access to multiple MCP tool servers. Using the wrong one wastes time,
 
 AI conversations are expensive real estate. Every token spent repeating yourself, holding finished YAML in chat, or running tools you don't need is a token stolen from the actual work. This section governs how to keep sessions lean, recoverable, and productive.
 
-**1. Ship it or lose it — write to disk immediately.**
+#### 1.14.1 Ship it or lose it — write to disk immediately
 When a file is finalized (user approved or explicitly requested), write it to disk in the same turn. Don't hold finished YAML in conversation for a "final review pass" unless the user asks for one. Conversation history is volatile — finished work belongs on the filesystem, not in a chat bubble that's one browser crash away from oblivion. This applies to configs, build logs, violation reports, and documentation alike.
 
-**2. Post-task state checkpoint.**
+#### 1.14.2 Post-task state checkpoint
 After completing any significant deliverable (new blueprint, multi-file edit, audit sweep), produce a brief state summary:
 
 - **Decisions made** — what was agreed, what trade-offs were accepted.
@@ -331,7 +331,7 @@ After completing any significant deliverable (new blueprint, multi-file edit, au
 
 This is the *output* counterpart to §11.6's *input* checkpoint. §11.6 says "summarize before you build." This says "summarize after you ship." Together they bookend the work. For multi-step builds with build logs (§11.8), update the log's `Current State` section instead of producing a separate summary.
 
-**3. Reference, don't repeat.**
+#### 1.14.3 Reference, don't repeat
 Once a code block, config snippet, or design decision has been established in the conversation, refer to it by name or location — don't paste it again. Examples:
 
 - ✅ *"Using the trigger block from chunk 1 above..."*
@@ -340,7 +340,7 @@ Once a code block, config snippet, or design decision has been established in th
 
 This extends §1.9's "never echo back file contents" from tool outputs to all conversation content. If the user needs to see something again, they can scroll up or you can re-read the file. Don't burn 500 tokens on a courtesy repost.
 
-**4. Artifact-first — files over explanation.**
+#### 1.14.4 Artifact-first — files over explanation
 When the deliverable is code, write the file. Don't narrate 50 lines of YAML across three conversational messages when a single file write does the job in one turn. The reasoning-first directive (§1.10) still applies — explain your approach *before* generating — but once the plan is agreed, go straight to the artifact. Save conversational explanation for things that went wrong, surprising decisions mid-generation, or post-delivery context the user needs.
 
 | Situation | Do this | Not this |
@@ -349,7 +349,7 @@ When the deliverable is code, write the file. Don't narrate 50 lines of YAML acr
 | Applying 5 fixes to an existing file | Make the edits, list what changed | Explain each fix in a paragraph, then make the edits, then summarize again |
 | User asks "what did you change?" | Reference the git diff or list changes concisely | Paste the before and after side by side |
 
-**5. Trim your toolkit.**
+#### 1.14.5 Trim your toolkit
 Not every session needs every tool. If you're doing pure YAML config work, web search and image generation are dead weight in the context window. Mentally scope your active tools at session start:
 
 | Task type | Active tools | Idle tools |
@@ -361,7 +361,7 @@ Not every session needs every tool. If you're doing pure YAML config work, web s
 
 This isn't about disabling anything — it's about not reaching for tools that add latency and context overhead when they're irrelevant to the task. If a YAML session suddenly needs web search (e.g., verifying an integration's API), use it. But don't proactively search for things you already know.
 
-**6. Session scoping — one major deliverable at a time.**
+#### 1.14.6 Session scoping — one major deliverable at a time
 Complex builds (new blueprints, multi-file refactors, full audits) should be one-per-session. Don't start a second blueprint in the same conversation where you just finished a 200-line bedtime automation — the context is already loaded with decisions, partial reads, and tool outputs from the first build. Start a fresh session. Quick follow-ups ("fix this one line," "rename that helper") are fine to chain.
 
 **The turn threshold:**

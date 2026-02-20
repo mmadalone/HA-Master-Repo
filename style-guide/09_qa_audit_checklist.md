@@ -120,7 +120,7 @@ action:
 | `conversation_agent` selector requires HA 2024.2+ | 01_blueprint_patterns.md | HA release notes |
 | `collapsed: true` requires HA 2024.6+ | 01_blueprint_patterns.md | HA release notes |
 | Modern blueprint syntax requires HA 2024.10+ | 01_blueprint_patterns.md | HA release notes |
-| Dual wake word support requires HA 2025.10+ | 04_esphome_patterns.md | ESPHome changelog |
+| Dual wake word support requires HA 2025.10+ | 04_esphome_patterns.md | HA release notes |
 | Sub-devices require HA 2025.7+ | 04_esphome_patterns.md | ESPHome changelog |
 | `ask_question` full capabilities require HA 2025.7+ | 08_voice_assistant_pattern.md | HA release notes |
 | TTS streaming requires HA 2025.10+ | 08_voice_assistant_pattern.md | HA release notes |
