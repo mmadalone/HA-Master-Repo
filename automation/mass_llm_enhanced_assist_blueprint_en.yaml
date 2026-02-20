@@ -18,17 +18,6 @@ blueprint:
     - **v12:** Style guide compliance — conversation_agent selector,
     section key/name conventions, === divider style.
 
-    - **v11:** Pronoun fix — voice responses now say "your liked songs"
-    instead of echoing back "my liked songs". LLM prompt instructs
-    second-person pronouns in media_description; regex_replace safety
-    net on media_info as fallback.
-
-    - **v10:** URI override layer — map voice keywords to exact Music
-    Assistant URIs, bypassing search. Configurable keyword=uri mappings
-    for playlists and media that are hard to find by name (e.g.,
-    "liked songs", "chill vibes"). New Stage 5 input section.
-
-
     ### Blueprint setup
 
     #### Required
@@ -199,7 +188,7 @@ blueprint:
 
     player_protection:
       name: "③ Player blacklist & divert"
-      icon: mdi:shield-music
+      icon: mdi:play-box-lock
       description: >
         Permanently exclude players from receiving music via this automation.
         Optionally divert to a fallback player instead.
@@ -823,6 +812,10 @@ actions:
   # =========================================================================
   # ③ PLAYER BLACKLIST & DIVERT
   # =========================================================================
+  # Depends on: target_raw (from Step 5). HA automation variables persist
+  # across action blocks, so target_raw is available here even though it
+  # was set in a prior variables block. Produces: target (consumed by
+  # Steps 6–10).
 
   # 5i — Filter out blacklisted players unconditionally.
   #      When an area contains a blacklisted player, expands the area
@@ -911,6 +904,8 @@ actions:
   # =========================================================================
   # ④ URI OVERRIDE RESOLUTION
   # =========================================================================
+  # Depends on: llm_action_data_media_id (from Step 5). Produces:
+  # final_media_id (consumed by Step 7 play_media calls).
 
   # 5j — If the LLM-extracted media_id matches a keyword in the user's
   #      override map, substitute the exact URI. This bypasses MA search
@@ -959,6 +954,10 @@ actions:
   # =========================================================================
   # ⑤ PLAYBACK
   # =========================================================================
+  # Depends on: target (from Step 5i), final_media_id (from Step 5j),
+  # llm_action_data_* variables (from Step 5), enqueue_mode and
+  # play_continuously (from Step 5). Produces: play_succeeded
+  # (consumed by Step 10).
 
   # 6 — Gate: only attempt playback if we resolved at least one target.
   - alias: "6 · Play music only if target was resolved"
@@ -1060,6 +1059,9 @@ actions:
   # =========================================================================
   # ⑥ BUILD AND RETURN VOICE RESPONSE
   # =========================================================================
+  # Depends on: target (from Step 5i), llm_result (from Step 3),
+  # llm_action_data_media_id (from Step 5), shuffle (top-level),
+  # play_succeeded (from Step 8b).
 
   # 9 — Assemble response variables. Shuffle word logic lives here (not
   #     in response input defaults) so translators don't need Jinja.
