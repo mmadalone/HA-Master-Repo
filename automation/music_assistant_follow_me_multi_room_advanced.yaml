@@ -40,6 +40,7 @@ blueprint:
       changelog.
 
   domain: automation
+  source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/music_assistant_follow_me_multi_room_advanced.yaml"
   homeassistant:
     min_version: "2024.10.0"
 
@@ -441,6 +442,9 @@ blueprint:
           default: ""
           selector:
             entity:
+              domain:
+                - input_boolean
+                - binary_sensor
               multiple: false
 
 mode: restart
