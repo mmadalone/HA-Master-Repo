@@ -103,11 +103,12 @@ blueprint:
       name: "② TTS & audio"
       icon: mdi:volume-high
       description: TTS engine, output player, and volume settings.
-      collapsed: false
+      collapsed: true
       input:
 
         tts_engine:
           name: TTS engine (required)
+          default: ""
           description: >
             TTS entity to use with tts.speak. This is required —
             the blueprint cannot function without a TTS engine.
@@ -117,6 +118,7 @@ blueprint:
 
         tts_output_player:
           name: TTS output media_player (required)
+          default: ""
           description: >
             media_player where the TTS wake-up announcement will play.
             This is required — the blueprint cannot function without
@@ -351,7 +353,7 @@ actions:
 
   - alias: "Default wake message"
     variables:
-      wake_message: "{{ v_tts_message }}"
+      wake_message: "{{ v_tts_message | default('good morning, time to get up.', true) }}"
 
   # Compute TTS options once — avoids duplicating the voice_profile choose block
   # at every tts.speak call site (§1.1 DRY).
