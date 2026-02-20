@@ -16,6 +16,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v7.6:** Removed `continue_on_error` from both TTS speak actions
+      (AP-17) — if TTS fails, automation now halts before the bedtime
+      question flow, preventing orphaned bedtime prompts without a
+      preceding greeting
+
     - **v7.5:** Audit remediation — added blueprint_version variable,
       quantization note on cooldown inputs, genericized fallback
       messages, code comments for expand() and bedtime error paths,
@@ -551,7 +556,7 @@ trace:
 
 variables:
   # core
-  blueprint_version: "7.5"
+  blueprint_version: "7.6"
   presence_entities: !input presence_sensors
   repeat_while_present: !input repeat_while_present
   max_nags_per_session: !input max_nags_per_session
@@ -913,7 +918,6 @@ actions:
             value_template: "{{ tts_mode == 'elevenlabs_custom_service' }}"
         sequence:
           - alias: "ElevenLabs tts.speak with voice_profile"
-            continue_on_error: true
             action: tts.speak
             target:
               entity_id: "{{ tts_entity | default('') }}"
@@ -929,7 +933,6 @@ actions:
             value_template: "{{ tts_mode == 'standard_tts_entity' }}"
         sequence:
           - alias: "Standard tts.speak"
-            continue_on_error: true
             action: tts.speak
             target:
               entity_id: "{{ tts_entity | default('') }}"
