@@ -12,6 +12,13 @@ blueprint:
 
     ### Recent changes
 
+    - **v8:** Audit fixes — `v_tts_message` added to variables block for
+      consistency; `| trim` on LLM response extraction to guard against
+      whitespace-only replies; `| tojson` on `tts_options` for guaranteed
+      JSON serialisation; comment clarifying intentional static notification
+      message; comment flagging duplicated music-script guard for future
+      refactor
+
     - **v7:** Audit fixes — Unicode section numbering (①–⑤); expanded
       stage ② (required TTS inputs no longer hidden behind collapsed
       section); added `event.data is defined` guard to all three
@@ -301,6 +308,7 @@ variables:
   v_wakeup_time: !input wakeup_time
   v_wakeup_entities: !input wakeup_entities
   v_music_script: !input music_script
+  v_tts_message: !input tts_message
   v_voice_profile: !input voice_profile
 
 triggers:
@@ -338,7 +346,7 @@ actions:
 
   - alias: "Default wake message"
     variables:
-      wake_message: !input tts_message
+      wake_message: "{{ v_tts_message }}"
 
   # Compute TTS options once — avoids duplicating the voice_profile choose block
   # at every tts.speak call site (§1.1 DRY).
@@ -346,9 +354,9 @@ actions:
     variables:
       tts_options: >-
         {% if v_voice_profile | default('') | string | length > 0 %}
-          {{ {"voice_profile": v_voice_profile} }}
+          {{ {"voice_profile": v_voice_profile} | tojson }}
         {% else %}
-          {{ {} }}
+          {{ {} | tojson }}
         {% endif %}
 
   - alias: "Build sensor context for LLM"
@@ -398,9 +406,11 @@ actions:
           - variables:
               wake_message: >-
                 {% set res = wake_llm | default({}) %}
-                {% set text = (((res.get('response') or {}).get('speech') or {}).get('plain') or {}).get('speech', '') | default('', true) %}
+                {% set text = (((res.get('response') or {}).get('speech') or {}).get('plain') or {}).get('speech', '') | default('', true) | trim %}
                 {{ text if text | length > 0 else wake_message }}
 
+  # Notification fires before TTS and uses a static summary intentionally —
+  # the push is a brief heads-up, not a transcript of the LLM wake message.
   - alias: "Optional mobile notification with Snooze/Stop"
     choose:
       - conditions:
@@ -525,6 +535,10 @@ actions:
                       volume_level: !input tts_volume_after
                   - stop: "wake-up guard stopped by user (stop after snooze)"
             default:
+              # Music-script guard is duplicated across exit paths (here and
+              # first-window default). HA choose branches can't share sub-
+              # sequences without a helper script. If a third call site
+              # appears, extract to script.llm_alarm_play_music.
               - alias: "No stop after snooze – start wake-up music"
                 if:
                   - condition: template
