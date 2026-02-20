@@ -106,7 +106,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**15 top-level sections · 142 subsections · 49 anti-patterns (44 AP codes + 5 sub-items) · 8 security checks · 10 files**
+**15 top-level sections · 146 subsections · 49 anti-patterns (44 AP codes + 5 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
