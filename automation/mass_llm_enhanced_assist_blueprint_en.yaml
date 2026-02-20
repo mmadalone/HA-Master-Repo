@@ -3,7 +3,7 @@ blueprint:
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
-  # Version: 16 — tracked in description changelog, not as a key
+  # Version: 17 — tracked in description changelog, not as a key
   # (HA blueprint schema does not allow 'version' as a top-level key)
   # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
@@ -16,6 +16,11 @@ blueprint:
     and player-based targeting with automatic fallback to default player.
 
     ### Recent changes
+
+    - **v17:** Add missing `| bool` guard on `divert_enabled` in blacklist
+    divert logic (step 5i-h). Add `| bool` guards to all `expose_areas`
+    and `expose_players` conditionals in `llm_prompt_target` default text
+    (7 occurrences) — completes the v16 string-coercion hardening pass.
 
     - **v16:** Add `| bool` guards at all boolean consumption points to
     prevent string-coercion bugs if values cross serialization boundaries.
@@ -526,38 +531,38 @@ blueprint:
             The "target_data" key is used to define the information on which
             the request should be played.
 
-            {% if expose_areas %}These are the area names which have a Music Assistant
+            {% if expose_areas | bool %}These are the area names which have a Music Assistant
             player: {{ area_names }}. Only use these area names for the "target_data".
             In case another area description is used in the request, try to map it
             to one of these area names." {% endif %}
 
             In case the query requests the music to be played in one or more areas
-            {% if expose_areas %}in which a Music Assistant player is located{% endif
+            {% if expose_areas | bool %}in which a Music Assistant player is located{% endif
             %}, use {"areas": ["area name"]} for "target_data". Always use a list
-            with area names, even when there is only one. {% if expose_areas %}Try
+            with area names, even when there is only one. {% if expose_areas | bool %}Try
             to match the areas mentioned in the request to the provided area names.
             Only use area names from the list provided. {% else %}Do not include articles
             like "the" at the start of the area name. So if the request is "Play music
             from Queen in the kitchen" use "kitchen" as area name. Besides removing
             the first article, use exactly what was provided in the request.{% endif
-            %}When no area is mentioned in the voice request{% if expose_areas %}
+            %}When no area is mentioned in the voice request{% if expose_areas | bool %}
             or no area could be matched{% endif %}, use {"areas":[]}
 
-            {% if expose_players %}These are the Music Assistant players in the system:
+            {% if expose_players | bool %}These are the Music Assistant players in the system:
             {{ player_names }}. Only use these names for the "target_data". In case
             another player name is mentioned in the request, try to map it to one
             of these player names.{% endif %}
 
             In case the query requests the music to be played on one or more media
             players, use {"players": ["player name"]} for "target_data". Always use
-            a list with player names, even when there is only one. {% if expose_players
+            a list with player names, even when there is only one. {% if expose_players | bool
             %}Try to match the players mentioned in the request to the provided player
             names. Only use player names from the list provided. {% else %}Do not
             include articles like "the" at the start of the player name. So if the
             request is "Play music from Queen on the bedroom Sonos" use "bedroom Sonos"
             as area name. Besides removing the first article, use exactly what was
             provided in the request.{% endif %}When no player is mentioned in the
-            voice request{% if expose_players %} or no player could be matched {%
+            voice request{% if expose_players | bool %} or no player could be matched {%
             endif %}, use {"players":[]}
 
         llm_prompt_outro:
@@ -925,7 +930,7 @@ actions:
 
       # 5i-h — Assemble final target
       target: >-
-        {% if blacklist_triggered | bool and filtered_is_empty | bool and divert_enabled and divert_player %}
+        {% if blacklist_triggered | bool and filtered_is_empty | bool and divert_enabled | bool and divert_player %}
           {{ dict(entity_id=[divert_player]) }}
         {% else %}
           {% set t = {} %}
