@@ -1,4 +1,4 @@
-# bedtime_routine_plus.yaml — v5.4.13
+# bedtime_routine_plus.yaml — v5.4.14
 blueprint:
   name: "Bedtime routine Plus – LLM-driven goodnight (Kodi)"
   author: madalone
@@ -23,6 +23,10 @@ blueprint:
     *Bedtime Routine* blueprint (`bedtime_routine.yaml`).
 
     ### Recent changes
+
+    - **v5.4.14:** Audit fix — added `| int(5)` guard to all 7 bare
+    `post_tts_delay_val` delay references, matching the defensive pattern
+    used on all other numeric template outputs (BRP-AUDIT-002).
 
     - **v5.4.13:** Audit fix — added nested `| int(4)` guard to bare
     `int(default_countdown)` fallback in conversational mode countdown
@@ -899,7 +903,7 @@ blueprint:
 # ═══════════════════════════════════════════════════════════════════════
 variables:
   # --- Blueprint version ---
-  blueprint_version: "5.4.13"
+  blueprint_version: "5.4.14"
 
   # --- Trigger inputs ---
   scheduled_time_val: !input scheduled_time
@@ -1292,7 +1296,7 @@ actions:
 
           - alias: "Wait for conversation to settle — agent has had time to set the countdown helper"
             delay:
-              seconds: "{{ post_tts_delay_val }}"
+              seconds: "{{ post_tts_delay_val | int(5) }}"
 
     default:
       # NOTE: The TTS voice-profile choose pattern (check voice_profile_val →
@@ -1331,7 +1335,7 @@ actions:
 
       - alias: "Post-TTS buffer — let streaming audio finish"
         delay:
-          seconds: "{{ post_tts_delay_val }}"
+          seconds: "{{ post_tts_delay_val | int(5) }}"
 
   # --- Lights off except lamp (TV stays ON) -----------------------------------
 
@@ -1519,7 +1523,7 @@ actions:
 
                           - alias: "Post-TTS buffer for settling-in message"
                             delay:
-                              seconds: "{{ post_tts_delay_val }}"
+                              seconds: "{{ post_tts_delay_val | int(5) }}"
 
           # --- Countdown (non-negotiable in preset mode) ---
           - alias: "Wait the default countdown — lamp stays on, user settles in"
@@ -1660,7 +1664,7 @@ actions:
 
                   - alias: "Post-TTS buffer for final goodnight"
                     delay:
-                      seconds: "{{ post_tts_delay_val }}"
+                      seconds: "{{ post_tts_delay_val | int(5) }}"
 
     # =====================================================================
     # CONVERSATIONAL MODES — curated / freeform / both
@@ -2088,7 +2092,7 @@ actions:
 
                                   - alias: "Post-TTS buffer for settling-in message"
                                     delay:
-                                      seconds: "{{ post_tts_delay_val }}"
+                                      seconds: "{{ post_tts_delay_val | int(5) }}"
 
       # --- Goodnight message (conversational modes only) ---
       - alias: "Generate goodnight message via conversation agent"
@@ -2141,7 +2145,7 @@ actions:
 
       - alias: "Post-TTS buffer — let goodnight finish playing"
         delay:
-          seconds: "{{ post_tts_delay_val }}"
+          seconds: "{{ post_tts_delay_val | int(5) }}"
 
       # --- Countdown — wait the negotiated duration ---
       - alias: "Wait the negotiated countdown — lamp stays on, user goes to bed"
@@ -2282,7 +2286,7 @@ actions:
 
               - alias: "Post-TTS buffer for final goodnight"
                 delay:
-                  seconds: "{{ post_tts_delay_val }}"
+                  seconds: "{{ post_tts_delay_val | int(5) }}"
 
   # --- Common tail (both modes) — lamp off + cleanup ----------------------------
 
