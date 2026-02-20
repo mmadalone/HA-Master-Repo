@@ -2,7 +2,8 @@ blueprint:
   domain: automation
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
-  # source_url removed — no public fork yet. Upstream ref:
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
+  # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/mass_llm_enhanced_assist-header.jpeg)
 
@@ -117,7 +118,7 @@ blueprint:
             The LLM agent used to parse voice commands into structured media queries.
             Should be configured WITHOUT house control — it only needs to return JSON.
           selector:
-            conversation_agent:
+            conversation_agent: {}
           default: ""
 
         default_player:
@@ -701,6 +702,11 @@ actions:
         {%- else -%}
           {{ {} }}
         {%- endif -%}
+      # Recovery: if from_json throws on malformed JSON (e.g. {broken "json}),
+      # HA leaves llm_result undefined → llm_parse_ok evaluates false →
+      # gate 4 bails with a user-facing error. The shape pre-check above
+      # catches obvious non-JSON; this comment documents the implicit
+      # exception-recovery path for anything that slips through.
       llm_parse_ok: >-
         {{ llm_result is mapping
            and llm_result.get('action_data', {}).get('media_id', '') | length > 0
