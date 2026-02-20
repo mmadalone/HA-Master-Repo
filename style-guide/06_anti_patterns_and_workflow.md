@@ -6,7 +6,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 
 ## 10. ANTI-PATTERNS (NEVER DO THESE)
 
-> **AI self-check:** Before outputting generated code, scan this table top to bottom. Each row has a structured ID (`AP-XX`), a severity tier (§1.11), a scannable trigger pattern, and a fix reference. If your output matches any trigger, fix it before presenting. Rows are grouped by domain and sorted by ID within each group.
+> **AI self-check:** Before outputting generated code, scan this table top to bottom. Each row has a structured ID (`AP-XX`), a severity tier (§1.11), a scannable trigger pattern, and a fix reference. If your output matches any trigger, fix it before presenting. Rows are grouped by domain and sorted by ID within each group. IDs are non-sequential — gaps (e.g., AP-14, AP-28, AP-29) and out-of-order codes (e.g., AP-42 in Core/General) are intentional to preserve stable cross-references across guide versions.
 
 #### Core / General
 
@@ -21,7 +21,7 @@ Sections 10 and 11 — Things to never do, and build/review/edit workflows.
 | AP-07 | ℹ️ | HA API calls (`ha_call_service`, `ha_get_state`) without filesystem fallback plan | §10 #7 |
 | AP-08 | ⚠️ | Blueprint action block >200 lines OR nesting depth >4 levels | §1.1, §1.8 |
 | AP-09 | ⚠️ | Blueprint with 0 `input:` sections (no collapsible groups) | §3.2 |
-| AP-09a | ⚠️ | Input inside collapsible section missing `default:` — silently breaks collapse | §3.2 |
+| AP-09a | ⚠️ | Input inside collapsible section missing `default:` — silently breaks collapse *(subset of AP-44, which adds bare-default, boolean, and section-ordering checks)* | §3.2 |
 | AP-10 | ⚠️ | `service:` keyword in new code | §11.3 |
 | AP-10a | ⚠️ | `platform:` as trigger type prefix in new code (should be `trigger:`) | §11.3 |
 | AP-10b | ⚠️ | `data_template:` in new code (deprecated ~HA 0.115/2020, no removal date announced — use `data:`) | §11.3 |

@@ -1,6 +1,6 @@
 # Home Assistant Style Guide — Master Index
 
-**Style Guide Version: 3.25 — 2026-02-17** · Bump this on structural changes (new files, section renumbering, directive additions).
+**Style Guide Version: 3.26 — 2026-02-20** · Bump this on structural changes (new files, section renumbering, directive additions).
 
 > **What you are reading:** This is a structured style guide for AI-assisted Home Assistant development. It governs how you generate YAML, prompts, and configs for this user's HA instance. The guide is split across 10 files (~110K tokens total — but you should never load more than ~15K for any task). **Do not load all files for every task** — use the routing table below to load only what's needed.
 
@@ -92,13 +92,13 @@ The section numbers are preserved across files for cross-referencing.
 | [Automation Patterns](02_automation_patterns.md) | §5 | ~6.2K | Error handling, modes, timeouts, triggers, GPS bounce, helpers, area/label targeting |
 | [Conversation Agents](03_conversation_agents.md) | §8 | ~8.0K | Agent prompt structure, separation from blueprints, naming conventions |
 | [ESPHome Patterns](04_esphome_patterns.md) | §6 | ~6.1K | Device config structure, packages, secrets, wake words, naming |
-| [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.1K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
-| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~20.4K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), audit resilience (§11.15), crash recovery |
+| [Music Assistant Patterns](05_music_assistant_patterns.md) | §7 | ~11.8K | MA players, play_media, TTS duck/restore, volume sync, voice bridges |
+| [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md) | §10, §11 | ~22.6K (scan table: ~4.9K) | Things to never do, build/review/edit workflows, README generation (§11.14), audit resilience (§11.15), crash recovery |
 | [Troubleshooting & Debugging](07_troubleshooting.md) | §13 | ~6.9K | Traces, Developer Tools, failure modes, log analysis, domain-specific debugging |
 | [Voice Assistant Pattern](08_voice_assistant_pattern.md) | §14 | ~11.8K | End-to-end voice stack architecture: ESPHome satellites, pipelines, agents, blueprints, tool scripts, helpers, TTS |
 | [QA Audit Checklist](09_qa_audit_checklist.md) | §15 | ~12.7K | QA audit checks, trigger rules, cross-reference index, audit tiers (§15.4), and user commands for guide maintenance |
 
-*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9). Total across all files: ~111K.*
+*Token estimates measured Feb 2026. Re-measure after structural changes. Budget ceiling: keep total loaded style guide content under ~15K tokens per task (§1.9). Total across all files: ~114K.*
 
 > **Note on section numbering:** Section numbers are preserved from the original unified guide and are non-sequential across files. This is intentional — it allows stable cross-references (e.g., "see §5.1") regardless of how files are reorganized.
 
@@ -106,7 +106,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**15 top-level sections · 132 subsections · 43 anti-patterns (39 AP codes + 4 sub-items) · 8 security checks · 10 files**
+**15 top-level sections · 132 subsections · 46 anti-patterns (41 AP codes + 5 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -150,7 +150,7 @@ The section numbers are preserved across files for cross-referencing.
   - §3.2 — Collapsible input sections (Mandatory)
   - §3.3 — Input definitions
   - §3.4 — Variables block
-  - §3.5 — Action labels and comments (Mandatory)
+  - §3.5 — Action aliases (STRONGLY RECOMMENDED)
   - §3.6 — Template safety (Mandatory)
   - §3.7 — YAML formatting
   - §3.8 — HA 2024.10+ syntax (MANDATORY)
@@ -283,9 +283,9 @@ The section numbers are preserved across files for cross-referencing.
 ### [QA Audit Checklist](09_qa_audit_checklist.md)
 
 - **§15** — QA Audit Checklist
-  - §15.1 — Check definitions (SEC, VER, AIR, CQ, ARCH, ZONE, INT, MAINT categories)
+  - §15.1 — Check definitions (SEC, VER, AIR, CQ, ARCH, INT, ZONE, MAINT, BP, PERF categories)
   - §15.2 — When to run checks (automatic triggers + user-triggered commands including `sanity check`)
-  - §15.3 — Cross-reference index (which checks apply to which guide sections)
+  - §15.3 — Quick Grep Patterns
   - §15.4 — Audit tiers (quick-pass / deep-pass, tier selection rules, escalation)
 
 ---
