@@ -3,7 +3,7 @@ blueprint:
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
-  # Version: 15 — tracked in description changelog, not as a key
+  # Version: 16 — tracked in description changelog, not as a key
   # (HA blueprint schema does not allow 'version' as a top-level key)
   # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
@@ -16,6 +16,11 @@ blueprint:
     and player-based targeting with automatic fallback to default player.
 
     ### Recent changes
+
+    - **v16:** Add `| bool` guards at all boolean consumption points to
+    prevent string-coercion bugs if values cross serialization boundaries.
+    Add DO-NOT-HOIST warning on play_succeeded. Add dict-ordering note
+    on prompt assembly. Drop redundant `reject(''none'')` from area_list.
 
     - **v15:** Add `| default([])` guards on all `integration_entities()`
     calls — prevents cascade failure if Music Assistant integration is
@@ -664,6 +669,9 @@ actions:
     continue_on_error: true
     action: conversation.process
     data:
+      # prompt.values() relies on Python 3.7+ dict insertion-order guarantee.
+      # Section order matches the key definition order in the prompt variable
+      # block above (intro → media_type → … → outro). HA 2024.10+ = Python 3.12+.
       text: "{{ prompt.values() | reject('none') | join('\n\n') }}"
       agent_id: !input llm_agent
     response_variable: result
@@ -727,7 +735,7 @@ actions:
     if:
       - alias: "Check llm_parse_ok flag"
         condition: template
-        value_template: "{{ not llm_parse_ok }}"
+        value_template: "{{ not (llm_parse_ok | bool) }}"
     then:
       - alias: "4a · Return parse-error response to voice assistant"
         set_conversation_response: >-
@@ -827,7 +835,7 @@ actions:
 
       # 5h — Final target: LLM target if available, else backup
       target_data: >-
-        {{ (llm_target_data if llm_has_target else backup_target) | default({}, true) }}
+        {{ (llm_target_data if llm_has_target | bool else backup_target) | default({}, true) }}
       target_raw: >-
         {%- set ns = namespace(pairs=[]) -%}
         {%- for k, v in target_data.items() -%}
@@ -890,6 +898,7 @@ actions:
         {% for aid in tainted_area_ids %}
           {% set area_players = area_entities(aid) | default([], true)
              | select('match', 'media_player\\.')
+             {# match() anchors at string start — sufficient for entity_id format #}
              | reject('in', blacklisted_players | default([], true))
              | list %}
           {# Only keep MA players (filter by integration) #}
@@ -916,7 +925,7 @@ actions:
 
       # 5i-h — Assemble final target
       target: >-
-        {% if blacklist_triggered and filtered_is_empty and divert_enabled and divert_player %}
+        {% if blacklist_triggered | bool and filtered_is_empty | bool and divert_enabled and divert_player %}
           {{ dict(entity_id=[divert_player]) }}
         {% else %}
           {% set t = {} %}
@@ -1057,7 +1066,7 @@ actions:
       - alias: "8 · Set shuffle mode — separate call because play_media has no shuffle param"
         action: media_player.shuffle_set
         data:
-          shuffle: "{{ shuffle }}"
+          shuffle: "{{ shuffle | bool }}"
         target: "{{ target }}"
         continue_on_error: true
 
@@ -1078,6 +1087,7 @@ actions:
             {% for aid in target.get('area_id', []) %}
               {% set ns.entities = ns.entities + (area_entities(aid) | default([], true)
                  | select('match', 'media_player\\.')
+                 {# match() anchors at string start — sufficient for entity_id format #}
                  | list) %}
             {% endfor %}
             {{ ns.entities }}
@@ -1099,13 +1109,13 @@ actions:
   - alias: "9 · Build response variables"
     variables:
       combine: !input combine_text
-      action_word: "{{ 'shuffling' if shuffle else 'playing' }}"
+      action_word: "{{ 'shuffling' if shuffle | bool else 'playing' }}"
       resp_no_target: !input no_target_response
       resp_area: !input area_response
       resp_player: !input player_response
       resp_area_player: !input area_and_player_response
       area_list: >-
-        {{ target.get('area_id', []) | map('area_name') | reject('none') | list }}
+        {{ target.get('area_id', []) | map('area_name') | list }}
       area_info: >-
         {% if area_list | count == 0 %}
         {% elif area_list | count > 2 %}
@@ -1137,13 +1147,15 @@ actions:
   #      play_succeeded is undefined → condition 10a evaluates false →
   #      choose falls through to default 10e (no target). This is
   #      intentional — do not hoist play_succeeded to a top-level variable.
+  #      WARNING: DO NOT HOIST play_succeeded — undefined state drives
+  #      the choose fall-through to the no-target default (10e).
   - alias: "10 · Set conversation response via choose"
     choose:
       - alias: "10a · Response: playback failed (best-effort check)"
         conditions:
           - condition: template
             value_template: >-
-              {{ play_succeeded is defined and not play_succeeded }}
+              {{ play_succeeded is defined and not (play_succeeded | bool) }}
         sequence:
           - alias: "10a · Return play-failed response"
             set_conversation_response: >-
