@@ -16,6 +16,12 @@ blueprint:
 
     ### Recent changes
 
+    - **v7.4:** Fix cross-midnight weekend profile mismatch — added
+      tentative_day_key using weekday schedule to break dependency
+      cycle; is_weekend and effective_day_key now derive from
+      tentative_day_key so weekday cross-midnight sessions are not
+      hijacked by weekend profile activation at midnight rollover
+
     - **v7.3:** Audit fixes — presence_sensors default "" → [] for
       multi-entity selector, "Stage N" references → circled-number
       section labels, tightened chosen_user_name whitespace,
@@ -613,8 +619,22 @@ variables:
     {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
     {{ days[now().weekday()] }}
 
+  # Cross-midnight day shift using weekday schedule — breaks the
+  # dependency cycle so weekend profile doesn't hijack an active
+  # weekday cross-midnight session at midnight rollover.
+  tentative_day_key: >-
+    {% set days = ['mon','tue','wed','thu','fri','sat','sun'] %}
+    {% set start = today_at(weekday_start_time) %}
+    {% set end = today_at(weekday_end_time) %}
+    {% set crosses_midnight = as_timestamp(end) < as_timestamp(start) %}
+    {% if crosses_midnight and now() < end %}
+      {{ days[(now().weekday() - 1) % 7] }}
+    {% else %}
+      {{ today_key }}
+    {% endif %}
+
   is_weekend: >-
-    {{ today_key in (weekend_days | default([])) }}
+    {{ tentative_day_key in (weekend_days | default([])) }}
 
   weekend_profile_active: >-
     {{ is_weekend and (weekend_mode | default('same_as_weekdays')) == 'use_weekend_profile' }}
@@ -644,7 +664,7 @@ variables:
     {% if crosses_midnight and now() < end %}
       {{ days[(now().weekday() - 1) % 7] }}
     {% else %}
-      {{ today_key }}
+      {{ tentative_day_key }}
     {% endif %}
 
   cooldown: >-
