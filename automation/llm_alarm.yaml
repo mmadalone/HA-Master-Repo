@@ -12,6 +12,12 @@ blueprint:
 
     ### Recent changes
 
+    - **v9:** Audit fix — migrated conversation agent input from
+      `entity` selector (domain: conversation) to native
+      `conversation_agent` selector for consistency with all other
+      LLM blueprints; renamed input `llm_agent` → `conversation_agent`
+      and variable `v_llm_agent` → `v_conversation_agent`
+
     - **v8:** Audit fixes — `v_tts_message` added to variables block for
       consistency; `| trim` on LLM response extraction to guard against
       whitespace-only replies; `| tojson` on `tts_options` for guaranteed
@@ -178,7 +184,7 @@ blueprint:
           selector:
             boolean: {}
 
-        llm_agent:
+        conversation_agent:
           name: Conversation agent
           description: >
             The Home Assistant conversation agent that should generate
@@ -186,8 +192,7 @@ blueprint:
             Only required when "Use LLM for wake-up message" is enabled.
           default: ""
           selector:
-            entity:
-              domain: conversation
+            conversation_agent:
 
         llm_wake_prompt:
           name: LLM wake-up prompt
@@ -297,7 +302,7 @@ max_exceeded: silent
 variables:
   v_active_days: !input active_days
   v_use_llm_wake: !input use_llm_wake_message
-  v_llm_agent: !input llm_agent
+  v_conversation_agent: !input conversation_agent
   v_llm_wake_prompt: !input llm_wake_prompt
   v_llm_context_entities: !input llm_context_entities
   v_notify_service: !input notify_service
@@ -376,7 +381,7 @@ actions:
       - conditions:
           - condition: template
             value_template: >-
-              {{ v_use_llm_wake and (v_llm_agent | default('') | string | length > 0) }}
+              {{ v_use_llm_wake and (v_conversation_agent | default('') | string | length > 0) }}
         sequence:
           # §1.2 — Only structured per-run data goes here.
           # Behavioral instructions (speech rate, time format preferences,
@@ -384,7 +389,7 @@ actions:
           # in the HA UI, not repeated on every call.
           - action: conversation.process
             data:
-              agent_id: "{{ v_llm_agent }}"
+              agent_id: "{{ v_conversation_agent }}"
               text: >-
                 {{ (v_llm_wake_prompt | default('') | string)
                    ~ '\n\nmeta:\n'
