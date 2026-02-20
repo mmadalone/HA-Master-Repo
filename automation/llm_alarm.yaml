@@ -353,11 +353,9 @@ actions:
   - alias: "Resolve TTS options for voice_profile"
     variables:
       tts_options: >-
-        {% if v_voice_profile | default('') | string | length > 0 %}
-          {{ {"voice_profile": v_voice_profile} | tojson }}
-        {% else %}
-          {{ {} | tojson }}
-        {% endif %}
+        {{ ({"voice_profile": v_voice_profile}
+            if (v_voice_profile | default('') | string | length > 0)
+            else {}) | tojson }}
 
   - alias: "Build sensor context for LLM"
     variables:
@@ -378,7 +376,7 @@ actions:
       - conditions:
           - condition: template
             value_template: >-
-              {{ v_use_llm_wake and v_llm_agent is string and v_llm_agent | length > 0 }}
+              {{ v_use_llm_wake and (v_llm_agent | default('') | string | length > 0) }}
         sequence:
           # §1.2 — Only structured per-run data goes here.
           # Behavioral instructions (speech rate, time format preferences,
