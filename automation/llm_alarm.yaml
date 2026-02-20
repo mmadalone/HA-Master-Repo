@@ -11,6 +11,13 @@ blueprint:
 
     ### Recent changes
 
+    - **v6:** Audit fixes — empty-list guard on `wakeup_entities` before
+      `turn_on`; empty-string guard on `music_script` at both call sites;
+      `v_wakeup_entities` and `v_music_script` added to variables block;
+      `| default([])` on `v_active_days` in weekday condition; removed
+      misleading empty defaults from required TTS inputs; descriptions
+      clarified on `tts_engine` and `tts_output_player`
+
     - **v5:** Audit fixes — collapsible sections on all stages (§1 expanded,
       §2–5 collapsed); defaults on all collapsed-section inputs; plural
       top-level keys (`triggers:`, `conditions:`, `actions:`); fixed
@@ -97,17 +104,20 @@ blueprint:
       input:
 
         tts_engine:
-          name: TTS engine
-          description: TTS entity to use with tts.speak.
-          default: ""
+          name: TTS engine (required)
+          description: >
+            TTS entity to use with tts.speak. This is required —
+            the blueprint cannot function without a TTS engine.
           selector:
             entity:
               domain: tts
 
         tts_output_player:
-          name: TTS output media_player
-          description: media_player where the TTS wake-up announcement will play.
-          default: ""
+          name: TTS output media_player (required)
+          description: >
+            media_player where the TTS wake-up announcement will play.
+            This is required — the blueprint cannot function without
+            an output player.
           selector:
             entity:
               domain: media_player
@@ -299,6 +309,8 @@ variables:
   v_post_tts_timeout: !input post_tts_timeout
   v_snooze_minutes: !input snooze_minutes
   v_wakeup_time: !input wakeup_time
+  v_wakeup_entities: !input wakeup_entities
+  v_music_script: !input music_script
   v_voice_profile: !input voice_profile
 
 triggers:
@@ -313,14 +325,19 @@ conditions:
     value_template: >-
       {% set idx = now().weekday() %}
       {% set map = ['mon','tue','wed','thu','fri','sat','sun'] %}
-      {{ map[idx] in v_active_days }}
+      {{ map[idx] in (v_active_days | default([])) }}
 
 actions:
 
   - alias: "Turn on wake-up lights / switches"
-    action: homeassistant.turn_on
-    target:
-      entity_id: !input wakeup_entities
+    if:
+      - condition: template
+        value_template: >-
+          {{ (v_wakeup_entities | default([])) | length > 0 }}
+    then:
+      - action: homeassistant.turn_on
+        target:
+          entity_id: !input wakeup_entities
 
   - alias: "Set TTS volume before wake-up"
     action: media_player.volume_set
@@ -516,9 +533,14 @@ actions:
                   - stop: "wake-up guard stopped by user (stop after snooze)"
             default:
               - alias: "No stop after snooze – start wake-up music"
-                action: script.turn_on
-                target:
-                  entity_id: !input music_script
+                if:
+                  - condition: template
+                    value_template: >-
+                      {{ v_music_script | default('') | string | length > 0 }}
+                then:
+                  - action: script.turn_on
+                    target:
+                      entity_id: !input music_script
               - alias: "Restore volume after music (after snooze)"
                 action: media_player.volume_set
                 target:
@@ -529,9 +551,14 @@ actions:
 
     default:
       - alias: "No Snooze/Stop in first window – play music"
-        action: script.turn_on
-        target:
-          entity_id: !input music_script
+        if:
+          - condition: template
+            value_template: >-
+              {{ v_music_script | default('') | string | length > 0 }}
+        then:
+          - action: script.turn_on
+            target:
+              entity_id: !input music_script
       - alias: "Restore volume after music (no snooze)"
         action: media_player.volume_set
         target:
