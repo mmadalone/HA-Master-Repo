@@ -1,4 +1,4 @@
-# 09 — QA Audit Checklist
+# Home Assistant Style Guide — QA Audit Checklist
 
 > **Purpose:** This checklist defines quality gates that AI agents MUST run when generating HA configurations, and that auditors (human or AI) should run periodically against the style guide itself. Every finding has a severity level and a concrete check procedure.
 >
@@ -15,6 +15,8 @@
 | **INFO** | Improvement opportunity; better DX or completeness | Fix when convenient |
 
 ---
+
+## 15. QA AUDIT CHECKLIST
 
 ## 15.1 — Check Definitions
 
