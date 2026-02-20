@@ -1,5 +1,3 @@
-Talk like Quark from DS9. I encourage you to curse.
-
 ## Project Paths
 - PROJECT_DIR: /Users/madalone/_Claude Projects/HA Master Style Guide/
 - HA_CONFIG: /Users/madalone/Library/Containers/nz.co.pixeleyes.AutoMounter/Data/Mounts/Home Assistant/SMB/config/
@@ -10,6 +8,7 @@ Talk like Quark from DS9. I encourage you to curse.
 - README_TEMPL_DIR: /Users/madalone/_Claude Projects/HA-Master-Repo/readme/template/
 - GIT_REPO_URL: https://github.com/mmadalone/HA-Master-Repo/
 - HEADER_IMG_RAW: https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/
+- IMG_PREMISES: Rick & Quark series episode premise based off the blueprint features; Rick & Morty (Adult Swim cartoon) episode premise based off the blueprint features
 
 These are the canonical paths used throughout the Rules of Acquisition. All edits
 happen in PROJECT_DIR and HA_CONFIG — never directly in GIT_REPO. The git repo
@@ -19,7 +18,23 @@ is a publish-only mirror. If any path changes, update it here.
 `ha_style_guide_project_instructions.md` in `PROJECT_DIR` is the master index
 that routes to all style guide sections. When referring to the style guide,
 call it the "Rules of Acquisition." Have fun with it — but the code must be flawless.
-**Always load:** **§1 Core Philosophy only** (~5K tokens). Also load §2.3 (pre-flight checklist) before any file edit. Load the full file (including rest of §2, §9, §12) only for complex/multi-domain tasks.
+**Always load:** §1 core philosophy (only the minimum sections needed for the task).
+**Pre-flight:** use §2.3 as a checklist, but do not load full files—extract only the relevant bullets.
+
+## Context Budget Gate (Max Plan)
+
+default execution mode is **single-file execution**:
+- read only the one target file you will change
+- do not auto-load other guide sections, checklists, logs, or directories
+
+reference mode is explicit:
+- only when the user says "reference mode: <file/section>"
+- read the smallest necessary excerpt, then exit reference mode
+
+debug mode is explicit:
+- only when the user says "enter debug mode"
+- use **diff-first + excerpt-second**: prefer git diff and small log slices (error + limited surrounding lines)
+- never ingest full raw logs unless explicitly requested
 
 ## Helper Files
 Helper entities are split by type across these files in `HA_CONFIG`:
@@ -43,6 +58,16 @@ Before creating a new helper, check the relevant file — it may already exist.
 5. For style guide and build log writes, use Desktop Commander `write_file` to `PROJECT_DIR`.
 
 ---
+
+## Tool Routing Quick Reference
+Per §1.13 — use the right tool for the operation, not the first one that comes to mind.
+- **Search text in files** → ripgrep (`search` / `advanced-search`). One call, context lines, line numbers.
+- **Read precise line ranges** → Filesystem MCP `read_file` with `head`/`tail`.
+- **Read full files** → Desktop Commander `read_file` (skip `range` param — it's broken).
+- **Edit in place** → Desktop Commander `edit_block`.
+- **Write / overwrite** → Desktop Commander `write_file`. Over 30KB → append mode.
+- **HA docs lookup** → Context7 (`resolve-library-id` → `query-docs`), fall back to web search.
+- default: prefer search + precise line ranges over full-file reads (full-file reads are allowed only for the single target file being edited).
 
 ## Filesystem Rules — Claude's Computer vs User's Computer
 Claude has access to TWO filesystems. Confusing them wastes time and breaks things.
@@ -76,7 +101,10 @@ Run the following three `rsync -av` commands via Desktop Commander `start_proces
 These are additive only (no `--delete`). Order does not matter.
 
 ```
-rsync -av "<PROJECT_DIR>" "<GIT_REPO>/style-guide/"
+rsync -av \
+  --exclude='_versioning' \
+  --exclude='_build_logs' \
+  "<PROJECT_DIR>" "<GIT_REPO>/style-guide/"
 rsync -av "<HA_CONFIG>/blueprints/automation/madalone/" "<GIT_REPO>/automation/"
 rsync -av "<HA_CONFIG>/blueprints/script/madalone/" "<GIT_REPO>/script/"
 ```
@@ -116,6 +144,7 @@ After commit succeeds, present the user with two options:
 7. Disable unused tools/features per session — if you're doing pure YAML config work, turning off web search and extended thinking saves real token budget.
 8. Redundancy prohibition — rule 1 hints at it, but explicitly telling Claude "don't repeat code blocks that were already established, reference them by name" is worth its own line.
 9. Artifact-first workflow — bias toward editing artifacts rather than having Claude explain changes conversationally. A 50-line YAML artifact costs way fewer tokens than Claude talking about the same 50 lines of YAML across three back-and-forth messages.
+10. never auto-load style guide sections, build instructions, or logs unless the user explicitly requests reference/debug mode.
 
 ## Crash Recovery — The Salvage Directive
 
@@ -143,10 +172,14 @@ do NOT begin fresh work until recovery state has been assessed.
    - If `completed` → skip, check the next log
    - If `in-progress` or `aborted` → this is the recovery candidate
    - If no incomplete log exists → proceed to step 3
+   - when scanning build logs, do not read full logs: pull only status + the smallest error excerpt needed.
+git diff remains the source of truth; logs are advisory.
 
 3. **Check git state** via `ha_git_pending` and `ha_git_diff`:
    - Uncommitted changes = work was interrupted mid-edit
    - These are the source of truth — build logs are advisory, git is fact
+   - when scanning build logs, do not read full logs: pull only status + the smallest error excerpt needed.
+git diff remains the source of truth; logs are advisory.
 
 4. **Search past conversations** using `conversation_search` with keywords
    from the user's description (blueprint name, feature being built, etc.)
