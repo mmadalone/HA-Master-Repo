@@ -3,6 +3,7 @@ blueprint:
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
+  version: '13'
   # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/mass_llm_enhanced_assist-header.jpeg)
@@ -14,6 +15,10 @@ blueprint:
     and player-based targeting with automatic fallback to default player.
 
     ### Recent changes
+
+    - **v13:** Fix regex injection in fuzzy target matching, add version
+    field, rename trigger input to avoid shadowing, explicit from_json
+    guard, play_succeeded scoping comment.
 
     - **v12:** Style guide compliance — conversation_agent selector,
     section key/name conventions, === divider style.
@@ -243,7 +248,7 @@ blueprint:
         and <player_info> are replaced dynamically.
       collapsed: true
       input:
-        trigger:
+        trigger_sentences:
           name: Conversation trigger sentences
           description: >
             Trigger patterns for voice commands. Text in [ ] is optional,
@@ -592,7 +597,7 @@ blueprint:
 triggers:
   - alias: "1 · Voice music request trigger"
     trigger: conversation
-    command: !input trigger
+    command: !input trigger_sentences
 
 # Top-level variables — resolves !input values and trigger context.
 # These depend only on inputs and trigger data, not on LLM results.
@@ -687,15 +692,21 @@ actions:
       llm_result: >-
         {%- set cleaned = llm_cleaned | trim -%}
         {%- if cleaned.startswith('{') and cleaned.endswith('}') -%}
-          {{ cleaned | from_json }}
+          {%- set parsed = cleaned | from_json -%}
+          {%- if parsed is mapping -%}
+            {{ parsed }}
+          {%- else -%}
+            {{ {} }}
+          {%- endif -%}
         {%- else -%}
           {{ {} }}
         {%- endif -%}
-      # Recovery: if from_json throws on malformed JSON (e.g. {broken "json}),
-      # HA leaves llm_result undefined → llm_parse_ok evaluates false →
-      # gate 4 bails with a user-facing error. The shape pre-check above
-      # catches obvious non-JSON; this comment documents the implicit
-      # exception-recovery path for anything that slips through.
+      # Recovery: from_json on malformed JSON (e.g. {broken "json}) raises
+      # ValueError. HA's Jinja error handling leaves llm_result as a string
+      # (not a mapping) → llm_parse_ok evaluates false → gate 4 bails.
+      # The shape pre-check (startswith/endswith) catches obvious non-JSON;
+      # the inner `is mapping` check catches from_json returning unexpected
+      # types; HA's implicit error-string fallback is the last-resort net.
       llm_parse_ok: >-
         {{ llm_result is mapping
            and llm_result.get('action_data', {}).get('media_id', '') | length > 0
@@ -741,34 +752,42 @@ actions:
       llm_requested_areas: >-
         {{ llm_result.get('target_data', {}).get('areas', []) }}
 
-      # 5b — Resolve player names to entity_ids via fuzzy match
-      llm_player_search: >-
-        {% set players = llm_requested_players %}
-        {% set search = players | join('|') if players is list and players | length > 0 else '' %}
-        {{ search }}
+      # 5b — Resolve player names to entity_ids via case-insensitive
+      #       substring match. Uses a loop instead of regex to avoid
+      #       injection from LLM-extracted names containing metacharacters
+      #       like parentheses or pipes.
       llm_resolved_players: >-
-        {% if llm_player_search | length > 0 %}
+        {% if llm_requested_players | length > 0 %}
+          {% set ns = namespace(matched=[]) %}
+          {% set req_lower = llm_requested_players | map('lower') | list %}
+          {% for name in player_names_safe.split('|||') %}
+            {% for req in req_lower %}
+              {% if req in name | lower %}
+                {% set ns.matched = ns.matched + [name] %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
           {{ integration_entities('music_assistant')
              | expand
-             | selectattr('name', 'in',
-                 player_names_safe.split('|||')
-                 | select('search', llm_player_search, ignorecase=true)
-                 | list)
+             | selectattr('name', 'in', ns.matched | unique | list)
              | map(attribute='entity_id')
              | list }}
         {% else %}{{ [] }}{% endif %}
 
-      # 5c — Resolve area names to area_ids via fuzzy match
-      llm_area_search: >-
-        {% set areas = llm_requested_areas %}
-        {% set search = areas | join('|') if areas is list and areas | length > 0 else '' %}
-        {{ search }}
+      # 5c — Resolve area names to area_ids via case-insensitive
+      #       substring match. Loop-based to avoid regex injection.
       llm_resolved_areas: >-
-        {% if llm_area_search | length > 0 %}
-          {{ area_names_safe.split('|||')
-             | select('search', llm_area_search, ignorecase=true)
-             | map('area_id')
-             | list }}
+        {% if llm_requested_areas | length > 0 %}
+          {% set ns = namespace(matched=[]) %}
+          {% set req_lower = llm_requested_areas | map('lower') | list %}
+          {% for name in area_names_safe.split('|||') %}
+            {% for req in req_lower %}
+              {% if req in name | lower %}
+                {% set ns.matched = ns.matched + [name] %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          {{ ns.matched | unique | map('area_id') | list }}
         {% else %}{{ [] }}{% endif %}
 
       # 5d — Did the LLM provide any usable target?
@@ -1101,6 +1120,11 @@ actions:
 
   # 10 — Return the final voice response. Error branch is first so a
   #      failed play_media doesn't produce a false success message.
+  #      NOTE: play_succeeded is only defined when Step 6's if/then branch
+  #      executes (i.e., target was non-empty). When target is empty,
+  #      play_succeeded is undefined → condition 10a evaluates false →
+  #      choose falls through to default 10e (no target). This is
+  #      intentional — do not hoist play_succeeded to a top-level variable.
   - alias: "10 · Set conversation response via choose"
     choose:
       - alias: "10a · Response: playback failed (best-effort check)"
