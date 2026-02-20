@@ -526,7 +526,7 @@ actions:
 
       target_player: >
         {% set ti = target_index | int(-1) %}
-        {% if ti == -1 %}
+        {% if ti == -1 or ti >= player_list | length %}
           {{ '' }}
         {% else %}
           {{ player_list[ti] }}
@@ -656,7 +656,7 @@ actions:
         {% if src_idx == -1 %}
           true
         {% else %}
-          {{ states(presence_list[src_idx]) != 'on' }}
+          {{ states(presence_list[src_idx]) | default('off') != 'on' }}
         {% endif %}
       {% endif %}
 
@@ -751,7 +751,6 @@ actions:
       failure_reason: >
         {% if not transfer_succeeded | bool %}
           Music Assistant could not move the queue — the source player may be stuck or the queue may have been lost
-        {% else %}
         {% endif %}
 
   - alias: "On success — stamp cooldown, silence others, announce arrival"

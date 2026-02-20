@@ -3,7 +3,7 @@ blueprint:
   name: Music Assistant – Local LLM Enhanced Voice Support
   author: Music Assistant Project (style-guide fixes by madalone)
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/mass_llm_enhanced_assist_blueprint_en.yaml
-  # Version: 18 — tracked in description changelog, not as a key
+  # Version: 19 — tracked in description changelog, not as a key
   # (HA blueprint schema does not allow 'version' as a top-level key)
   # Upstream ref:
   # https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
@@ -16,6 +16,11 @@ blueprint:
     and player-based targeting with automatic fallback to default player.
 
     ### Recent changes
+
+    - **v19:** Fix TemplateSyntaxError — move Jinja comments (`{# ... #}`)
+    out of mid-expression filter chains in `rescued_players` (step 5i-d)
+    and `check_entities` (step 8b). Jinja2 comments are block-level
+    constructs and cannot appear inside `{% set %}` expressions.
 
     - **v18:** Restore `| reject(''none'')` guard on `area_list` in step 9
     response assembly for consistency with `player_list` — prevents
@@ -905,9 +910,9 @@ actions:
       rescued_players: >-
         {% set ns = namespace(players=[]) %}
         {% for aid in tainted_area_ids %}
+          {# match() anchors at string start — sufficient for entity_id format #}
           {% set area_players = area_entities(aid) | default([], true)
              | select('match', 'media_player\\.')
-             {# match() anchors at string start — sufficient for entity_id format #}
              | reject('in', blacklisted_players | default([], true))
              | list %}
           {# Only keep MA players (filter by integration) #}
@@ -1094,9 +1099,9 @@ actions:
               {% set ns.entities = ns.entities + [eid] %}
             {% endfor %}
             {% for aid in target.get('area_id', []) %}
+              {# match() anchors at string start — sufficient for entity_id format #}
               {% set ns.entities = ns.entities + (area_entities(aid) | default([], true)
                  | select('match', 'media_player\\.')
-                 {# match() anchors at string start — sufficient for entity_id format #}
                  | list) %}
             {% endfor %}
             {{ ns.entities }}
