@@ -1,6 +1,7 @@
 blueprint:
   name: "Wake-up alarm – LLM context"
   author: madalone
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/llm_alarm.yaml
   description: '![Wake-up alarm header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/llm_alarm-header.jpeg)
 
     # Wake-up alarm – LLM context
@@ -11,6 +12,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v7:** Audit fixes — Unicode section numbering (①–⑤); expanded
+      stage ② (required TTS inputs no longer hidden behind collapsed
+      section); added `event.data is defined` guard to all three
+      `wait.trigger` templates; added `source_url`; trimmed changelog
+
     - **v6:** Audit fixes — empty-list guard on `wakeup_entities` before
       `turn_on`; empty-string guard on `music_script` at both call sites;
       `v_wakeup_entities` and `v_music_script` added to variables block;
@@ -18,30 +24,14 @@ blueprint:
       misleading empty defaults from required TTS inputs; descriptions
       clarified on `tts_engine` and `tts_output_player`
 
-    - **v5:** Audit fixes — collapsible sections on all stages (§1 expanded,
-      §2–5 collapsed); defaults on all collapsed-section inputs; plural
-      top-level keys (`triggers:`, `conditions:`, `actions:`); fixed
-      `music_script` description (optional, not required)
-
-    - **v4:** Collapsible sections (stages 3–5); defaults for `llm_agent` and
-      `music_script`; removed hardcoded name from TTS/notification text;
-      improved `notify_service` description with expected format
-
-    - **v3:** DRY — single TTS options variable replaces duplicated choose blocks;
-      LLM call now passes only structured meta (behavioral instructions belong in
-      agent system prompt); defensive dict traversal on LLM response
-
-    - **v2:** Style guide compliance — collapsible input sections, `action:` syntax,
-      header fields, description image
-
-    - **v1:** Initial version'
+    See commit history for v1–v5 changes.'
   domain: automation
   homeassistant:
     min_version: "2024.6.0"
   input:
 
     stage_1_schedule:
-      name: "Stage 1 — Schedule"
+      name: "① Schedule"
       icon: mdi:calendar-clock
       description: When the alarm fires.
       collapsed: false
@@ -97,10 +87,10 @@ blueprint:
               multiple: true
 
     stage_2_tts:
-      name: "Stage 2 — TTS & audio"
+      name: "② TTS & audio"
       icon: mdi:volume-high
       description: TTS engine, output player, and volume settings.
-      collapsed: true
+      collapsed: false
       input:
 
         tts_engine:
@@ -165,7 +155,7 @@ blueprint:
               multiline: true
 
     stage_3_llm:
-      name: "Stage 3 — LLM wake-up message"
+      name: "③ LLM wake-up message"
       icon: mdi:robot
       description: Optional AI-generated wake-up message via a conversation agent.
       collapsed: true
@@ -216,7 +206,7 @@ blueprint:
               multiple: true
 
     stage_4_notifications:
-      name: "Stage 4 — Mobile notifications"
+      name: "④ Mobile notifications"
       icon: mdi:cellphone-message
       description: Snooze/Stop push notification controls.
       collapsed: true
@@ -253,7 +243,7 @@ blueprint:
             text: {}
 
     stage_5_timing:
-      name: "Stage 5 — Snooze & music"
+      name: "⑤ Snooze & music"
       icon: mdi:timer-sand
       description: Snooze timing and post-alarm music.
       collapsed: true
@@ -460,6 +450,7 @@ actions:
             value_template: >-
               {{ wait.trigger is not none
                  and wait.trigger.event is defined
+                 and wait.trigger.event.data is defined
                  and wait.trigger.event.data.action == v_mobile_stop_action_id }}
         sequence:
           - alias: "Stop TTS immediately (first window)"
@@ -480,6 +471,7 @@ actions:
             value_template: >-
               {{ wait.trigger is not none
                  and wait.trigger.event is defined
+                 and wait.trigger.event.data is defined
                  and wait.trigger.event.data.action == v_mobile_snooze_action_id }}
         sequence:
           - alias: "Stop TTS immediately (snooze)"
@@ -518,6 +510,7 @@ actions:
                     value_template: >-
                       {{ wait.trigger is not none
                          and wait.trigger.event is defined
+                         and wait.trigger.event.data is defined
                          and wait.trigger.event.data.action == v_mobile_stop_action_id }}
                 sequence:
                   - alias: "Stop TTS immediately (stop after snooze)"
