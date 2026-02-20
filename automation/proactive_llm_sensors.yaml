@@ -20,30 +20,7 @@ blueprint:
       tentative_day_key using weekday schedule to break dependency
       cycle; is_weekend and effective_day_key now derive from
       tentative_day_key so weekday cross-midnight sessions are not
-      hijacked by weekend profile activation at midnight rollover
-
-    - **v7.3:** Audit fixes — presence_sensors default "" → [] for
-      multi-entity selector, "Stage N" references → circled-number
-      section labels, tightened chosen_user_name whitespace,
-      sensor_context for-loop whitespace control tags
-
-    - **v7.2:** Audit fixes — nag tick interval /1→/5 to reduce event bus
-      load, gender-neutral default bedtime prompt, min_presence_seconds
-      anchors to earliest ON sensor (| min), added source_url
-
-    - **v7.1:** Cross-midnight day attribution fix — effective_day_key
-      shifts post-midnight hours to the previous day''s run_days entry,
-      preventing unwanted evening activations on the next calendar day
-
-    - **v7:** Section key/name convention alignment, > → >- on all computed
-      template variables, YAML comment dividers between input sections
-
-    - **v6:** Style guide compliance — collapsible input sections, aliases on
-      all actions, service→action migration, template safety, error handling
-      on LLM calls, user_name input replacing hardcoded name
-
-    - **v5:** Weekday controls + weekend profile with separate schedule,
-      cooldown, prompt overrides, and bedtime behavior per weekend days'
+      hijacked by weekend profile activation at midnight rollover'
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/proactive_llm_sensors.yaml"
   homeassistant:
