@@ -806,7 +806,13 @@ actions:
       target_data: >-
         {{ (llm_target_data if llm_has_target else backup_target) | default({}, true) }}
       target_raw: >-
-        {{ dict(target_data.items() | selectattr('1')) }}
+        {%- set ns = namespace(pairs=[]) -%}
+        {%- for k, v in target_data.items() -%}
+          {%- if v -%}
+            {%- set ns.pairs = ns.pairs + [(k, v)] -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {{ dict(ns.pairs) }}
 
   # =========================================================================
   # ③ PLAYER BLACKLIST & DIVERT
@@ -1089,25 +1095,25 @@ actions:
   #      failed play_media doesn't produce a false success message.
   - alias: "10 · Set conversation response via choose"
     choose:
-      - alias: "10pre · Response: playback failed (best-effort check)"
+      - alias: "10a · Response: playback failed (best-effort check)"
         conditions:
           - condition: template
             value_template: >-
               {{ play_succeeded is defined and not play_succeeded }}
         sequence:
-          - alias: "10pre · Return play-failed response"
+          - alias: "10a · Return play-failed response"
             set_conversation_response: >-
               Sorry, I couldn't start playback. The player may be
               unavailable or the media wasn't found. Please try again.
 
-      - alias: "10a · Response: area + player targets"
+      - alias: "10b · Response: area + player targets"
         conditions:
           - condition: template
             value_template: >-
               {{ target.get('area_id', []) | length > 0
                  and target.get('entity_id', []) | length > 0 }}
         sequence:
-          - alias: "10a · Return area-and-player response"
+          - alias: "10b · Return area-and-player response"
             set_conversation_response: >-
               {{ resp_area_player
                  | replace('<action_word>', action_word)
@@ -1115,13 +1121,13 @@ actions:
                  | replace('<area_info>', area_info)
                  | replace('<player_info>', player_info) }}
 
-      - alias: "10b · Response: area targets only"
+      - alias: "10c · Response: area targets only"
         conditions:
           - condition: template
             value_template: >-
               {{ target.get('area_id', []) | length > 0 }}
         sequence:
-          - alias: "10b · Return area response"
+          - alias: "10c · Return area response"
             set_conversation_response: >-
               {{ resp_area
                  | replace('<action_word>', action_word)
@@ -1129,13 +1135,13 @@ actions:
                  | replace('<area_info>', area_info)
                  | replace('<player_info>', player_info) }}
 
-      - alias: "10c · Response: player targets only"
+      - alias: "10d · Response: player targets only"
         conditions:
           - condition: template
             value_template: >-
               {{ target.get('entity_id', []) | length > 0 }}
         sequence:
-          - alias: "10c · Return player response"
+          - alias: "10d · Return player response"
             set_conversation_response: >-
               {{ resp_player
                  | replace('<action_word>', action_word)
@@ -1144,7 +1150,7 @@ actions:
                  | replace('<player_info>', player_info) }}
 
     default:
-      - alias: "10d · Response: no target resolved"
+      - alias: "10e · Response: no target resolved"
         set_conversation_response: "{{ resp_no_target }}"
 
 # Parallel mode — each voice command is self-contained with no shared
