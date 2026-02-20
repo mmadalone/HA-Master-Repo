@@ -106,7 +106,7 @@ The section numbers are preserved across files for cross-referencing.
 
 ## Full Table of Contents
 
-**15 top-level sections · 146 subsections · 49 anti-patterns (44 AP codes + 5 sub-items) · 8 security checks · 10 files**
+**15 top-level sections · 146 subsections · 46 anti-patterns (41 AP codes + 5 sub-items) · 8 security checks · 10 files**
 
 ### [Core Philosophy](00_core_philosophy.md)
 
@@ -224,7 +224,7 @@ The section numbers are preserved across files for cross-referencing.
 ### [Anti-Patterns & Workflow](06_anti_patterns_and_workflow.md)
 
 - **§10** — Anti-Patterns (Never Do These)
-  - §10 scan tables — AP-01 through AP-39, grouped by domain (Core, ESPHome, MA, Dev Env) with severity tiers
+  - §10 scan tables — AP-01 through AP-44, grouped by domain (Core, ESPHome, MA, Dev Env) with severity tiers
   - §10.5 — Security review checklist (S1–S8, runs after scan tables)
   - General prose (1–24)
   - ESPHome (25–29)
