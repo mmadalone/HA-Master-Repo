@@ -13,6 +13,16 @@ blueprint:
 
     ### Recent changes
 
+    - **v12:** Consistency pass — added `| bool` filter to all six
+      `{% if %}` flag checks in condition templates, matching the pattern
+      already used in `choose` conditions throughout the blueprint.
+
+    - **v11:** Post-audit hardening — added `continue_on_error: true` to
+      all five non-critical service calls (cooldown stamp, silence-others,
+      pre/post/failure announcement scripts). Made post-transfer settling
+      delay configurable via new input `post_transfer_settle_seconds`
+      (default 2 s, max 300 s) instead of hardcoded 1 s.
+
     - **v10:** Collapsible section compliance — added collapsed keys to
       all six input sections (① open, ②–⑥ collapsed). Replaced four null
       defaults with empty strings to enable collapsibility. Removed dead
@@ -332,6 +342,21 @@ blueprint:
               domain: input_datetime
               multiple: false
 
+        post_transfer_settle_seconds:
+          name: Post-transfer settling delay (seconds)
+          description: >
+            Time to wait after the Music Assistant queue transfer before checking
+            whether the transfer succeeded. Gives MA time to propagate state to
+            the target player. Increase this if you see false-negative transfer
+            detections (e.g. with Spotify or slow backends).
+          default: 2
+          selector:
+            number:
+              min: 0
+              max: 300
+              unit_of_measurement: s
+              mode: slider
+
     # ===========================================================================
     # ⑤ ANNOUNCEMENTS
     # ===========================================================================
@@ -451,6 +476,7 @@ variables:
   treat_unknown_duration_as_music_flag: !input treat_unknown_duration_as_music
   voice_assistant_guard_entity: !input voice_assistant_guard
   silence_other_players_flag: !input silence_other_players
+  post_transfer_settle_seconds_value: !input post_transfer_settle_seconds
 
 triggers:
   - alias: "Presence sensor turned ON — zone occupancy detected after minimum hold time"
@@ -469,7 +495,7 @@ conditions:
   - alias: "Persons must be home (optional) — skipped when person gate is disabled"
     condition: template
     value_template: >
-      {% if not require_person %}
+      {% if not require_person | bool %}
         true
       {% else %}
         {% set ns = namespace(home=false) %}
@@ -578,7 +604,7 @@ actions:
 
       any_music_active: >
         {% set valid_states = ['playing'] %}
-        {% if follow_paused_music_flag %}
+        {% if follow_paused_music_flag | bool %}
           {% set valid_states = ['playing', 'paused'] %}
         {% endif %}
         {% set ns = namespace(any=false) %}
@@ -617,7 +643,7 @@ actions:
   - alias: "Gate — only follow when music is playing or paused (optional)"
     condition: template
     value_template: >
-      {% if not only_follow_when_playing_flag %}
+      {% if not only_follow_when_playing_flag | bool %}
         true
       {% else %}
         {{ any_music_active | bool }}
@@ -649,7 +675,7 @@ actions:
   - alias: "Gate — source room still occupied, don't steal music from another person (optional)"
     condition: template
     value_template: >
-      {% if not skip_if_source_occupied_flag %}
+      {% if not skip_if_source_occupied_flag | bool %}
         true
       {% else %}
         {% set src_idx = source_index | int(-1) %}
@@ -663,7 +689,7 @@ actions:
   - alias: "Gate — priority anchor prevents downgrade while source zone active (optional)"
     condition: template
     value_template: >
-      {% if not enforce_priority_anchor_flag %}
+      {% if not enforce_priority_anchor_flag | bool %}
         true
       {% else %}
         {% set src_idx = source_index | int(-1) %}
@@ -683,7 +709,7 @@ actions:
   - alias: "Gate — protect target playback, skip if target already playing (optional)"
     condition: template
     value_template: >
-      {% if not protect_target_playback_flag %}
+      {% if not protect_target_playback_flag | bool %}
         true
       {% else %}
         {{ target_state not in ['playing', 'buffering'] }}
@@ -701,6 +727,7 @@ actions:
                  and any_music_active | bool }}
         sequence:
           - alias: "Call pre-transfer announcement script — TTS targets pre-transfer speaker"
+            continue_on_error: true
             action: script.turn_on
             target:
               entity_id: "{{ pre_announcement_script_entity }}"
@@ -741,7 +768,7 @@ actions:
 
   - alias: "Post-transfer settling delay — let MA propagate state before checking success"
     delay:
-      seconds: 1
+      seconds: "{{ post_transfer_settle_seconds_value | int(2) }}"
 
   - alias: "Evaluate transfer success — target must now be playing/paused/buffering"
     variables:
@@ -771,6 +798,7 @@ actions:
                          and cooldown_helper_entity != '' }}
                 sequence:
                   - alias: "Stamp current time into cooldown helper"
+                    continue_on_error: true
                     action: input_datetime.set_datetime
                     target:
                       entity_id: "{{ cooldown_helper_entity }}"
@@ -787,6 +815,7 @@ actions:
                          and other_active_players | from_json | default([]) | length > 0 }}
                 sequence:
                   - alias: "Stop all configured players except the transfer target"
+                    continue_on_error: true
                     action: media_player.media_stop
                     target:
                       entity_id: "{{ other_active_players | from_json | default([]) }}"
@@ -802,6 +831,7 @@ actions:
                          and announcement_script_entity != '' }}
                 sequence:
                   - alias: "Call post-transfer announcement script — TTS targets post-transfer speaker"
+                    continue_on_error: true
                     action: script.turn_on
                     target:
                       entity_id: "{{ announcement_script_entity }}"
@@ -824,6 +854,7 @@ actions:
                  and announcement_script_entity != '' }}
         sequence:
           - alias: "Call announcement script with failure context — script/LLM crafts the message"
+            continue_on_error: true
             action: script.turn_on
             target:
               entity_id: "{{ announcement_script_entity }}"
