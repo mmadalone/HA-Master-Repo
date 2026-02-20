@@ -12,6 +12,13 @@ blueprint:
 
     ### Recent changes
 
+    - **v10:** Audit fixes — added `v_tts_engine` and
+      `v_tts_output_player` to variables block for consistency;
+      added runtime guard aborting early if required TTS inputs are
+      unconfigured; trim markers on `sensor_context` template to
+      eliminate leading whitespace in LLM prompt; corrected stale
+      v7 changelog entry
+
     - **v9:** Audit fix — migrated conversation agent input from
       `entity` selector (domain: conversation) to native
       `conversation_agent` selector for consistency with all other
@@ -25,10 +32,9 @@ blueprint:
       message; comment flagging duplicated music-script guard for future
       refactor
 
-    - **v7:** Audit fixes — Unicode section numbering (①–⑤); expanded
-      stage ② (required TTS inputs no longer hidden behind collapsed
-      section); added `event.data is defined` guard to all three
-      `wait.trigger` templates; added `source_url`; trimmed changelog
+    - **v7:** Audit fixes — Unicode section numbering (①–⑤); added
+      `event.data is defined` guard to all three `wait.trigger`
+      templates; added `source_url`; trimmed changelog
 
     - **v6:** Audit fixes — empty-list guard on `wakeup_entities` before
       `turn_on`; empty-string guard on `music_script` at both call sites;
@@ -316,6 +322,8 @@ variables:
   v_wakeup_entities: !input wakeup_entities
   v_music_script: !input music_script
   v_tts_message: !input tts_message
+  v_tts_engine: !input tts_engine
+  v_tts_output_player: !input tts_output_player
   v_voice_profile: !input voice_profile
 
 triggers:
@@ -333,6 +341,15 @@ conditions:
       {{ map[idx] in (v_active_days | default([])) }}
 
 actions:
+
+  - alias: "Validate required TTS inputs"
+    if:
+      - condition: template
+        value_template: >-
+          {{ (v_tts_engine | default('') | string | length == 0)
+             or (v_tts_output_player | default('') | string | length == 0) }}
+    then:
+      - stop: "llm_alarm: tts_engine or tts_output_player is not configured — aborting"
 
   - alias: "Turn on wake-up lights / switches"
     if:
@@ -368,15 +385,15 @@ actions:
     variables:
       sensor_context: >-
         {% set entities = expand(v_llm_context_entities | default([])) %}
-        {% if entities | length == 0 %}
+        {%- if entities | length == 0 -%}
           no extra sensor data
-        {% else %}
+        {%- else -%}
           {% set ns = namespace(lines=[]) %}
-          {% for e in entities %}
+          {%- for e in entities -%}
             {% set ns.lines = ns.lines + [e.entity_id ~ ' (' ~ (e.name or e.entity_id) ~ '): ' ~ e.state] %}
-          {% endfor %}
+          {%- endfor -%}
           {{ ns.lines | join(' | ') }}
-        {% endif %}
+        {%- endif -%}
 
   - alias: "Optionally generate wake message via LLM"
     choose:
