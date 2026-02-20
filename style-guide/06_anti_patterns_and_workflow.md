@@ -251,7 +251,7 @@ The proactive check catches crashes the user *forgot* to mention. The reactive c
    - After generating, rename the output file from its auto-generated name to the proper `<blueprint_name>-header.<ext>` convention. Save it to `HEADER_IMG`. Ensure the extension in the YAML `![Image](...)` URL matches the actual filename in the repo exactly. **Use `HEADER_IMG_RAW`** — never `github.com/blob/...` (blob URLs render HTML, not the image binary).
    - **Image cleanup (MANDATORY):** After the user approves an image, delete the original auto-generated file (the one with the tool's default filename) if it differs from the renamed target. If earlier attempts were rejected during the session, delete those too — don't accumulate orphaned `attempt-1.jpeg`, `attempt-2.jpeg` files. If the user declines a header image entirely, delete all generated files. Verify `HEADER_IMG` contains only the final approved file for this blueprint (no duplicates with different extensions, e.g., both `.jpeg` and `.png` for the same blueprint).
 5. **Edit directly** — write to the SMB mount. Don't ask "should I write this?" — just do it.
-   - **Checkpoint:** If the build requires ≥3 chunks (§11.5), create a build log (§11.8) after completing the outline (step 3) and update it after each chunk is confirmed.
+   - **Checkpoint:** Create a build log (§11.8) before the first write — this is unconditional per AP-39, not gated by chunk count. Update it after each chunk is confirmed.
 6. **Verify output (MANDATORY)** — after writing the file:
    - **Self-check against §10 scan table** — run through the machine-scannable anti-pattern triggers. Fix violations before telling the user the file is ready.
    - **Tell the user to validate** — include this in your response: *"File written. Next steps: (1) Reload automations in Developer Tools → YAML, (2) Open the automation/blueprint in the UI and check for schema errors, (3) Run it once manually and check the trace for unexpected behavior."*
@@ -309,7 +309,7 @@ Conversation context compresses over long exchanges and during extended generati
 
 **Procedure:**
 1. **Outline first.** Before writing any content, present the full structure as a numbered section list. Get user confirmation.
-2. **Create build log** (§11.8) if the build requires ≥3 chunks. Record the outline, decisions, and target file paths.
+2. **Create build log** (§11.8) before the first write — unconditional per AP-39. Record the outline, decisions, and target file paths.
 3. **Write one section at a time.** Each chunk should be a coherent, self-contained section (e.g., one input group, one action block, one trigger set). Keep chunks under ~80 lines.
 4. **Confirm before continuing.** After writing each chunk, briefly state what was just written and what comes next. Update the build log's "Completed chunks" section. This creates a recent-context anchor that resists compression.
 5. **If something feels off mid-generation — stop.** Re-read the outline and the last confirmed chunk. Don't power through on vibes.
@@ -367,7 +367,7 @@ Conversations die. Browser crashes, token limits hit, Claude goes sideways, or t
 During any multi-step build, maintain a running decision log as a file. After each significant decision or completed chunk, append to it.
 
 **Build log naming convention:** `YYYY-MM-DD_<project-slug>_build_log.md`
-**Save location:** `_build_logs/` (under HA config directory, committed to git)
+**Save location:** `PROJECT_DIR/_build_logs/` (never in `HA_CONFIG` — see §11.0 mandatory location rule)
 
 **Required schema — every build log MUST contain these sections:**
 
@@ -482,7 +482,7 @@ Multi-file audits, reviews, and compliance sweeps carry state that is just as vu
 - Any multi-file refactor where edits depend on scan findings
 
 **Audit log naming convention:** `YYYY-MM-DD_<scope-slug>_audit_log.md`
-**Save location:** `_build_logs/` (under HA config directory, committed to git)
+**Save location:** `PROJECT_DIR/_build_logs/` (never in `HA_CONFIG` — see §11.0 mandatory location rule)
 
 **Required schema — every audit log MUST contain these sections:**
 
