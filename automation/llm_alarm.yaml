@@ -12,6 +12,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v12:** Audit fix — added `| default()` guards to
+      `v_wakeup_time` and `v_post_tts_timeout` in LLM prompt
+      meta block for full defensive consistency
+
     - **v11:** Audit fix — added `v_tts_volume_before` and
       `v_tts_volume_after` to variables block for full input-to-variable
       parity (all 19 inputs now reflected)
@@ -420,9 +424,9 @@ actions:
                    ~ '\n\nmeta:\n'
                    ~ '- current_time_24h: ' ~ now().strftime('%H:%M') ~ '\n'
                    ~ '- current_time_12h_plain: ' ~ now().strftime('%I:%M').lstrip('0') ~ '\n'
-                   ~ '- configured_wakeup_time: ' ~ (v_wakeup_time | string) ~ '\n'
-                   ~ '- snooze_stop_window_seconds: ' ~ (v_post_tts_timeout | string) ~ '\n'
-                   ~ '- target_word_count: ' ~ ((v_post_tts_timeout * 2) | int | string) ~ '\n'
+                   ~ '- configured_wakeup_time: ' ~ (v_wakeup_time | default('07:00:00') | string) ~ '\n'
+                   ~ '- snooze_stop_window_seconds: ' ~ (v_post_tts_timeout | default(40) | string) ~ '\n'
+                   ~ '- target_word_count: ' ~ ((v_post_tts_timeout | default(40) * 2) | int | string) ~ '\n'
                    ~ '\ncontext:\n'
                    ~ '- wakeup_reason: alarm time reached\n'
                    ~ '- sensor_context: ' ~ (sensor_context | string)
