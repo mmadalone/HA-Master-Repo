@@ -16,11 +16,18 @@ blueprint:
 
     ### Recent changes
 
+    - **v7.5:** Audit remediation — added blueprint_version variable,
+      quantization note on cooldown inputs, genericized fallback
+      messages, code comments for expand() and bedtime error paths,
+      standardized template parenthesis style
+
     - **v7.4:** Fix cross-midnight weekend profile mismatch — added
       tentative_day_key using weekday schedule to break dependency
       cycle; is_weekend and effective_day_key now derive from
       tentative_day_key so weekday cross-midnight sessions are not
-      hijacked by weekend profile activation at midnight rollover'
+      hijacked by weekend profile activation at midnight rollover
+
+    [Full changelog →](https://github.com/mmadalone/HA-Master-Repo)'
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/proactive_llm_sensors.yaml"
   homeassistant:
@@ -294,6 +301,8 @@ blueprint:
             Minimum time between proactive messages in this area. When
             "Keep nagging while present" is enabled, this acts as the nag
             interval while presence is on. Default is 30 minutes.
+            Note: the repeat timer ticks every 5 minutes, so effective
+            intervals are rounded up to the nearest 5-minute boundary.
           default: 30
           selector:
             number:
@@ -402,7 +411,9 @@ blueprint:
           name: Weekend cooldown / nag interval (minutes)
           description: >
             Cooldown/nag interval for weekend days when using the weekend
-            profile.
+            profile. Note: the repeat timer ticks every 5 minutes, so
+            effective intervals are rounded up to the nearest 5-minute
+            boundary.
           default: 30
           selector:
             number:
@@ -540,6 +551,7 @@ trace:
 
 variables:
   # core
+  blueprint_version: "7.5"
   presence_entities: !input presence_sensors
   repeat_while_present: !input repeat_while_present
   max_nags_per_session: !input max_nags_per_session
@@ -652,7 +664,7 @@ variables:
     {% endif %}
 
   llm_prompt: >-
-    {% if weekend_profile_active and ((weekend_llm_prompt_override | default('')) | trim) %}
+    {% if weekend_profile_active and (weekend_llm_prompt_override | default('') | trim) %}
       {{ weekend_llm_prompt_override }}
     {% else %}
       {{ llm_prompt_base }}
@@ -685,7 +697,7 @@ variables:
   bedtime_llm_prompt: >-
     {% if weekend_profile_active
           and (weekend_bedtime_mode | default('same_as_weekdays')) == 'use_weekend_bedtime_prompt'
-          and ((weekend_bedtime_llm_prompt_override | default('')) | trim) %}
+          and (weekend_bedtime_llm_prompt_override | default('') | trim) %}
       {{ weekend_bedtime_llm_prompt_override }}
     {% else %}
       {{ bedtime_llm_prompt_base }}
@@ -760,6 +772,8 @@ conditions:
       {% endif %}
 
   # Must still be present in the area
+  # Note: expand() silently drops nonexistent entity IDs — if a sensor is
+  # misconfigured, it won't error but won't count as present either.
   - condition: template
     alias: "Presence still detected"
     value_template: >
@@ -870,11 +884,11 @@ actions:
         {% set name = chosen_direct_name %}
         {% set fallback %}
           {% if tod_label == 'morning' %}
-            good {{ tod_label }} in the {{ area_name | default('room') }}, {{ name }}. want me to start your usual chaos... i mean, music?
+            good {{ tod_label }}, {{ name }}. you're in the {{ area_name | default('room') }}. let me know if you need anything.
           {% elif tod_label == 'afternoon' %}
-            back in the {{ area_name | default('room') }}, huh {{ name }}? need me to resume your tunes or handle something for you?
+            hey {{ name }}, welcome back to the {{ area_name | default('room') }}. need anything from me?
           {% else %}
-            it's {{ tod_label }} in the {{ area_name | default('room') }}, {{ name }}. i can play something relaxing or set the mood if you want.
+            good {{ tod_label }}, {{ name }}. i'm here in the {{ area_name | default('room') }} if you need anything.
           {% endif %}
         {% endset %}
         {% if resp is not none
@@ -999,6 +1013,9 @@ actions:
                 - "cancel"
         response_variable: bedtime_answer
 
+      # Note: If assist_satellite.ask_question errors (timeout, unavailable),
+      # the response object won't have .id == 'yes', so this safely falls
+      # through to no-op. No explicit error guard needed.
       - alias: "Run bedtime script if user said yes"
         choose:
           - alias: "User answered YES and script is configured"
