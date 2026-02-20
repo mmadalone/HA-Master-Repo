@@ -16,6 +16,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v7.3:** Audit fixes — presence_sensors default "" → [] for
+      multi-entity selector, "Stage N" references → circled-number
+      section labels, tightened chosen_user_name whitespace,
+      sensor_context for-loop whitespace control tags
+
     - **v7.2:** Audit fixes — nag tick interval /1→/5 to reduce event bus
       load, gender-neutral default bedtime prompt, min_presence_seconds
       anchors to earliest ON sensor (| min), added source_url
@@ -59,7 +64,7 @@ blueprint:
               domain: binary_sensor
               device_class: occupancy
               multiple: true
-          default: ""
+          default: []
 
         min_presence_seconds:
           name: Minimum presence duration (seconds)
@@ -370,7 +375,7 @@ blueprint:
           description: >
             Which days should be treated as "weekend" for the setting above.
             Only used for weekend behavior; does not override "Run on these
-            days" in Stage 4.
+            days" in ④ Schedule & timing.
           default:
             - sat
             - sun
@@ -498,8 +503,9 @@ blueprint:
           name: Fallback bedtime question text
           description: >
             Fallback text if the LLM fails to generate a bedtime question.
-            Should be a short yes/no question. The user name from Stage 3
-            is NOT automatically inserted here — write the full question.
+            Should be a short yes/no question. The user name from ③ AI
+            conversation is NOT automatically inserted here — write the
+            full question.
           default: "Do you want me to help you go to bed now?"
           selector:
             text:
@@ -520,7 +526,7 @@ blueprint:
           name: Weekend bedtime question
           description: >
             Optionally change bedtime behavior on weekend days when using
-            the weekend profile from Stage 5.
+            the weekend profile from ⑤ Weekend overrides.
           default: same_as_weekdays
           selector:
             select:
@@ -563,11 +569,7 @@ variables:
   chosen_user_name: >-
     {% set names = (user_names_raw | default('', true)).split(',')
         | map('trim') | reject('eq', '') | list %}
-    {% if names | length > 0 %}
-      {{ names | random }}
-    {% else %}
-      {{ '' }}
-    {% endif %}
+    {{ names | random if names | length > 0 else '' }}
 
   # Direct address in spoken TTS — falls back to "friend" pool
   chosen_direct_name: >-
@@ -833,13 +835,13 @@ actions:
           none
         {% else %}
           {% set expanded = expand(entities) %}
-          {% for e in expanded %}
+          {%- for e in expanded %}
           {% if e.domain == 'media_player' %}
           - {{ e.entity_id }} ({{ e.name }}): {{ e.state }}{% if e.state == 'playing' %} — "{{ e.attributes.media_title | default('unknown track') }}"{% if e.attributes.media_artist | default('') %} by {{ e.attributes.media_artist | default('') }}{% endif %}{% if e.attributes.media_content_type | default('') %} [{{ e.attributes.media_content_type | default('') }}]{% endif %}{% endif %}
           {% else %}
           - {{ e.entity_id }} ({{ e.name }}): {{ e.state }}{% if e.attributes.unit_of_measurement | default('') %} {{ e.attributes.unit_of_measurement | default('') }}{% endif %}
-          {% endif %}
-          {% endfor %}
+          {%- endif %}
+          {%- endfor %}
         {% endif %}
 
   - alias: "Generate proactive message via LLM"
