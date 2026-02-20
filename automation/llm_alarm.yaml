@@ -12,6 +12,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v11:** Audit fix — added `v_tts_volume_before` and
+      `v_tts_volume_after` to variables block for full input-to-variable
+      parity (all 19 inputs now reflected)
+
     - **v10:** Audit fixes — added `v_tts_engine` and
       `v_tts_output_player` to variables block for consistency;
       added runtime guard aborting early if required TTS inputs are
@@ -324,6 +328,8 @@ variables:
   v_tts_message: !input tts_message
   v_tts_engine: !input tts_engine
   v_tts_output_player: !input tts_output_player
+  v_tts_volume_before: !input tts_volume_before
+  v_tts_volume_after: !input tts_volume_after
   v_voice_profile: !input voice_profile
 
 triggers:
