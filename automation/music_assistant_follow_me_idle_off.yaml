@@ -78,7 +78,7 @@ blueprint:
           selector:
             entity:
               domain: input_boolean
-          default: ""
+          default: []
 
         music_players:
           name: Music players to monitor
@@ -89,7 +89,7 @@ blueprint:
             entity:
               domain: media_player
               multiple: true
-          default: ""
+          default: []
 
     # ===========================================================================
     # ② BEHAVIOR
