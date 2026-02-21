@@ -343,7 +343,7 @@ triggers:
 
   - alias: "Periodic tick — repeat nag check every minute"
     trigger: time_pattern
-    minutes: "/1"
+    minutes: "/5"
 
 conditions:
   - alias: "Time window — only during active hours"
@@ -496,6 +496,14 @@ actions:
             data:
               message: "{{ proactive_message }}"
               media_player_entity_id: "{{ player }}"
+    default:
+      - alias: "Fallback — unknown TTS mode, log warning"
+        action: system_log.write
+        data:
+          message: >
+            proactive_llm blueprint: unknown tts_mode '{{ tts_mode }}'.
+            Expected 'standard_tts_entity' or 'elevenlabs_custom_service'.
+          level: warning
 
   - alias: "Bedtime question gate — only if feature enabled"
     if:
@@ -565,17 +573,15 @@ actions:
                 - "cancel"
         response_variable: bedtime_answer
 
-      - alias: "Handle bedtime answer — run script if yes"
-        choose:
-          - conditions:
-              - condition: template
-                value_template: >
-                  {{ bedtime_answer is defined
-                     and bedtime_answer.id == 'yes'
-                     and bedtime_help_script is not none
-                     and bedtime_help_script != '' }}
-            sequence:
-              - alias: "Run bedtime help script"
-                action: script.turn_on
-                target:
-                  entity_id: "{{ bedtime_help_script }}"
+      - alias: "Gate — only proceed if bedtime answer was yes and script configured"
+        condition: template
+        value_template: >
+          {{ bedtime_answer is defined
+             and bedtime_answer.id == 'yes'
+             and bedtime_help_script is not none
+             and bedtime_help_script != '' }}
+
+      - alias: "Run bedtime help script"
+        action: script.turn_on
+        target:
+          entity_id: "{{ bedtime_help_script }}"
