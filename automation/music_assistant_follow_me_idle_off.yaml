@@ -137,29 +137,46 @@ triggers:
     trigger: state
     entity_id: !input music_players
 
+conditions:
+  - alias: "Skip attribute-only changes — only react to actual state transitions"
+    condition: template
+    value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
+
+  - alias: "Guard — require configured inputs before evaluating"
+    condition: template
+    value_template: >
+      {{ players not in ['', none, []]
+         and follow_switch_entity not in ['', none] }}
+
 actions:
   - alias: "Compute idle and playback state across all monitored players"
     variables:
       all_idle: >
-        {% set now_ts = as_timestamp(now()) %}
-        {% set idle_secs = (idle_minutes | int) * 60 %}
-        {% set ns = namespace(all_idle=true) %}
+        {% set player_list = expand(players) if players else [] %}
+        {% if player_list | length == 0 %}
+          {{ false }}
+        {% else %}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set idle_secs = (idle_minutes | int) * 60 %}
+          {% set ns = namespace(all_idle=true) %}
 
-        {% for p in expand(players) %}
-          {# If any player is currently playing, we are not idle #}
-          {% if p.state == 'playing' %}
-            {% set ns.all_idle = false %}
-          {# If last change was too recent, we haven't been idle long enough #}
-          {% elif now_ts - as_timestamp(p.last_changed | default(now())) < idle_secs %}
-            {% set ns.all_idle = false %}
-          {% endif %}
-        {% endfor %}
+          {% for p in player_list %}
+            {# If any player is currently playing, we are not idle #}
+            {% if p.state == 'playing' %}
+              {% set ns.all_idle = false %}
+            {# If last change was too recent, we haven't been idle long enough #}
+            {% elif now_ts - as_timestamp(p.last_changed | default(now())) < idle_secs %}
+              {% set ns.all_idle = false %}
+            {% endif %}
+          {% endfor %}
 
-        {{ ns.all_idle }}
+          {{ ns.all_idle }}
+        {% endif %}
 
       any_playing: >
+        {% set player_list = expand(players) if players else [] %}
         {% set ns = namespace(any_play=false) %}
-        {% for p in expand(players) %}
+        {% for p in player_list %}
           {% if p.state == 'playing' %}
             {% set ns.any_play = true %}
           {% endif %}
