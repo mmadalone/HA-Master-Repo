@@ -58,6 +58,7 @@ blueprint:
     - **v1:** Initial version
 
   domain: automation
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/music_assistant_follow_me_idle_off.yaml
 
   input:
     # ===========================================================================
@@ -135,8 +136,6 @@ triggers:
     id: player_state_change
     trigger: state
     entity_id: !input music_players
-
-conditions: []
 
 actions:
   - alias: "Compute idle and playback state across all monitored players"
