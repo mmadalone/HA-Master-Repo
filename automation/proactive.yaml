@@ -50,7 +50,7 @@ blueprint:
             Friendly name of this area, used in fallback messages and
             can be referenced in AI-generated text. Pick from the menu
             or type your own value.
-          default: Workshop
+          default: ""
           selector:
             select:
               options:
@@ -61,7 +61,6 @@ blueprint:
                 - Kitchen
                 - Bathroom
               custom_value: true
-          default: ""
 
     # ===========================================================================
     # ② TTS CONFIGURATION
@@ -342,10 +341,10 @@ triggers:
     from: "off"
     to: "on"
 
-  - alias: "Periodic tick — repeat nag check every minute"
+  - alias: "Periodic tick — repeat nag check every five minutes"
     id: periodic_tick
     trigger: time_pattern
-    minutes: "/1"
+    minutes: "/5"
 
   - alias: "Bedtime — exact start_time trigger each day"
     id: bedtime_time
@@ -525,7 +524,7 @@ actions:
               - condition: template
                 value_template: >-
                   {{ bedtime_answer is defined
-                     and bedtime_answer.id == 'yes' }}
+                     and bedtime_answer.get('id', '') == 'yes' }}
             sequence:
               - alias: "Execute bedtime routine script"
                 action: script.turn_on
