@@ -140,7 +140,10 @@ triggers:
 conditions:
   - alias: "Skip attribute-only changes — only react to actual state transitions"
     condition: template
-    value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
+    value_template: >
+      {{ trigger.from_state is not none
+         and trigger.to_state is not none
+         and trigger.from_state.state != trigger.to_state.state }}
 
   - alias: "Guard — require configured inputs before evaluating"
     condition: template
@@ -157,7 +160,7 @@ actions:
           {{ false }}
         {% else %}
           {% set now_ts = as_timestamp(now()) %}
-          {% set idle_secs = (idle_minutes | int) * 60 %}
+          {% set idle_secs = (idle_minutes | int(15)) * 60 %}
           {% set ns = namespace(all_idle=true) %}
 
           {% for p in player_list %}
