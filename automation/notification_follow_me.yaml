@@ -286,7 +286,7 @@ blueprint:
     # =========================================================================
     tts_config:
       name: "⑤ TTS configuration"
-      icon: mdi:text-to-speech
+      icon: mdi:microphone-message
       description: Text-to-speech engine settings for voice delivery.
       collapsed: true
       input:
