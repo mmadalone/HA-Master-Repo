@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v1)
+# Notification Follow-Me (v2)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v1)"
+  name: "Notification Follow-Me (v2)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,10 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v2:** Cooldown fix (timezone-aware math), multi-message support
+      (android.textLines), queued mode, trigger-safe attribute extraction,
+      conditional TTS announce, case-insensitive blocked contacts,
+      today_at guard, variable-based conditions
     - **v1:** Initial release
 
   domain: automation
@@ -374,9 +378,8 @@ triggers:
 # =============================================================================
 conditions:
   - alias: "Master toggle must be ON"
-    condition: state
-    entity_id: !input enable_toggle
-    state: "on"
+    condition: template
+    value_template: "{{ is_state(toggle_entity, 'on') }}"
 
   - alias: "DND must not be active (skip check if no DND sensor configured)"
     condition: template
@@ -394,8 +397,8 @@ conditions:
       {% if not (enable_quiet | bool(false)) %}
         true
       {% else %}
-        {% set qs = today_at(quiet_start_val) %}
-        {% set qe = today_at(quiet_end_val) %}
+        {% set qs = today_at(quiet_start_val | default('23:00:00')) %}
+        {% set qe = today_at(quiet_end_val | default('07:00:00')) %}
         {% if qs < qe %}
           {{ not (qs <= now() < qe) }}
         {% else %}
@@ -439,7 +442,7 @@ actions:
   - alias: "2 · Apply blocked contacts filter"
     condition: template
     value_template: >-
-      {%- set sender = notif_sender | default('') | string -%}
+      {%- set sender = notif_sender | default('') | string | lower -%}
       {%- set helper = blocked_contacts_entity | default('') | string -%}
       {%- if helper | length == 0 -%}
         true
@@ -448,7 +451,7 @@ actions:
         {%- if raw | length == 0 -%}
           true
         {%- else -%}
-          {%- set blocked = raw.split(',') | map('trim') | list -%}
+          {%- set blocked = raw.split(',') | map('trim') | map('lower') | list -%}
           {{ sender not in blocked }}
         {%- endif -%}
       {%- endif -%}
@@ -584,6 +587,32 @@ actions:
         {% endif %}
 
   # ---------------------------------------------------------------------------
+  # 7b. Build TTS data payloads — conditionally inject announce key
+  # ---------------------------------------------------------------------------
+  - alias: "7b · Build TTS data payloads (announce-safe)"
+    variables:
+      tts_data_standard: >-
+        {% if tts_announce | bool(false) %}
+          {{ {"message": announcement,
+              "media_player_entity_id": target_satellite,
+              "announce": true} }}
+        {% else %}
+          {{ {"message": announcement,
+              "media_player_entity_id": target_satellite} }}
+        {% endif %}
+      tts_data_elevenlabs: >-
+        {% if tts_announce | bool(false) %}
+          {{ {"message": announcement,
+              "media_player_entity_id": target_satellite,
+              "options": {"voice_profile": voice_profile},
+              "announce": true} }}
+        {% else %}
+          {{ {"message": announcement,
+              "media_player_entity_id": target_satellite,
+              "options": {"voice_profile": voice_profile}} }}
+        {% endif %}
+
+  # ---------------------------------------------------------------------------
   # 8. Deliver announcement — TTS to satellite or mobile push fallback
   # ---------------------------------------------------------------------------
   - alias: "8 · Route announcement to satellite or fallback"
@@ -606,11 +635,7 @@ actions:
                     continue_on_error: true
                     target:
                       entity_id: "{{ tts_entity }}"
-                    data:
-                      message: "{{ announcement }}"
-                      media_player_entity_id: "{{ target_satellite }}"
-                      options:
-                        voice_profile: "{{ voice_profile }}"
+                    data: "{{ tts_data_elevenlabs }}"
 
               - alias: "Standard TTS entity"
                 conditions:
@@ -622,9 +647,7 @@ actions:
                     continue_on_error: true
                     target:
                       entity_id: "{{ tts_entity }}"
-                    data:
-                      message: "{{ announcement }}"
-                      media_player_entity_id: "{{ target_satellite }}"
+                    data: "{{ tts_data_standard }}"
 
             default:
               - alias: "Fallback — unknown TTS mode, log warning and use standard"
@@ -639,9 +662,7 @@ actions:
                 continue_on_error: true
                 target:
                   entity_id: "{{ tts_entity }}"
-                data:
-                  message: "{{ announcement }}"
-                  media_player_entity_id: "{{ target_satellite }}"
+                data: "{{ tts_data_standard }}"
 
       # --- No satellite: mobile push fallback ---
       - alias: "No satellite — send mobile push notification"
