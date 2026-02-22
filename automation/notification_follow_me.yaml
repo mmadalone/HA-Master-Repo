@@ -6,7 +6,7 @@
 # has the conversation agent summarize who messaged and what they said.
 #
 # Data source: Android Companion App `last_notification` sensor.
-# Dual filter: VIP Contacts (messaging apps) + VIP Apps (non-messaging).
+# Blocked contacts: blacklist filter — names in the list are suppressed.
 # Presence: Parallel-array mapping — sensor[N] → satellite[N].
 # =============================================================================
 
@@ -24,9 +24,9 @@ blueprint:
     conversation agent summarize the message — completely hands-free.
 
     Uses the Android Companion App's `last_notification` sensor as the data
-    source. Includes dual filtering (VIP contacts for messaging apps, VIP apps
-    for non-messaging), configurable cooldown, quiet hours, DND respect, and
-    media message detection with "check your phone" fallback.
+    source. Includes blocked-sender filtering, configurable cooldown,
+    quiet hours, DND respect, and media message detection with "check your
+    phone" fallback.
 
     ### Recent changes
     - **v1:** Initial release
@@ -162,29 +162,19 @@ blueprint:
       name: "③ Notification filtering"
       icon: mdi:filter-variant
       description: >-
-        VIP contact and app lists, cooldown between announcements, and
-        message character cap for LLM input.
+        Blocked contacts list, cooldown between announcements, and
+        message character cap for LLM input. App-level filtering is
+        handled on the phone via the Companion App's Allow List.
       collapsed: true
       input:
-        vip_contacts:
-          name: VIP contacts helper
+        blocked_contacts:
+          name: Blocked contacts helper
           description: >-
             Input text helper containing comma-separated sender names
-            (e.g., "Arden de Raaij, Mare, Mom"). Only notifications from
-            these senders are announced for messaging apps (WhatsApp,
-            Signal, SMS where category = "msg").
-          default: ""
-          selector:
-            entity:
-              domain: input_text
-
-        vip_apps:
-          name: VIP apps helper
-          description: >-
-            Input text helper containing comma-separated package names
-            for non-messaging apps (e.g., "com.bankapp"). These bypass
-            the VIP contacts filter — all notifications from these
-            packages are announced regardless of sender.
+            to suppress (e.g., "Spam Bot, Group Chat"). Notifications
+            from these senders are silently dropped. Leave empty to
+            allow all senders through. App-level filtering is handled
+            on the phone via the Companion App's Allow List.
           default: ""
           selector:
             entity:
@@ -345,8 +335,7 @@ variables:
   satellite_list: !input target_satellites
   fallback: !input fallback_mode
   mobile_service: !input mobile_notify_service
-  vip_contacts_entity: !input vip_contacts
-  vip_apps_entity: !input vip_apps
+  blocked_contacts_entity: !input blocked_contacts
   cooldown: !input cooldown_seconds
   last_announced_entity: !input last_announced_helper
   char_limit: !input char_cap
@@ -416,28 +405,27 @@ actions:
         {{ state_attr(sensor_entity, 'android.text') | default('') }}
       notif_package: >-
         {{ state_attr(sensor_entity, 'package') | default('') }}
-      notif_category: >-
-        {{ state_attr(sensor_entity, 'category') | default('') }}
       notif_is_group: >-
         {{ state_attr(sensor_entity, 'android.isGroupConversation') | default(false) }}
 
   # ---------------------------------------------------------------------------
-  # 2. Dual filter — VIP contacts for messaging, VIP apps for the rest
+  # 2. Blocked contacts filter — drop notifications from blacklisted senders
   # ---------------------------------------------------------------------------
-  - alias: "2 · Apply dual notification filter"
+  - alias: "2 · Apply blocked contacts filter"
     condition: template
     value_template: >-
       {%- set sender = notif_sender | default('') | string -%}
-      {%- set package = notif_package | default('') | string -%}
-      {%- set category = notif_category | default('') | string -%}
-      {%- if category == 'msg' -%}
-        {%- set contacts_raw = states(vip_contacts_entity) | default('') -%}
-        {%- set contacts = contacts_raw.split(',') | map('trim') | list -%}
-        {{ sender in contacts }}
+      {%- set helper = blocked_contacts_entity | default('') | string -%}
+      {%- if helper | length == 0 -%}
+        true
       {%- else -%}
-        {%- set apps_raw = states(vip_apps_entity) | default('') -%}
-        {%- set apps = apps_raw.split(',') | map('trim') | list -%}
-        {{ package in apps }}
+        {%- set raw = states(helper) | default('') -%}
+        {%- if raw | length == 0 -%}
+          true
+        {%- else -%}
+          {%- set blocked = raw.split(',') | map('trim') | list -%}
+          {{ sender not in blocked }}
+        {%- endif -%}
       {%- endif -%}
 
   # ---------------------------------------------------------------------------
