@@ -316,11 +316,23 @@ blueprint:
             text:
               multiline: false
 
+        tts_announce:
+          name: Use announce mode for TTS
+          description: >-
+            When enabled, sends announce: true with tts.speak calls.
+            This ducks current audio, plays the announcement, then
+            resumes. Supported by Sonos, Google Cast, and Music
+            Assistant players. Disable for ESPHome Voice PE satellites
+            and other devices that don't support it.
+          default: false
+          selector:
+            boolean: {}
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
-mode: single
-max_exceeded: silent
+mode: queued
+max: 5
 
 trace:
   stored_traces: 10
@@ -346,6 +358,7 @@ variables:
   tts_mode: !input tts_mode
   tts_entity: !input tts_entity
   voice_profile: !input elevenlabs_voice_profile
+  tts_announce: !input tts_announce
   notification_prompt: !input notification_prompt
 
 # =============================================================================
@@ -399,14 +412,26 @@ actions:
   # ---------------------------------------------------------------------------
   - alias: "1 · Extract notification attributes"
     variables:
+      _attrs: >-
+        {% if trigger.to_state is defined %}
+          {{ trigger.to_state.attributes }}
+        {% else %}
+          {{ states[sensor_entity].attributes }}
+        {% endif %}
       notif_sender: >-
-        {{ state_attr(sensor_entity, 'android.title') | default('Unknown sender') }}
+        {{ _attrs.get('android.title', 'Unknown sender') }}
       notif_text: >-
-        {{ state_attr(sensor_entity, 'android.text') | default('') }}
+        {% set lines = _attrs.get('android.textLines', none) %}
+        {% if lines is iterable and lines is not string
+              and lines | length > 0 %}
+          {{ lines | join(' · ') }}
+        {% else %}
+          {{ _attrs.get('android.text', '') }}
+        {% endif %}
       notif_package: >-
-        {{ state_attr(sensor_entity, 'package') | default('') }}
+        {{ _attrs.get('package', '') }}
       notif_is_group: >-
-        {{ state_attr(sensor_entity, 'android.isGroupConversation') | default(false) }}
+        {{ _attrs.get('android.isGroupConversation', false) }}
 
   # ---------------------------------------------------------------------------
   # 2. Blocked contacts filter — drop notifications from blacklisted senders
@@ -438,17 +463,8 @@ actions:
       {% if helper | length == 0 %}
         true
       {% else %}
-        {% set last = states(helper) | default('unknown') %}
-        {% if last in ['unknown', 'unavailable', ''] %}
-          true
-        {% else %}
-          {% set last_dt = last | as_datetime | default(none) %}
-          {% if last_dt is none %}
-            true
-          {% else %}
-            {{ (now() - last_dt).total_seconds() | float(9999) >= (cooldown | int(60)) }}
-          {% endif %}
-        {% endif %}
+        {% set last_ts = states(helper) | as_timestamp | default(0) %}
+        {{ (as_timestamp(now()) - last_ts) >= (cooldown | int(60)) }}
       {% endif %}
 
   # ---------------------------------------------------------------------------
