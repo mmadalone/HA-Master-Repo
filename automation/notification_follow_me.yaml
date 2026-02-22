@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v2)
+# Notification Follow-Me (v3)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v2)"
+  name: "Notification Follow-Me (v3)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,10 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3:** Ringer mode volume control — vibrate ducks to quiet volume,
+      silent skips TTS entirely. Corrected announce mode support note
+      (Voice PE supports announce). Defensive hardening on cooldown,
+      attribute fallback, and mobile push service guards.
     - **v2:** Cooldown fix (timezone-aware math), multi-message support
       (android.textLines), queued mode, trigger-safe attribute extraction,
       conditional TTS announce, case-insensitive blocked contacts,
@@ -325,12 +329,65 @@ blueprint:
           description: >-
             When enabled, sends announce: true with tts.speak calls.
             This ducks current audio, plays the announcement, then
-            resumes. Supported by Sonos, Google Cast, and Music
-            Assistant players. Disable for ESPHome Voice PE satellites
-            and other devices that don't support it.
+            resumes. Supported by ESPHome Voice PE, Sonos, Google
+            Cast, and Music Assistant players. Disable for devices
+            that don't support announce mode.
           default: false
           selector:
             boolean: {}
+
+    # =========================================================================
+    # ⑥ RINGER MODE VOLUME CONTROL
+    # =========================================================================
+    ringer_mode:
+      name: "⑥ Ringer mode volume control"
+      icon: mdi:phone-ring
+      description: >-
+        Adjust announcement volume based on phone ringer mode.
+        When vibrate, TTS plays at a reduced volume. When silent,
+        TTS is skipped entirely. Leave the sensor empty to disable.
+      collapsed: true
+      input:
+        ringer_mode_sensor:
+          name: Ringer mode sensor
+          description: >-
+            Phone ringer mode sensor from the Android Companion App.
+            States: "normal", "vibrate", "silent". Leave empty to
+            skip ringer-based volume control entirely.
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+
+        quiet_volume:
+          name: Quiet volume (vibrate mode)
+          description: >-
+            Volume level (0.0–1.0) used for TTS when the phone is
+            in vibrate mode. The player's original volume is saved
+            before ducking and restored after the announcement.
+          default: 0.15
+          selector:
+            number:
+              min: 0.0
+              max: 1.0
+              step: 0.05
+              mode: slider
+
+        tts_restore_delay:
+          name: Volume restore delay (seconds)
+          description: >-
+            Seconds to wait after TTS delivery before restoring the
+            original volume. Allows streaming TTS engines to finish
+            playback before the volume snaps back. Increase for
+            longer announcements.
+          default: 8
+          selector:
+            number:
+              min: 1
+              max: 30
+              step: 1
+              unit_of_measurement: seconds
+              mode: slider
 
 # =============================================================================
 # EXECUTION MODE
@@ -364,6 +421,9 @@ variables:
   voice_profile: !input elevenlabs_voice_profile
   tts_announce: !input tts_announce
   notification_prompt: !input notification_prompt
+  ringer_entity: !input ringer_mode_sensor
+  quiet_vol: !input quiet_volume
+  restore_delay: !input tts_restore_delay
 
 # =============================================================================
 # TRIGGERS
@@ -419,7 +479,7 @@ actions:
         {% if trigger.to_state is defined %}
           {{ trigger.to_state.attributes }}
         {% else %}
-          {{ states[sensor_entity].attributes }}
+          {{ states[sensor_entity].attributes | default({}) }}
         {% endif %}
       notif_sender: >-
         {{ _attrs.get('android.title', 'Unknown sender') }}
@@ -613,6 +673,51 @@ actions:
         {% endif %}
 
   # ---------------------------------------------------------------------------
+  # 7c. Ringer mode — resolve state and save current volume
+  # ---------------------------------------------------------------------------
+  - alias: "7c · Resolve ringer mode and save current player volume"
+    variables:
+      ringer_state: >-
+        {% set ent = ringer_entity | default('') | string %}
+        {% if ent | length == 0 %}
+          normal
+        {% else %}
+          {{ states(ent) | default('normal') }}
+        {% endif %}
+      saved_volume: >-
+        {% if has_satellite %}
+          {{ state_attr(target_satellite, 'volume_level')
+             | default(0.5) | float(0.5) }}
+        {% else %}
+          {{ 0.5 }}
+        {% endif %}
+
+  # ---------------------------------------------------------------------------
+  # 7d. Gate — skip TTS entirely when phone is silent
+  # ---------------------------------------------------------------------------
+  - alias: "7d · Gate: skip TTS when phone is in silent mode"
+    condition: template
+    value_template: "{{ ringer_state != 'silent' }}"
+
+  # ---------------------------------------------------------------------------
+  # 7e. Duck volume when phone is in vibrate mode
+  # ---------------------------------------------------------------------------
+  - alias: "7e · Duck player volume for vibrate mode"
+    choose:
+      - alias: "Phone in vibrate — set quiet volume before TTS"
+        conditions:
+          - condition: template
+            value_template: "{{ ringer_state == 'vibrate' and has_satellite }}"
+        sequence:
+          - alias: "Set target player to quiet volume"
+            action: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_satellite }}"
+            data:
+              volume_level: "{{ quiet_vol | float(0.15) }}"
+
+  # ---------------------------------------------------------------------------
   # 8. Deliver announcement — TTS to satellite or mobile push fallback
   # ---------------------------------------------------------------------------
   - alias: "8 · Route announcement to satellite or fallback"
@@ -668,7 +773,9 @@ actions:
       - alias: "No satellite — send mobile push notification"
         conditions:
           - condition: template
-            value_template: "{{ not has_satellite and fallback == 'mobile_push' }}"
+            value_template: >-
+              {{ not has_satellite and fallback == 'mobile_push'
+                 and (mobile_service | default('') | string | length) > 0 }}
         sequence:
           - alias: "Send push notification via mobile app"
             action: "{{ mobile_service }}"
@@ -678,9 +785,34 @@ actions:
               message: "{{ announcement }}"
 
   # ---------------------------------------------------------------------------
+  # 8a. Restore volume after vibrate-mode announcement
+  # ---------------------------------------------------------------------------
+  - alias: "8a · Restore player volume after vibrate-mode TTS"
+    choose:
+      - alias: "Vibrate mode was active — wait then restore original volume"
+        conditions:
+          - condition: template
+            value_template: "{{ ringer_state == 'vibrate' and has_satellite }}"
+        sequence:
+          - alias: "Wait for TTS playback to finish"
+            delay:
+              seconds: "{{ restore_delay | int(8) }}"
+          - alias: "Restore original volume level"
+            action: media_player.volume_set
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_satellite }}"
+            data:
+              volume_level: "{{ saved_volume }}"
+
+  # ---------------------------------------------------------------------------
   # 9. Update cooldown timestamp
   # ---------------------------------------------------------------------------
   - alias: "9 · Update last-announced timestamp for cooldown tracking"
+    condition: template
+    value_template: "{{ (last_announced_entity | default('') | string | length) > 0 }}"
+
+  - alias: "9a · Write timestamp to cooldown helper"
     action: input_datetime.set_datetime
     continue_on_error: true
     target:
