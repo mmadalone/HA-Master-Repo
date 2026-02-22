@@ -1,5 +1,5 @@
 blueprint:
-  name: "Proactive – Presence-based suggestions (v5)"
+  name: "Proactive – Presence-based suggestions (v6)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive-header.jpeg)
@@ -14,11 +14,13 @@ blueprint:
     bedtime yes/no question via Assist Satellite.
 
     ### Recent changes
+    - **v6:** Audit fixes — added `source_url`, TTS `choose` default fallback branch, gated bedtime trigger on `enable_bedtime_question`, companion README
     - **v5:** Collapsible section audit — added `collapsed:` to all sections, defaults on all entity inputs
     - **v4:** Style guide compliance — collapsible sections, modern syntax, template safety
     - **v3:** Added bedtime question via Assist Satellite, nag limits
     - **v2:** Added ElevenLabs custom TTS mode, refresh button support
   domain: automation
+  source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/proactive.yaml"
   homeassistant:
     min_version: "2024.10.0"
 
@@ -368,6 +370,11 @@ conditions:
     value_template: >-
       {{ repeat_while_present or trigger.id != 'periodic_tick' }}
 
+  - alias: "Bedtime time trigger only fires when bedtime mode is enabled"
+    condition: template
+    value_template: >-
+      {{ enable_bedtime_question or trigger.id != 'bedtime_time' }}
+
   - alias: "Cooldown and max nags per session"
     condition: template
     value_template: >-
@@ -475,6 +482,22 @@ actions:
             data:
               message: "{{ proactive_message }}"
               media_player_entity_id: "{{ player }}"
+
+    default:
+      - alias: "Fallback — unknown TTS mode, log warning and use standard TTS"
+        action: system_log.write
+        data:
+          message: >-
+            Proactive blueprint: unknown tts_mode '{{ tts_mode }}'
+            — falling back to standard TTS.
+          level: warning
+      - alias: "Fallback TTS speak"
+        action: tts.speak
+        target:
+          entity_id: "{{ tts_entity }}"
+        data:
+          message: "{{ proactive_message }}"
+          media_player_entity_id: "{{ player }}"
 
   - alias: "Press refresh button if enabled and not in bedtime mode"
     if:
