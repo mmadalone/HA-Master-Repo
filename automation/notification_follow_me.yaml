@@ -1,0 +1,675 @@
+# =============================================================================
+# Notification Follow-Me (v1)
+# =============================================================================
+# When a messaging notification arrives on the phone, determines the user's
+# room via FP2 presence sensors, routes to the nearest voice satellite, and
+# has the conversation agent summarize who messaged and what they said.
+#
+# Data source: Android Companion App `last_notification` sensor.
+# Dual filter: VIP Contacts (messaging apps) + VIP Apps (non-messaging).
+# Presence: Parallel-array mapping — sensor[N] → satellite[N].
+# =============================================================================
+
+blueprint:
+  name: "Notification Follow-Me (v1)"
+  author: madalone
+  description: >
+    ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
+
+    # Notification Follow-Me
+
+    When a messaging notification arrives on your phone (WhatsApp, Signal, SMS,
+    or any selected app), this blueprint determines which room you're in via
+    FP2 presence sensors, routes to the nearest voice satellite, and has a
+    conversation agent summarize the message — completely hands-free.
+
+    Uses the Android Companion App's `last_notification` sensor as the data
+    source. Includes dual filtering (VIP contacts for messaging apps, VIP apps
+    for non-messaging), configurable cooldown, quiet hours, DND respect, and
+    media message detection with "check your phone" fallback.
+
+    ### Recent changes
+    - **v1:** Initial release
+
+  domain: automation
+  source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/notification_follow_me.yaml"
+  homeassistant:
+    min_version: "2024.10.0"
+
+  input:
+    # =========================================================================
+    # ① CORE SETUP
+    # =========================================================================
+    core_setup:
+      name: "① Core setup"
+      icon: mdi:message-bulleted
+      description: Notification sensor, master toggle, and conversation agent.
+      collapsed: false
+      input:
+        notification_sensor:
+          name: Notification sensor
+          description: >-
+            Required. The Android Companion App `last_notification` sensor
+            that fires on incoming notifications. Must have Notification
+            Listener permission and an Allow List configured at the phone level.
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+
+        enable_toggle:
+          name: Master enable toggle
+          description: >-
+            Required. Input boolean that enables/disables this automation.
+            When off, all notifications are silently ignored.
+          default: ""
+          selector:
+            entity:
+              domain: input_boolean
+
+        conversation_agent:
+          name: Conversation / LLM agent
+          description: >-
+            Required. Conversation agent that generates the natural-language
+            summary of incoming notifications. Can be Extended OpenAI
+            Conversation, OpenAI Conversation, or any agent supporting
+            conversation.process. The agent's system prompt handles personality.
+          default: ""
+          selector:
+            conversation_agent:
+
+        notification_prompt:
+          name: LLM summarization prompt
+          description: >-
+            Instructions for how the AI should summarize the notification.
+            The blueprint appends sender name, app, message text, and
+            timestamp as structured context. Keep this focused on tone
+            and format — data injection is automatic.
+          default: >-
+            You received a notification. Summarize it naturally in one or
+            two sentences as if you're a personal assistant telling someone
+            about a message they received. Be concise. Do not read the
+            message verbatim — paraphrase it. If the message is very short
+            (under 10 words), you may quote it directly.
+          selector:
+            text:
+              multiline: true
+
+    # =========================================================================
+    # ② PRESENCE ROUTING
+    # =========================================================================
+    presence_routing:
+      name: "② Presence routing"
+      icon: mdi:account-search
+      description: >-
+        Presence sensors and their paired voice satellites. Lists must be
+        the same length — sensor at position N maps to satellite at position N.
+        Zones not included use the fallback behavior.
+      collapsed: true
+      input:
+        presence_sensors:
+          name: Presence sensors (priority order, first = highest)
+          description: >-
+            Binary sensors indicating room occupancy. Order matters —
+            first occupied zone wins. Map each to a satellite below.
+          default: []
+          selector:
+            entity:
+              domain: binary_sensor
+              multiple: true
+
+        target_satellites:
+          name: Target satellites (paired with presence sensors above)
+          description: >-
+            Media players to announce on, in the same order as presence
+            sensors. Satellite at index N is used when sensor N is active.
+          default: []
+          selector:
+            entity:
+              domain: media_player
+              multiple: true
+
+        fallback_mode:
+          name: No-presence fallback
+          description: >-
+            What to do when no presence sensor is active (user not
+            detected in any mapped zone). "mobile_push" sends a push
+            notification. "silent" drops the announcement.
+          default: silent
+          selector:
+            select:
+              options:
+                - label: "Send mobile push notification"
+                  value: mobile_push
+                - label: "Drop silently"
+                  value: silent
+
+        mobile_notify_service:
+          name: Mobile notify service name
+          description: >-
+            Only used when fallback mode is "mobile_push". The service
+            name for notify (e.g., "notify.mobile_app_madaringer").
+            Leave empty if using silent fallback.
+          default: ""
+          selector:
+            text:
+              multiline: false
+
+    # =========================================================================
+    # ③ NOTIFICATION FILTERING
+    # =========================================================================
+    filtering:
+      name: "③ Notification filtering"
+      icon: mdi:filter-variant
+      description: >-
+        VIP contact and app lists, cooldown between announcements, and
+        message character cap for LLM input.
+      collapsed: true
+      input:
+        vip_contacts:
+          name: VIP contacts helper
+          description: >-
+            Input text helper containing comma-separated sender names
+            (e.g., "Arden de Raaij, Mare, Mom"). Only notifications from
+            these senders are announced for messaging apps (WhatsApp,
+            Signal, SMS where category = "msg").
+          default: ""
+          selector:
+            entity:
+              domain: input_text
+
+        vip_apps:
+          name: VIP apps helper
+          description: >-
+            Input text helper containing comma-separated package names
+            for non-messaging apps (e.g., "com.bankapp"). These bypass
+            the VIP contacts filter — all notifications from these
+            packages are announced regardless of sender.
+          default: ""
+          selector:
+            entity:
+              domain: input_text
+
+        cooldown_seconds:
+          name: Cooldown between announcements (seconds)
+          description: >-
+            Minimum seconds between announcements. Prevents rapid-fire
+            TTS when multiple messages arrive in quick succession.
+            Uses an input_datetime helper to track the last announcement.
+          default: 60
+          selector:
+            number:
+              min: 0
+              max: 600
+              step: 5
+              unit_of_measurement: seconds
+              mode: slider
+
+        last_announced_helper:
+          name: Last announced timestamp helper
+          description: >-
+            Input datetime helper that tracks when the last notification
+            was announced. Used for cooldown enforcement. Must have both
+            date and time enabled.
+          default: ""
+          selector:
+            entity:
+              domain: input_datetime
+
+        char_cap:
+          name: Message character cap
+          description: >-
+            Maximum characters of the message text sent to the LLM.
+            Longer messages are truncated with "..." appended. Prevents
+            excessive token usage on long messages.
+          default: 500
+          selector:
+            number:
+              min: 50
+              max: 2000
+              step: 50
+              unit_of_measurement: characters
+              mode: slider
+
+    # =========================================================================
+    # ④ QUIET HOURS & DND
+    # =========================================================================
+    quiet_hours:
+      name: "④ Quiet hours & DND"
+      icon: mdi:weather-night
+      description: >-
+        DND sensor gate and optional time-based quiet hours window.
+        Both gates are enforced — belt and suspenders.
+      collapsed: true
+      input:
+        dnd_sensor:
+          name: Do Not Disturb sensor
+          description: >-
+            Phone DND sensor from the Companion App. When state is
+            anything other than "off" or "unavailable", announcements
+            are suppressed. Leave empty to skip DND checking.
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+
+        enable_quiet_hours:
+          name: Enable quiet hours window
+          description: >-
+            When enabled, announcements are suppressed between the
+            start and end times below. Stacks with DND — both are
+            checked independently.
+          default: false
+          selector:
+            boolean: {}
+
+        quiet_start:
+          name: Quiet hours start
+          description: >-
+            Time when quiet hours begin (e.g., 23:00). Only used when
+            quiet hours are enabled.
+          default: "23:00:00"
+          selector:
+            time: {}
+
+        quiet_end:
+          name: Quiet hours end
+          description: >-
+            Time when quiet hours end (e.g., 07:00). Only used when
+            quiet hours are enabled.
+          default: "07:00:00"
+          selector:
+            time: {}
+
+    # =========================================================================
+    # ⑤ TTS CONFIGURATION
+    # =========================================================================
+    tts_config:
+      name: "⑤ TTS configuration"
+      icon: mdi:text-to-speech
+      description: Text-to-speech engine settings for voice delivery.
+      collapsed: true
+      input:
+        tts_mode:
+          name: TTS mode
+          description: >-
+            Choose how TTS is delivered:
+            "standard_tts_entity" uses any TTS entity via tts.speak.
+            "elevenlabs_custom_service" uses the HACS ElevenLabs custom
+            integration with options.voice_profile.
+          default: standard_tts_entity
+          selector:
+            select:
+              options:
+                - standard_tts_entity
+                - elevenlabs_custom_service
+
+        tts_entity:
+          name: TTS entity
+          description: >-
+            TTS entity used by tts.speak. Examples: tts.elevenlabs_tts
+            (official), tts.elevenlabs_custom_tts (HACS custom), or
+            any other TTS entity.
+          default: {}
+          selector:
+            entity:
+              domain: tts
+
+        elevenlabs_voice_profile:
+          name: ElevenLabs voice profile (for custom mode)
+          description: >-
+            Only used when TTS mode is "elevenlabs_custom_service".
+            Voice profile name/ID for the ElevenLabs custom integration.
+            Must match your tts.speak options.voice_profile value.
+          default: ""
+          selector:
+            text:
+              multiline: false
+
+# =============================================================================
+# EXECUTION MODE
+# =============================================================================
+mode: single
+max_exceeded: silent
+
+# =============================================================================
+# VARIABLES — resolve all inputs once at the top
+# =============================================================================
+variables:
+  sensor_entity: !input notification_sensor
+  toggle_entity: !input enable_toggle
+  presence_list: !input presence_sensors
+  satellite_list: !input target_satellites
+  fallback: !input fallback_mode
+  mobile_service: !input mobile_notify_service
+  vip_contacts_entity: !input vip_contacts
+  vip_apps_entity: !input vip_apps
+  cooldown: !input cooldown_seconds
+  last_announced_entity: !input last_announced_helper
+  char_limit: !input char_cap
+  dnd_entity: !input dnd_sensor
+  enable_quiet: !input enable_quiet_hours
+  quiet_start_val: !input quiet_start
+  quiet_end_val: !input quiet_end
+  tts_mode: !input tts_mode
+  tts_entity: !input tts_entity
+  voice_profile: !input elevenlabs_voice_profile
+  notification_prompt: !input notification_prompt
+
+# =============================================================================
+# TRIGGERS
+# =============================================================================
+triggers:
+  - alias: "Notification sensor state changed — new notification received"
+    trigger: state
+    entity_id: !input notification_sensor
+
+# =============================================================================
+# CONDITIONS
+# =============================================================================
+conditions:
+  - alias: "Master toggle must be ON"
+    condition: state
+    entity_id: !input enable_toggle
+    state: "on"
+
+  - alias: "DND must not be active (skip check if no DND sensor configured)"
+    condition: template
+    value_template: >-
+      {% set dnd = dnd_entity | default('') | string %}
+      {% if dnd | length == 0 %}
+        true
+      {% else %}
+        {{ states(dnd) | default('off') in ['off', 'unavailable', 'unknown'] }}
+      {% endif %}
+
+  - alias: "Quiet hours gate (skip if disabled)"
+    condition: template
+    value_template: >-
+      {% if not (enable_quiet | bool(false)) %}
+        true
+      {% else %}
+        {% set qs = today_at(quiet_start_val) %}
+        {% set qe = today_at(quiet_end_val) %}
+        {% if qs < qe %}
+          {{ not (qs <= now() < qe) }}
+        {% else %}
+          {{ qe <= now() < qs }}
+        {% endif %}
+      {% endif %}
+
+# =============================================================================
+# ACTIONS
+# =============================================================================
+actions:
+  # ---------------------------------------------------------------------------
+  # 1. Extract notification attributes into variables
+  # ---------------------------------------------------------------------------
+  - alias: "1 · Extract notification attributes"
+    variables:
+      notif_sender: >-
+        {{ state_attr(sensor_entity, 'android.title') | default('Unknown sender') }}
+      notif_text: >-
+        {{ state_attr(sensor_entity, 'android.text') | default('') }}
+      notif_package: >-
+        {{ state_attr(sensor_entity, 'package') | default('') }}
+      notif_category: >-
+        {{ state_attr(sensor_entity, 'category') | default('') }}
+      notif_post_time: >-
+        {{ state_attr(sensor_entity, 'post_time') | default(0) }}
+      notif_is_group: >-
+        {{ state_attr(sensor_entity, 'android.isGroupConversation') | default(false) }}
+
+  # ---------------------------------------------------------------------------
+  # 2. Dual filter — VIP contacts for messaging, VIP apps for the rest
+  # ---------------------------------------------------------------------------
+  - alias: "2 · Apply dual notification filter"
+    condition: template
+    value_template: >-
+      {%- set sender = notif_sender | default('') | string -%}
+      {%- set package = notif_package | default('') | string -%}
+      {%- set category = notif_category | default('') | string -%}
+      {%- if category == 'msg' -%}
+        {%- set contacts_raw = states(vip_contacts_entity) | default('') -%}
+        {%- set contacts = contacts_raw.split(',') | map('trim') | list -%}
+        {{ sender in contacts }}
+      {%- else -%}
+        {%- set apps_raw = states(vip_apps_entity) | default('') -%}
+        {%- set apps = apps_raw.split(',') | map('trim') | list -%}
+        {{ package in apps }}
+      {%- endif -%}
+
+  # ---------------------------------------------------------------------------
+  # 3. Cooldown check — suppress if last announcement was too recent
+  # ---------------------------------------------------------------------------
+  - alias: "3 · Enforce cooldown between announcements"
+    condition: template
+    value_template: >-
+      {% set helper = last_announced_entity | default('') | string %}
+      {% if helper | length == 0 %}
+        true
+      {% else %}
+        {% set last = states(helper) | default('unknown') %}
+        {% if last in ['unknown', 'unavailable', ''] %}
+          true
+        {% else %}
+          {% set last_dt = last | as_datetime | default(none) %}
+          {% if last_dt is none %}
+            true
+          {% else %}
+            {{ (now() - last_dt).total_seconds() | float(9999) >= (cooldown | int(60)) }}
+          {% endif %}
+        {% endif %}
+      {% endif %}
+
+  # ---------------------------------------------------------------------------
+  # 4. Resolve presence — find first active zone and map to satellite
+  # ---------------------------------------------------------------------------
+  - alias: "4 · Resolve presence to target satellite"
+    variables:
+      active_index: >-
+        {% set ns = namespace(idx=-1) %}
+        {% for s in presence_list %}
+          {% if states(s) | default('off') == 'on' and ns.idx == -1 %}
+            {% set ns.idx = loop.index0 %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.idx }}
+
+      target_satellite: >-
+        {% set idx = active_index | int(-1) %}
+        {% if idx >= 0 and idx < (satellite_list | length) %}
+          {{ satellite_list[idx] }}
+        {% else %}
+
+        {% endif %}
+
+      has_satellite: "{{ (target_satellite | default('') | string | length) > 0 }}"
+
+  # ---------------------------------------------------------------------------
+  # 5. Gate — must have satellite or fallback must be mobile_push
+  # ---------------------------------------------------------------------------
+  - alias: "5 · Gate: satellite found or fallback enabled"
+    condition: template
+    value_template: >-
+      {{ has_satellite or fallback == 'mobile_push' }}
+
+  # ---------------------------------------------------------------------------
+  # 6. Detect media messages and truncate text
+  # ---------------------------------------------------------------------------
+  - alias: "6 · Prepare message text for LLM"
+    variables:
+      media_patterns:
+        - "Voice message"
+        - "Photo"
+        - "Video"
+        - "Sticker"
+        - "GIF"
+        - "Document"
+        - "Contact card"
+        - "Location"
+        - "\U0001f4f7"
+        - "\U0001f3a5"
+        - "\U0001f399"
+
+      is_media_message: >-
+        {% set text = notif_text | default('') | string %}
+        {% set ns = namespace(media=false) %}
+        {% for p in media_patterns %}
+          {% if p in text %}
+            {% set ns.media = true %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.media }}
+
+      truncated_text: >-
+        {% set text = notif_text | default('') | string %}
+        {% set cap = char_limit | int(500) %}
+        {% if is_media_message | bool(false) %}
+          [Media message — check your phone]
+        {% elif text | length > cap %}
+          {{ text[:cap] }}...
+        {% else %}
+          {{ text }}
+        {% endif %}
+
+      app_label: >-
+        {% set pkg = notif_package | default('') %}
+        {% if 'whatsapp' in pkg %}
+          WhatsApp
+        {% elif 'securesms' in pkg or 'signal' in pkg %}
+          Signal
+        {% elif 'messaging' in pkg or 'sms' in pkg or 'mms' in pkg %}
+          SMS
+        {% else %}
+          {{ pkg }}
+        {% endif %}
+
+  # ---------------------------------------------------------------------------
+  # 7. Generate summary via conversation agent
+  # ---------------------------------------------------------------------------
+  - alias: "7 · Generate notification summary via LLM"
+    continue_on_error: true
+    action: conversation.process
+    response_variable: llm_result
+    data:
+      agent_id: !input conversation_agent
+      text: >-
+        {{ notification_prompt }}
+
+        context:
+        - sender: {{ notif_sender }}
+        - app: {{ app_label }}
+        - message: {{ truncated_text }}
+        - is_group: {{ notif_is_group }}
+        - current_time: {{ now().strftime('%H:%M') }}
+
+  - alias: "7a · Extract LLM response with defensive fallback"
+    variables:
+      announcement: >-
+        {% if llm_result is defined
+              and llm_result.response is defined
+              and llm_result.response.speech is defined
+              and llm_result.response.speech.plain is defined
+              and llm_result.response.speech.plain.speech is defined %}
+          {{ llm_result.response.speech.plain.speech }}
+        {% else %}
+          You have a {{ app_label }} message from {{ notif_sender }}.
+        {% endif %}
+
+  # ---------------------------------------------------------------------------
+  # 8. Deliver announcement — TTS to satellite or mobile push fallback
+  # ---------------------------------------------------------------------------
+  - alias: "8 · Route announcement to satellite or fallback"
+    choose:
+      # --- Satellite available: TTS delivery ---
+      - alias: "Satellite found — deliver via TTS"
+        conditions:
+          - condition: template
+            value_template: "{{ has_satellite }}"
+        sequence:
+          - alias: "Deliver via TTS (mode-dependent)"
+            choose:
+              - alias: "ElevenLabs custom service with voice profile"
+                conditions:
+                  - condition: template
+                    value_template: "{{ tts_mode == 'elevenlabs_custom_service' }}"
+                sequence:
+                  - alias: "TTS speak with voice profile option"
+                    action: tts.speak
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ tts_entity }}"
+                    data:
+                      message: "{{ announcement }}"
+                      media_player_entity_id: "{{ target_satellite }}"
+                      options:
+                        voice_profile: "{{ voice_profile }}"
+
+              - alias: "Standard TTS entity"
+                conditions:
+                  - condition: template
+                    value_template: "{{ tts_mode == 'standard_tts_entity' }}"
+                sequence:
+                  - alias: "TTS speak via standard entity"
+                    action: tts.speak
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ tts_entity }}"
+                    data:
+                      message: "{{ announcement }}"
+                      media_player_entity_id: "{{ target_satellite }}"
+
+            default:
+              - alias: "Fallback — unknown TTS mode, log warning and use standard"
+                action: system_log.write
+                data:
+                  message: >-
+                    Notification Follow-Me: unknown tts_mode '{{ tts_mode }}'
+                    — falling back to standard TTS.
+                  level: warning
+              - alias: "Fallback TTS speak"
+                action: tts.speak
+                continue_on_error: true
+                target:
+                  entity_id: "{{ tts_entity }}"
+                data:
+                  message: "{{ announcement }}"
+                  media_player_entity_id: "{{ target_satellite }}"
+
+      # --- No satellite: mobile push fallback ---
+      - alias: "No satellite — send mobile push notification"
+        conditions:
+          - condition: template
+            value_template: "{{ not has_satellite and fallback == 'mobile_push' }}"
+        sequence:
+          - alias: "Send push notification via mobile app"
+            action: "{{ mobile_service }}"
+            continue_on_error: true
+            data:
+              title: "{{ app_label }} — {{ notif_sender }}"
+              message: "{{ announcement }}"
+
+  # ---------------------------------------------------------------------------
+  # 9. Update cooldown timestamp
+  # ---------------------------------------------------------------------------
+  - alias: "9 · Update last-announced timestamp for cooldown tracking"
+    action: input_datetime.set_datetime
+    continue_on_error: true
+    target:
+      entity_id: "{{ last_announced_entity }}"
+    data:
+      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  # ---------------------------------------------------------------------------
+  # 10. Log successful announcement for debugging
+  # ---------------------------------------------------------------------------
+  - alias: "10 · Log announcement to system log"
+    action: system_log.write
+    continue_on_error: true
+    data:
+      message: >-
+        Notification Follow-Me: announced {{ app_label }} from
+        {{ notif_sender }} via {{ target_satellite if has_satellite
+        else 'mobile push (' ~ mobile_service ~ ')' }}.
+      level: info

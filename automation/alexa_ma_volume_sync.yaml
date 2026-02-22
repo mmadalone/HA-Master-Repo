@@ -18,33 +18,30 @@ blueprint:
     MA speaker volume/mute changes → paired Echo updates to match
     ```
 
-    Pair multiple Echo ↔ MA speaker combos in one blueprint instance.
-    Select Alexa players and MA players in the same order — first Alexa
-    pairs with first MA player, second with second, etc.
+    **Paired mode** (default): Pair multiple Echo ↔ MA speaker combos
+    in one blueprint instance. Select Alexa players and MA players in
+    the same order — first Alexa pairs with first MA player, second
+    with second, etc.
+
+    **Group mode**: One ring rules them all — any device's volume
+    change syncs to ALL other devices in both lists. No pairing needed,
+    just add all your speakers.
 
     ### Setup
 
     1. Select your **Alexa media players** (e.g. living room Echo,
        workshop Echo, bathroom Echo)
     2. Select your **Music Assistant players** in the **same order**
-    3. Done — one instance handles all pairs
+       (paired mode) or any order (group mode)
+    3. Choose **Paired** or **Group** sync mode
+    4. Optionally configure ESP boot protection if using Voice PE
+       satellites
+    5. Done — one instance handles all your speakers
 
     ### Requirements
 
     * **Alexa Media Player** integration must be installed
     * **Music Assistant** integration must be installed
-
-    ### Recent changes
-    - **v5:** Fixed AP-44 — added `default: []` to `alexa_players` and
-      `ma_players` entity inputs in Section ① for collapsed section stability.
-      Added unavailability guard to prevent phantom sync-to-zero when a
-      device goes unavailable or unknown.
-    - **v4:** Fixed AP-16 — added `| default()` guards to all `states()` calls
-      in ducking flag and playing-state conditions. Fixed AP-09a — added
-      `default:` to ducking flag input for collapsed section stability.
-    - **v3:** Fixed section naming convention, moved ducking flag into section
-    - **v2:** Added author, header image, changelog, missing action aliases
-    - **v1:** Initial version
 
   homeassistant:
     min_version: 2024.10.0
@@ -59,15 +56,17 @@ blueprint:
       collapsed: false
       description: >
         Select Alexa Echo devices and Music Assistant speakers to keep
-        in volume sync. **Order matters** — first Alexa pairs with
-        first MA player, second with second, etc.
+        in volume sync. In **Paired mode**, order matters — first Alexa
+        pairs with first MA player, second with second, etc. In **Group
+        mode**, order does not matter — all devices sync together.
       input:
         alexa_players:
           name: Alexa media players
           default: []
           description: >
             The Alexa Echo devices exposed via the Alexa Media Player
-            integration. Order must match the MA players list below.
+            integration. In paired mode, order must match the MA players
+            list below.
           selector:
             entity:
               filter:
@@ -81,10 +80,12 @@ blueprint:
           default: []
           description: >
             The Music Assistant speakers to sync volume with.
-            First MA player pairs with first Alexa player, etc.
+            In paired mode, first MA player pairs with first Alexa
+            player, etc. In group mode, order does not matter.
 
 
-            **The order must exactly match the Alexa players list.**
+            **Paired mode: the order must exactly match the Alexa
+            players list.**
           selector:
             entity:
               filter:
@@ -103,6 +104,26 @@ blueprint:
         Fine-tune the volume sync behaviour.
       collapsed: true
       input:
+        sync_mode:
+          name: Sync mode
+          description: >
+            **Paired** — First Alexa syncs with first MA player, second
+            with second, etc. Each pair is independent.
+
+            **Group** — One ring rules them all. Any device's volume
+            change syncs to every other device in both lists.
+          selector:
+            select:
+              options:
+                - label: "Paired (1:1 matching by list order)"
+                  value: paired
+                - label: "Group (all devices sync together)"
+                  value: group
+              multiple: false
+              custom_value: false
+              sort: false
+          default: paired
+
         ducking_flag:
           name: Voice PE ducking flag (input_boolean)
           description: >
@@ -181,6 +202,51 @@ blueprint:
           selector:
             boolean: {}
 
+    # ===========================================================================
+    # ③ ESP BOOT PROTECTION
+    # ===========================================================================
+    esp_boot_protection:
+      name: "③ ESP boot protection"
+      icon: mdi:shield-refresh
+      description: >
+        Optional guards for ESPHome Voice PE satellites. Prevents
+        phantom volume sync when a device boots with its physical mute
+        switch engaged (which reports volume 0 to Home Assistant).
+      collapsed: true
+      input:
+        esp_mute_switches:
+          name: ESP physical mute switches (same order as MA players)
+          description: >
+            The hardware mute switch entities exposed by ESPHome for
+            each Voice PE satellite. Must be in the **same order** as
+            the MA players list above. When a mute switch is ON, volume
+            changes from that device are ignored.
+
+
+            Leave empty if you don't use Voice PE satellites.
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain: switch
+              multiple: true
+
+        boot_protection_seconds:
+          name: Boot protection window (seconds)
+          description: >
+            After a device transitions from unavailable, ignore
+            zero-volume reports for this many seconds. Prevents a
+            freshly booted device (with mute switch on) from zeroing
+            out all other speakers. Set to 0 to disable.
+          default: 60
+          selector:
+            number:
+              min: 0
+              max: 300
+              step: 10
+              unit_of_measurement: s
+              mode: slider
+
 # =============================================================================
 # TRIGGERS
 # =============================================================================
@@ -220,6 +286,9 @@ variables:
   tolerance: !input volume_tolerance
   cooldown: !input sync_cooldown
   only_playing: !input only_sync_when_playing
+  sync_mode: !input sync_mode
+  mute_switches: !input esp_mute_switches
+  boot_seconds: !input boot_protection_seconds
 
   # Which trigger fired
   source: "{{ trigger.id }}"
@@ -228,7 +297,7 @@ variables:
   is_mute_trigger: "{{ source in ['alexa_mute_changed', 'ma_mute_changed'] }}"
   is_alexa_source: "{{ source in ['alexa_vol_changed', 'alexa_mute_changed'] }}"
 
-  # Find the pair index and partner entity
+  # Find the pair index (used for paired mode targeting + mute switch lookup)
   pair_index: >
     {% if is_alexa_source %}
       {% set idx = alexa_list.index(changed_entity) if changed_entity in alexa_list else -1 %}
@@ -237,8 +306,10 @@ variables:
     {% endif %}
     {{ idx }}
 
-  # Source and target entities for this pair
+  # Source entity
   source_entity: "{{ changed_entity }}"
+
+  # Paired-mode partner entity
   target_entity: >
     {% set idx = pair_index | int(-1) %}
     {% if idx >= 0 %}
@@ -251,15 +322,37 @@ variables:
       {{ '' }}
     {% endif %}
 
-  # Current volume levels for the pair
+  # All target entities — depends on sync mode
+  all_targets: >
+    {% set mode = sync_mode | default('paired') %}
+    {% if mode == 'group' %}
+      {{ (alexa_list + ma_list) | reject('eq', changed_entity) | list }}
+    {% else %}
+      {% set te = target_entity | default('') | trim %}
+      {{ [te] if te != '' else [] }}
+    {% endif %}
+
+  # Current volume levels for the source
   source_vol: "{{ state_attr(source_entity, 'volume_level') | float(0) }}"
-  target_vol: "{{ state_attr(target_entity, 'volume_level') | float(0) }}"
 
-  # Current mute states for the pair
+  # Current mute states
   source_muted: "{{ state_attr(source_entity, 'is_volume_muted') | default(false) }}"
-  target_muted: "{{ state_attr(target_entity, 'is_volume_muted') | default(false) }}"
 
-  # Volume difference as percentage points (0–100 scale)
+  # Volume difference — in group mode, compare against first target
+  target_vol: >
+    {% if all_targets | length > 0 %}
+      {{ state_attr(all_targets[0], 'volume_level') | float(0) }}
+    {% else %}
+      {{ 0 }}
+    {% endif %}
+
+  target_muted: >
+    {% if all_targets | length > 0 %}
+      {{ state_attr(all_targets[0], 'is_volume_muted') | default(false) }}
+    {% else %}
+      {{ false }}
+    {% endif %}
+
   vol_diff: "{{ ((source_vol - target_vol) | abs * 100) | round(1) }}"
 
   # Direction checks
@@ -272,21 +365,47 @@ variables:
       {{ ma_to_alexa_allowed }}
     {% endif %}
 
+  # ESP mute switch state for source device (MA-side only)
+  source_mute_switch_on: >
+    {% set ms = mute_switches | default([]) %}
+    {% if not is_alexa_source and ms | length > 0 %}
+      {% set idx = pair_index | int(-1) %}
+      {% if idx >= 0 and idx < ms | length %}
+        {{ states(ms[idx]) | default('off') == 'on' }}
+      {% else %}
+        {{ false }}
+      {% endif %}
+    {% else %}
+      {{ false }}
+    {% endif %}
+
+  # Boot detection — was the source device recently unavailable?
+  source_was_unavailable: >
+    {{ trigger.from_state.state | default('') in ['unavailable', 'unknown'] }}
+
 # =============================================================================
 # ACTIONS
 # =============================================================================
 actions:
-  # 0) Bail if we couldn't resolve a pair
+  # 0) Bail if no valid targets
   - condition: template
-    alias: "Valid pair found"
-    value_template: "{{ target_entity | trim != '' }}"
+    alias: "Valid target(s) found"
+    value_template: "{{ all_targets | length > 0 }}"
 
-  # 0b) Skip sync if either device is unavailable/unknown
+  # 0a) Anti-feedback loop — skip if this state change was caused by
+  #     our own sync action (HA sets context.parent_id on automation-
+  #     triggered state changes; physical/external changes have none)
   - condition: template
-    alias: "Both devices are available"
+    alias: "Not a self-triggered change (anti-feedback loop)"
     value_template: >-
-      {{ states(source_entity) | default('unavailable') not in ['unavailable', 'unknown']
-         and states(target_entity) | default('unavailable') not in ['unavailable', 'unknown'] }}
+      {{ trigger.to_state.context.parent_id is none }}
+
+  # 0b) Skip sync if source device is unavailable/unknown
+  - condition: template
+    alias: "Source device is available"
+    value_template: >-
+      {{ states(source_entity) | default('unavailable')
+         not in ['unavailable', 'unknown'] }}
 
   # 1) Skip sync while Voice PE is ducking volumes
   - condition: template
@@ -298,7 +417,23 @@ actions:
     alias: "Sync direction allowed"
     value_template: "{{ direction_allowed }}"
 
-  # 3) Optional: only sync when playing
+  # 3) ESP mute switch guard — skip if hardware mute is engaged
+  - condition: template
+    alias: "ESP mute switch not engaged"
+    value_template: "{{ not source_mute_switch_on }}"
+
+  # 4) Boot protection — skip zero-volume from freshly booted device
+  - condition: template
+    alias: "Boot protection — skip zero-volume after reboot"
+    value_template: >
+      {% if source_vol == 0 and boot_seconds | int(0) > 0
+         and source_was_unavailable %}
+        false
+      {% else %}
+        true
+      {% endif %}
+
+  # 5) Optional: only sync when playing
   - condition: template
     alias: "At least one device is playing (optional)"
     value_template: >
@@ -306,37 +441,38 @@ actions:
         true
       {% else %}
         {{ states(source_entity) | default('off') == 'playing'
-           or states(target_entity) | default('off') == 'playing' }}
+           or (all_targets | length > 0
+               and states(all_targets[0]) | default('off') == 'playing') }}
       {% endif %}
 
-  # 4) Branch: mute sync vs volume sync
+  # 6) Branch: mute sync vs volume sync
   - alias: "Route by trigger type — mute sync vs volume sync"
     choose:
       # === MUTE SYNC ===
-      - alias: "Mute trigger — sync mute state to partner"
+      - alias: "Mute trigger — sync mute state to all targets"
         conditions:
           - condition: template
             value_template: "{{ is_mute_trigger }}"
         sequence:
-          # Skip if mute states already match
+          # Skip if mute states already match (check first target)
           - condition: template
             alias: "Mute states differ"
             value_template: "{{ source_muted != target_muted }}"
-          - alias: "Sync mute state to partner device"
+          - alias: "Sync mute state to target device(s)"
             action: media_player.volume_mute
+            continue_on_error: true
             target:
-              entity_id: "{{ target_entity }}"
+              entity_id: "{{ all_targets }}"
             data:
               is_volume_muted: "{{ source_muted }}"
 
     # === VOLUME SYNC (default) ===
     default:
-      # Skip if difference is within tolerance AND mute states match
+      # Skip if difference is within tolerance
       - condition: template
-        alias: "Volume difference exceeds tolerance or mute states differ"
+        alias: "Volume difference exceeds tolerance"
         value_template: >
-          {{ vol_diff >= tolerance | float(3) or
-             source_muted != target_muted }}
+          {{ vol_diff >= tolerance | float(3) }}
 
       # Cooldown delay to absorb rapid changes
       - alias: "Cooldown — absorb rapid volume changes"
@@ -351,16 +487,18 @@ actions:
       # Sync mute state (vol=0 → mute, vol>0 → unmute)
       - alias: "Sync mute state — mute if volume is zero"
         action: media_player.volume_mute
+        continue_on_error: true
         target:
-          entity_id: "{{ target_entity }}"
+          entity_id: "{{ all_targets }}"
         data:
           is_volume_muted: "{{ fresh_source_vol == 0 }}"
 
       # Sync volume level
-      - alias: "Sync volume level to partner device"
+      - alias: "Sync volume level to target device(s)"
         action: media_player.volume_set
+        continue_on_error: true
         target:
-          entity_id: "{{ target_entity }}"
+          entity_id: "{{ all_targets }}"
         data:
           volume_level: "{{ fresh_source_vol }}"
 
