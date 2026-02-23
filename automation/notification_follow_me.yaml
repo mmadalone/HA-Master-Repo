@@ -963,17 +963,18 @@ actions:
   # ---------------------------------------------------------------------------
   # 9. Update cooldown timestamp
   # ---------------------------------------------------------------------------
-  - alias: "9 · Update last-announced timestamp for cooldown tracking"
-    condition: template
-    value_template: "{{ (last_announced_entity | default('') | string | length) > 0 }}"
-
-  - alias: "9a · Write timestamp to cooldown helper"
-    action: input_datetime.set_datetime
-    continue_on_error: true
-    target:
-      entity_id: "{{ last_announced_entity }}"
-    data:
-      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+  - alias: "9 · Update cooldown timestamp (if helper configured)"
+    if:
+      - condition: template
+        value_template: "{{ (last_announced_entity | default('') | string | length) > 0 }}"
+    then:
+      - alias: "9a · Write timestamp to cooldown helper"
+        action: input_datetime.set_datetime
+        continue_on_error: true
+        target:
+          entity_id: "{{ last_announced_entity }}"
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
   # ---------------------------------------------------------------------------
   # 10. Log successful announcement for debugging
