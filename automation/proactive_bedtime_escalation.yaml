@@ -33,6 +33,10 @@ blueprint:
 
     ### Recent changes
 
+    - **v1.1:** Audit fixes — add explicit `mode: single` / `max_exceeded: silent`
+      (AP-42), fix compound boolean in scheduled_bedtime day gate (always-false
+      condition), add dedicated `bedtime_weekday_scheduled_time` input
+
     - **v1.0:** Initial unified release — merges proactive_llm_sensors v7.6,
       bedtime_routine v4.2.1, and bedtime_routine_plus into a single file
       with multi-stage escalation engine
@@ -306,6 +310,16 @@ blueprint:
             End time of the daily window. Can be earlier than start time
             to cross midnight (e.g. 23:00 → 02:00).
           default: "23:00:00"
+          selector:
+            time: {}
+
+        bedtime_weekday_scheduled_time:
+          name: Weekday bedtime trigger time
+          description: >
+            Time for the direct weekday bedtime trigger (the "scheduled_bedtime"
+            event). Separate from the proactive window start above. The weekend
+            equivalent is in section ⑰.
+          default: "22:00:00"
           selector:
             time: {}
 
@@ -2236,7 +2250,7 @@ triggers:
 
   - alias: "Scheduled bedtime — direct routine trigger"
     trigger: time
-    at: !input start_time
+    at: !input bedtime_weekday_scheduled_time
     id: scheduled_bedtime
 
   - alias: "Weekend scheduled bedtime — direct routine trigger"
@@ -2260,8 +2274,7 @@ conditions:
       {% set tid = trigger.id | default('') %}
       {% if tid == 'scheduled_bedtime' %}
         {# Weekday bedtime — skip if weekend profile is active #}
-        {{ not bedtime_weekend_active }}
-        and {{ effective_day_key in (run_days_val | default([])) }}
+        {{ not bedtime_weekend_active and effective_day_key in (run_days_val | default([])) }}
       {% elif tid == 'scheduled_bedtime_weekend' %}
         {# Weekend bedtime — only if weekend profile active #}
         {{ bedtime_weekend_active }}
@@ -3956,3 +3969,6 @@ actions:
                 Countdown used: {{ final_countdown | default(countdown_minutes) }} min.
                 Kill switch: {{ kill_switch_entity_val | default('not configured') }}.
                 Test mode: {{ test_mode_val | default(false) }}.
+
+mode: single
+max_exceeded: silent
