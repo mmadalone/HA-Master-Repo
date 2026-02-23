@@ -538,14 +538,16 @@ actions:
           {{ states[sensor_entity].attributes | default({}) }}
         {% endif %}
       notif_sender: >-
-        {{ _attrs.get('android.title', 'Unknown sender') }}
+        {% set raw = _attrs.get('android.title', '') | string %}
+        {{ 'Unknown sender' if raw in ['null', ''] else raw }}
       notif_text: >-
         {% set lines = _attrs.get('android.textLines', none) %}
         {% if lines is iterable and lines is not string
               and lines | length > 0 %}
           {{ lines | join(' · ') }}
         {% else %}
-          {{ _attrs.get('android.text', '') }}
+          {% set raw = _attrs.get('android.text', '') | string %}
+          {{ '' if raw == 'null' else raw }}
         {% endif %}
       notif_package: >-
         {{ _attrs.get('package', '') }}
@@ -580,7 +582,8 @@ actions:
     value_template: >-
       {%- set text = notif_text | default('') | string | trim -%}
       {%- set sender = notif_sender | default('') | string | trim -%}
-      {%- if text | length == 0 or sender in ['Unknown sender', ''] -%}
+      {%- if text | length == 0 or text == 'null'
+            or sender in ['Unknown sender', '', 'null'] -%}
         false
       {%- else -%}
         {%- set helper = junk_patterns_entity | default('') | string -%}
