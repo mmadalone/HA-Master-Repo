@@ -801,6 +801,26 @@ actions:
               You have a {{ app_label }} message from {{ display_sender }}.
             {% endif %}
 
+      - alias: "7a-log · Log LLM failure if fallback was used"
+        if:
+          - condition: template
+            value_template: >-
+              {{ not (llm_result is defined
+                    and llm_result.response is defined
+                    and llm_result.response.speech is defined
+                    and llm_result.response.speech.plain is defined
+                    and llm_result.response.speech.plain.speech is defined) }}
+        then:
+          - alias: "Log LLM call failure"
+            action: system_log.write
+            continue_on_error: true
+            data:
+              message: >-
+                Notification Follow-Me: LLM call failed or returned
+                incomplete response — using fallback announcement for
+                {{ app_label }} from {{ notif_sender[:20] | default('unknown') }}.
+              level: warning
+
   # ---------------------------------------------------------------------------
   # 7b. Build TTS data payloads — conditionally inject announce key
   # ---------------------------------------------------------------------------
