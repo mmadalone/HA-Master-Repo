@@ -579,7 +579,8 @@ actions:
     condition: template
     value_template: >-
       {%- set text = notif_text | default('') | string | trim -%}
-      {%- if text | length == 0 -%}
+      {%- set sender = notif_sender | default('') | string | trim -%}
+      {%- if text | length == 0 or sender in ['Unknown sender', ''] -%}
         false
       {%- else -%}
         {%- set helper = junk_patterns_entity | default('') | string -%}
