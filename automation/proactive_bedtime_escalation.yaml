@@ -33,10 +33,27 @@ blueprint:
 
     ### Recent changes
 
+    - **v1.4:** Hybrid escalation prompt gap-fill — stages without explicit
+      prompt overlays now get auto-generated behavioural directives based on
+      escalation progress (4-band curve: casual → frustrated → blunt → final).
+      Fixes dead-air stages when stage_count exceeds the 6 explicit prompt
+      slots, and eliminates robotic fallback to base LLM prompt mid-escalation.
+
+    - **v1.3:** Fix max_nags "0 = unlimited" contract — template now treats
+      0 as unlimited instead of "zero nags allowed" (always-exhausted gate).
+      Add default branch to main router choose block for testability — manual
+      runs now log a diagnostic message instead of silently exiting.
+      Fix LLM prompt assembly — stage_prompt_overlay was replacing the base
+      llm_prompt (format/length/persona constraints) instead of augmenting it,
+      causing the LLM to narrate raw entity states without character limits.
+
     - **v1.2:** Fix string-vs-boolean truthiness bug — add `| bool` to five
       condition gates (kill_switch_on, bedtime_already_active, media_is_playing,
       nags_exhausted, session_active) that rendered as strings via `>-` scalars,
-      causing all conditions to always block. Root cause of `last_triggered: null`.
+      causing all conditions to always block. Fix forward-reference error —
+      `default_countdown_val` was defined after `countdown_minutes` which
+      referenced it, causing `UndefinedError` at trigger time and preventing
+      the automation from ever executing.
 
     - **v1.1:** Audit fixes — add explicit `mode: single` / `max_exceeded: silent`
       (AP-42), fix compound boolean in scheduled_bedtime day gate (always-false
@@ -1907,6 +1924,7 @@ variables:
   countdown_helper_val: !input countdown_helper
   post_tts_delay_val: !input post_tts_delay
   tv_sleep_timer_val: !input tv_sleep_timer_minutes
+  default_countdown_val: !input default_countdown_minutes
 
   # --- Effective countdown (reads helper, falls back to default) ---
   countdown_minutes: >-
@@ -1927,7 +1945,6 @@ variables:
   audiobook_volume_val: !input audiobook_volume
   bedtime_prompt_val: !input bedtime_prompt
   goodnight_prompt_val: !input goodnight_prompt
-  default_countdown_val: !input default_countdown_minutes
   enable_negotiation_val: !input enable_countdown_negotiation
   enable_audiobook_offer_val: !input enable_audiobook_offer
 
@@ -2110,8 +2127,11 @@ variables:
     {% endif %}
 
   # --- Stage prompt overlay (selects prompt for current escalation stage) ---
+  # Hybrid: explicit prompts (1-6) are anchors; uncovered stages get
+  # auto-generated behavioural directives based on escalation progress.
   stage_prompt_overlay: >-
     {% set stage = current_stage | int(0) %}
+    {% set total = stage_count_val | int(4) %}
     {% set prompts = {
       1: stage_1_prompt_val | default(''),
       2: stage_2_prompt_val | default(''),
@@ -2123,6 +2143,17 @@ variables:
     {% set overlay = prompts.get(stage, '') | default('') %}
     {% if overlay | length > 0 %}
       {{ overlay }}
+    {% elif stage > 0 and total > 0 %}
+      {% set progress = (stage / total * 100) | int %}
+      {% if progress <= 35 %}
+        This is an early, low-pressure mention. Be casual and lighthearted — just an observation about the time, no urgency. You've only brought this up {{ stage }} time{{ 's' if stage > 1 }}.
+      {% elif progress <= 65 %}
+        You've brought this up {{ stage }} times now and been ignored every time. Your patience is wearing thin. Be noticeably frustrated — drop the charm, be direct, and make it clear you're not joking around anymore.
+      {% elif progress <= 85 %}
+        This is attempt {{ stage }} of {{ total }}. You are nearly out of patience. Be blunt and serious — no humour, no softening. Tell them exactly what's about to happen in plain language: they go to bed, or you handle it for them.
+      {% else %}
+        This is your absolute last warning — attempt {{ stage }} of {{ total }}. After this, you're done talking and taking over. Be dramatic, be final, be unmistakable. No technical jargon — just make it crystal clear the conversation is over.
+      {% endif %}
     {% else %}
       {{ effective_llm_prompt }}
     {% endif %}
@@ -2204,7 +2235,7 @@ variables:
     {{ current_stage | int(0) }}
 
   nags_exhausted: >-
-    {{ nag_count | int(0) >= max_nags_val | int(10) }}
+    {{ max_nags_val | int(0) > 0 and nag_count | int(0) >= max_nags_val | int(10) }}
 
   # --- Sleepy TV detection ---
   is_sleepy_tv: >-
@@ -2636,10 +2667,26 @@ actions:
             variables:
               context_snapshot: >-
                 {% set entities = context_entities_val | default([]) %}
+                {% set inactive_media = ['idle', 'off', 'standby', 'unavailable'] %}
                 {% set ns = namespace(lines=[]) %}
                 {% for entity in entities %}
                   {% set s = states(entity) | default('unavailable') %}
-                  {% set ns.lines = ns.lines + [entity ~ ': ' ~ s] %}
+                  {% set is_mp = entity.startswith('media_player.') %}
+                  {% if is_mp and s in inactive_media %}
+                    {# skip inactive media players entirely #}
+                  {% elif is_mp and s in ['playing', 'paused'] %}
+                    {% set title = state_attr(entity, 'media_title') | default('', true) %}
+                    {% set artist = state_attr(entity, 'media_artist') | default('', true) %}
+                    {% set album = state_attr(entity, 'media_album_name') | default('', true) %}
+                    {% set ctype = state_attr(entity, 'media_content_type') | default('', true) %}
+                    {% set detail = title %}
+                    {% if artist %}{% set detail = '"' ~ title ~ '" by ' ~ artist %}{% endif %}
+                    {% if album %}{% set detail = detail ~ ' (album: ' ~ album ~ ')' %}{% endif %}
+                    {% if ctype %}{% set detail = detail ~ ' [' ~ ctype ~ ']' %}{% endif %}
+                    {% set ns.lines = ns.lines + [entity ~ ': ' ~ s ~ ' — ' ~ detail] %}
+                  {% else %}
+                    {% set ns.lines = ns.lines + [entity ~ ': ' ~ s] %}
+                  {% endif %}
                 {% endfor %}
                 {{ ns.lines | join('\n') }}
 
@@ -2688,7 +2735,10 @@ actions:
             data:
               agent_id: "{{ proactive_conversation_agent }}"
               text: >-
-                {{ stage_prompt_overlay }}
+                {{ effective_llm_prompt }}
+                {% if stage_prompt_overlay | default('') | trim != effective_llm_prompt | trim %}
+                Tone: {{ stage_prompt_overlay }}
+                {% endif %}
                 ---
                 Context:
                 Area: {{ area_name_val | default('living room') }}
@@ -3974,6 +4024,20 @@ actions:
                 Countdown used: {{ final_countdown | default(countdown_minutes) }} min.
                 Kill switch: {{ kill_switch_entity_val | default('not configured') }}.
                 Test mode: {{ test_mode_val | default(false) }}.
+
+    # =====================================================================
+    # DEFAULT — no trigger matched (manual run or unknown trigger)
+    # =====================================================================
+    default:
+      - alias: "No trigger matched — log and exit"
+        continue_on_error: true
+        action: logbook.log
+        data:
+          name: "Proactive Escalation"
+          message: >-
+            ⚠️ Main router: no trigger matched (trigger.id={{ trigger.id | default('null') }}).
+            Manual runs are not supported — automation requires a real trigger
+            (presence_on, nag_tick, scheduled_bedtime, or scheduled_bedtime_weekend).
 
 mode: single
 max_exceeded: silent

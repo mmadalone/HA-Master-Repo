@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.4)
+# Notification Follow-Me (v3.5)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.4)"
+  name: "Notification Follow-Me (v3.5)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,14 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.5:** Duck restore hardening — persistent volume snapshot
+      via input_text helper prevents queued-run race conditions from
+      ratcheting volumes down. Poll-based restore replaces fixed
+      delay timer — waits for satellite to go idle instead of blind
+      sleep. LLM prompt cleanup — sensor context now emits natural-
+      language descriptions instead of raw entity IDs; idle/off
+      media players are excluded from context; prompt guard prevents
+      Rick from reciting sensor data.
     - **v3.4:** Media type awareness — media detection now captures
       specific type (Voice message, Photo, Video, etc.) instead of a
       flat boolean; type shown in TTS and truncated text. Sender alias
@@ -526,6 +534,23 @@ blueprint:
               step: 0.05
               mode: slider
 
+        duck_snapshot_helper:
+          name: Duck volume snapshot helper (optional)
+          description: >-
+            Optional. An input_text helper that stores the pre-duck
+            volume snapshot as JSON. When provided, all queued runs
+            share a single source of truth for original volumes —
+            preventing race conditions where Run 2 snapshots the
+            already-ducked level. The first run writes the snapshot;
+            subsequent runs skip the write and restore from the
+            stored values. Cleared after restore. Leave empty to
+            use per-run snapshots (simpler but vulnerable to queued
+            race conditions).
+          default: ""
+          selector:
+            entity:
+              domain: input_text
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
@@ -568,6 +593,7 @@ variables:
   context_entities_list: !input context_entities
   duck_player_entities: !input duck_player_list
   duck_vol: !input duck_volume
+  duck_snapshot_entity: !input duck_snapshot_helper
 
 # =============================================================================
 # TRIGGERS
@@ -842,10 +868,12 @@ actions:
         {% else %}
           {% set expanded = expand(entities) %}
           {%- for e in expanded %}
-          {% if e.domain == 'media_player' %}
-          - {{ e.entity_id }} ({{ e.name }}): {{ e.state }}{% if e.state == 'playing' %} — "{{ e.attributes.media_title | default('unknown track') }}"{% if e.attributes.media_artist | default('') %} by {{ e.attributes.media_artist | default('') }}{% endif %}{% endif %}
-          {% else %}
-          - {{ e.entity_id }} ({{ e.name }}): {{ e.state }}{% if e.attributes.unit_of_measurement | default('') %} {{ e.attributes.unit_of_measurement | default('') }}{% endif %}
+          {%- if e.domain == 'media_player' %}
+          {%- if e.state in ['playing', 'paused'] %}
+          - {{ e.name }} is {{ e.state }}{% if e.state == 'playing' and e.attributes.media_title | default('') %}: "{{ e.attributes.media_title }}"{% if e.attributes.media_artist | default('') %} by {{ e.attributes.media_artist }}{% endif %}{% endif %}
+          {%- endif %}
+          {%- else %}
+          - {{ e.name }}: {{ e.state }}{% if e.attributes.unit_of_measurement | default('') %} {{ e.attributes.unit_of_measurement }}{% endif %}
           {%- endif %}
           {%- endfor %}
         {% endif %}
@@ -888,9 +916,16 @@ actions:
             is_group: {{ notif_is_group }}
             {% endif %}
             current_time: {{ now().strftime('%H:%M') }}
-            extra_entities:
-            {{ sensor_context }}
             --- END NOTIFICATION DATA ---
+            {% if sensor_context | default('none') != 'none' %}
+
+            --- ENVIRONMENT CONTEXT (background awareness only) ---
+            The following describes what is happening around the user
+            right now. Only mention it if directly relevant to the
+            notification — never list or recite this data.
+            {{ sensor_context }}
+            --- END ENVIRONMENT CONTEXT ---
+            {% endif %}
 
       - alias: "7a · Extract LLM response with defensive fallback"
         variables:
@@ -1001,7 +1036,14 @@ actions:
   # ---------------------------------------------------------------------------
   - alias: "7f · Snapshot and duck other playing media players"
     variables:
-      ducked_players: >-
+      _duck_helper: "{{ duck_snapshot_entity | default('') | string }}"
+      _stored_snapshot: >-
+        {% if _duck_helper | length > 0 %}
+          {{ states(_duck_helper) | default('') | string | trim }}
+        {% else %}
+          
+        {% endif %}
+      _fresh_snapshot: >-
         {% set players = duck_player_entities | default([]) %}
         {% set ns = namespace(result=[]) %}
         {% for p in players %}
@@ -1013,6 +1055,30 @@ actions:
           {% endif %}
         {% endfor %}
         {{ ns.result }}
+      ducked_players: >-
+        {% if _stored_snapshot | length > 2 %}
+          {{ _stored_snapshot | from_json | default(_fresh_snapshot) }}
+        {% else %}
+          {{ _fresh_snapshot }}
+        {% endif %}
+      _snapshot_is_fresh: >-
+        {{ _stored_snapshot | length <= 2 }}
+
+  - alias: "7f-save · Persist snapshot to helper (first run only)"
+    if:
+      - condition: template
+        value_template: >-
+          {{ _duck_helper | length > 0
+             and _snapshot_is_fresh | bool(true)
+             and ducked_players | length > 0 }}
+    then:
+      - alias: "Write volume snapshot JSON to helper"
+        action: input_text.set_value
+        continue_on_error: true
+        target:
+          entity_id: "{{ _duck_helper }}"
+        data:
+          value: "{{ ducked_players | to_json }}"
 
   - alias: "7f-duck · Set ducked players to duck volume"
     if:
@@ -1099,18 +1165,38 @@ actions:
               message: "{{ announcement }}"
 
   # ---------------------------------------------------------------------------
+  # 8-wait. Poll satellite until TTS playback finishes
+  # ---------------------------------------------------------------------------
+  - alias: "8-wait · Wait for TTS playback to complete"
+    if:
+      - condition: template
+        value_template: >-
+          {{ has_satellite and
+             (ringer_state == 'vibrate'
+              or ducked_players | default([]) | length > 0) }}
+    then:
+      - alias: "Poll satellite state — exit when idle or max wait reached"
+        repeat:
+          until:
+            - condition: template
+              value_template: >-
+                {{ states(target_satellite) | default('idle')
+                   not in ['playing']
+                   or repeat.index >= (restore_delay | int(8)) }}
+          sequence:
+            - delay:
+                seconds: 1
+
+  # ---------------------------------------------------------------------------
   # 8a. Restore volume after vibrate-mode announcement
   # ---------------------------------------------------------------------------
   - alias: "8a · Restore player volume after vibrate-mode TTS"
     choose:
-      - alias: "Vibrate mode was active — wait then restore original volume"
+      - alias: "Vibrate mode was active — restore original volume"
         conditions:
           - condition: template
             value_template: "{{ ringer_state == 'vibrate' and has_satellite }}"
         sequence:
-          - alias: "Wait for TTS playback to finish"
-            delay:
-              seconds: "{{ restore_delay | int(8) }}"
           - alias: "Restore original volume level"
             action: media_player.volume_set
             continue_on_error: true
@@ -1127,13 +1213,6 @@ actions:
       - condition: template
         value_template: "{{ ducked_players | default([]) | length > 0 }}"
     then:
-      - alias: "Wait for TTS playback (skip if vibrate restore already waited)"
-        if:
-          - condition: template
-            value_template: "{{ ringer_state != 'vibrate' or not has_satellite }}"
-        then:
-          - delay:
-              seconds: "{{ restore_delay | int(8) }}"
       - alias: "Restore each ducked player"
         repeat:
           for_each: "{{ ducked_players }}"
@@ -1145,6 +1224,18 @@ actions:
                 entity_id: "{{ repeat.item.entity_id }}"
               data:
                 volume_level: "{{ repeat.item.volume }}"
+      - alias: "Clear persistent snapshot helper (if configured)"
+        if:
+          - condition: template
+            value_template: "{{ _duck_helper | default('') | length > 0 }}"
+        then:
+          - alias: "Reset snapshot helper to empty"
+            action: input_text.set_value
+            continue_on_error: true
+            target:
+              entity_id: "{{ _duck_helper }}"
+            data:
+              value: ""
 
   # ---------------------------------------------------------------------------
   # 9. Update cooldown timestamp
