@@ -1786,11 +1786,13 @@ variables:
   media_player_val: !input media_player
   tts_mode_val: !input tts_mode
   tts_entity_val: !input tts_entity
-  voice_profile_val: !input voice_profile
+  voice_profile_val: !input elevenlabs_voice_profile
   area_name_val: !input area_name
 
   user_names_val: !input user_names
-  proactive_conversation_agent: !input proactive_conversation_agent
+  fallback_names_val: !input fallback_names
+  llm_fallback_names_val: !input llm_fallback_names
+  proactive_conversation_agent: !input conversation_agent
   bedtime_conversation_agent: !input bedtime_conversation_agent
   assist_satellites_val: !input assist_satellites
   llm_prompt_val: !input llm_prompt
@@ -1808,30 +1810,31 @@ variables:
   # -------------------------------------------------------------------------
   # Weekend overrides — proactive (⑤)
   # -------------------------------------------------------------------------
-  proactive_weekend_mode: !input proactive_weekend_mode
+  proactive_weekend_mode: !input weekend_mode
   weekend_days_val: !input weekend_days
   weekend_start_time_val: !input weekend_start_time
   weekend_end_time_val: !input weekend_end_time
   weekend_cooldown_val: !input weekend_cooldown_minutes
-  weekend_llm_prompt_val: !input weekend_llm_prompt
+  weekend_llm_prompt_val: !input weekend_llm_prompt_override
 
   # -------------------------------------------------------------------------
   # Bedtime question (⑥)
   # -------------------------------------------------------------------------
   enable_bedtime_question_val: !input enable_bedtime_question
-  bedtime_satellite_val: !input bedtime_satellite
+  bedtime_satellite_val: !input bedtime_assist_satellite
   bedtime_question_delay_val: !input bedtime_question_delay
-  bedtime_question_prompt_val: !input bedtime_question_prompt
-  bedtime_question_fallback_val: !input bedtime_question_fallback_text
-  bedtime_weekend_mode_question: !input bedtime_weekend_mode_question
+  bedtime_question_prompt_val: !input bedtime_llm_prompt
+  bedtime_question_fallback_val: !input bedtime_question_fallback
+  bedtime_weekend_mode_question: !input weekend_bedtime_mode
+  weekend_bedtime_llm_prompt_val: !input weekend_bedtime_llm_prompt_override
 
   # -------------------------------------------------------------------------
   # Escalation (⑦)
   # -------------------------------------------------------------------------
   enable_escalation_val: !input enable_escalation
-  stage_count_val: !input stage_count
-  escalation_stage_entity: !input escalation_stage_entity
-  escalation_session_entity: !input escalation_session_entity
+  stage_count_val: !input escalation_stage_count
+  escalation_stage_entity: !input escalation_stage_helper
+  escalation_session_entity: !input escalation_session_helper
   cooldown_curve_val: !input cooldown_curve
   custom_stage_intervals_val: !input custom_stage_intervals
   absence_gap_minutes_val: !input absence_gap_minutes
@@ -1877,6 +1880,7 @@ variables:
   lights_off_target_val: !input lights_off_target
   living_room_lamp_val: !input living_room_lamp
   reset_switches_val: !input reset_switches
+  reset_switch_delay_val: !input reset_switch_delay
   media_players_stop_val: !input media_players_stop
   bathroom_sensor_val: !input bathroom_sensor
   bathroom_max_timeout_val: !input bathroom_max_timeout
@@ -2027,6 +2031,31 @@ variables:
       {{ llm_prompt_val }}
     {% endif %}
 
+  # --- Name selection (random pick from comma list, with fallbacks) ---
+  chosen_name: >-
+    {% set names = user_names_val | default('') %}
+    {% set fallback = fallback_names_val | default('friend') %}
+    {% set pool = names if names | trim | length > 0 else fallback %}
+    {% set items = pool.split(',') | map('trim') | select() | list %}
+    {{ items | random if items | length > 0 else 'friend' }}
+
+  llm_user_reference: >-
+    {% set names = user_names_val | default('') %}
+    {% set fallback = llm_fallback_names_val | default('the user') %}
+    {% set pool = names if names | trim | length > 0 else fallback %}
+    {% set items = pool.split(',') | map('trim') | select() | list %}
+    {{ items | random if items | length > 0 else 'the user' }}
+
+  # --- Effective bedtime question prompt (respects weekend override) ---
+  effective_bedtime_question_prompt: >-
+    {% if is_weekend
+       and (bedtime_weekend_mode_question | default('same_as_weekdays')) == 'use_weekend_bedtime_prompt'
+       and weekend_bedtime_llm_prompt_val | default('') | trim | length > 0 %}
+      {{ weekend_bedtime_llm_prompt_val }}
+    {% else %}
+      {{ bedtime_question_prompt_val }}
+    {% endif %}
+
   # --- Escalation state ---
   current_stage: >-
     {{ states(escalation_stage_entity) | int(0) }}
@@ -2139,13 +2168,6 @@ variables:
     {% else %}
       false
     {% endif %}
-
-  # --- Countdown (from helper or default) ---
-  countdown_minutes: >-
-    {% if default_countdown_val is defined %}
-      {{ states(escalation_stage_entity) | default('') }}
-    {% endif %}
-    {{ default_countdown_val | int(4) }}
 
   # --- Time window check ---
   in_time_window: >-
@@ -2305,14 +2327,14 @@ actions:
                   - alias: "Set session start timestamp"
                     action: input_datetime.set_datetime
                     target:
-                      entity_id: !input escalation_session_entity
+                      entity_id: !input escalation_session_helper
                     data:
                       datetime: "{{ now().isoformat() }}"
 
                   - alias: "Reset stage to 0"
                     action: input_number.set_value
                     target:
-                      entity_id: !input escalation_stage_entity
+                      entity_id: !input escalation_stage_helper
                     data:
                       value: 0
 
@@ -2343,14 +2365,14 @@ actions:
                           - alias: "Reset stage to 0 — gap exceeded"
                             action: input_number.set_value
                             target:
-                              entity_id: !input escalation_stage_entity
+                              entity_id: !input escalation_stage_helper
                             data:
                               value: 0
 
                           - alias: "Update session timestamp"
                             action: input_datetime.set_datetime
                             target:
-                              entity_id: !input escalation_session_entity
+                              entity_id: !input escalation_session_helper
                             data:
                               datetime: "{{ now().isoformat() }}"
 
@@ -2383,14 +2405,14 @@ actions:
           - alias: "Advance escalation stage"
             action: input_number.set_value
             target:
-              entity_id: !input escalation_stage_entity
+              entity_id: !input escalation_stage_helper
             data:
               value: "{{ (current_stage | int(0)) + 1 }}"
 
           - alias: "Update session timestamp for cooldown tracking"
             action: input_datetime.set_datetime
             target:
-              entity_id: !input escalation_session_entity
+              entity_id: !input escalation_session_helper
             data:
               datetime: "{{ now().isoformat() }}"
 
@@ -2574,14 +2596,14 @@ actions:
                   - alias: "Reset escalation stage to 0"
                     action: input_number.set_value
                     target:
-                      entity_id: !input escalation_stage_entity
+                      entity_id: !input escalation_stage_helper
                     data:
                       value: 0
 
                   - alias: "Clear session timestamp"
                     action: input_datetime.set_datetime
                     target:
-                      entity_id: !input escalation_session_entity
+                      entity_id: !input escalation_session_helper
                     data:
                       datetime: "1970-01-01 00:00:00"
 
@@ -2652,7 +2674,7 @@ actions:
                 ---
                 Context:
                 Area: {{ area_name_val | default('living room') }}
-                User(s): {{ user_names_val | default('the user') }}
+                User(s): {{ llm_user_reference | default('the user') }}
                 Stage: {{ (current_stage | int(0)) + 1 }} of {{ stage_count_val | int(4) }}
                 Time: {{ now().strftime('%H:%M') }}
                 {{ context_snapshot }}
@@ -2740,7 +2762,7 @@ actions:
                             target:
                               entity_id: "{{ bedtime_satellite_val }}"
                             data:
-                              start_message: "{{ bedtime_question_prompt_val }}"
+                              start_message: "{{ effective_bedtime_question_prompt }}"
                               extra_system_prompt: >-
                                 The user has been present for a while. Ask if they
                                 want to start bedtime. If yes, respond with exactly
@@ -2824,8 +2846,7 @@ actions:
                 sequence:
                   - action: switch.turn_off
                     target: !input reset_switches
-                  - delay:
-                      seconds: 2
+                  - delay: !input reset_switch_delay
                   - action: switch.turn_on
                     target: !input reset_switches
                   - delay:
@@ -3894,7 +3915,7 @@ actions:
             continue_on_error: true
             action: input_number.set_value
             target:
-              entity_id: !input escalation_stage_entity
+              entity_id: !input escalation_stage_helper
             data:
               value: 0
 
@@ -3902,7 +3923,7 @@ actions:
             continue_on_error: true
             action: input_datetime.set_datetime
             target:
-              entity_id: !input escalation_session_entity
+              entity_id: !input escalation_session_helper
             data:
               datetime: "1970-01-01 00:00:00"
 
