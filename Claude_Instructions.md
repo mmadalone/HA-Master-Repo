@@ -130,6 +130,10 @@ After commit succeeds, present the user with two options:
 
 **Never auto-push.** Always wait for the user's explicit choice.
 
+## ⚠️ Context Window — MANDATORY
+After every 3–4 exchanges, state your estimated context usage (low/medium/high/critical).
+At HIGH: warn the user. At CRITICAL: stop work, produce a state checkpoint and handoff summary.
+Never silently degrade — if recall is slipping, say so immediately.
 
 ## Context Management Rules
 1. NEVER paste full config files — reference sections by path and line range
