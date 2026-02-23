@@ -33,6 +33,11 @@ blueprint:
 
     ### Recent changes
 
+    - **v1.2:** Fix string-vs-boolean truthiness bug — add `| bool` to five
+      condition gates (kill_switch_on, bedtime_already_active, media_is_playing,
+      nags_exhausted, session_active) that rendered as strings via `>-` scalars,
+      causing all conditions to always block. Root cause of `last_triggered: null`.
+
     - **v1.1:** Audit fixes — add explicit `mode: single` / `max_exceeded: silent`
       (AP-42), fix compound boolean in scheduled_bedtime day gate (always-false
       condition), add dedicated `bedtime_weekday_scheduled_time` input
@@ -2062,7 +2067,7 @@ variables:
 
   # --- Effective bedtime question prompt (respects weekend override) ---
   effective_bedtime_question_prompt: >-
-    {% if is_weekend
+    {% if is_weekend | bool
        and (bedtime_weekend_mode_question | default('same_as_weekdays')) == 'use_weekend_bedtime_prompt'
        and weekend_bedtime_llm_prompt_val | default('') | trim | length > 0 %}
       {{ weekend_bedtime_llm_prompt_val }}
@@ -2265,7 +2270,7 @@ conditions:
   # Kill switch — hard stop for all triggers
   - condition: template
     alias: "Kill switch is not engaged"
-    value_template: "{{ not kill_switch_on }}"
+    value_template: "{{ not (kill_switch_on | bool) }}"
 
   # Day-of-week gate — route by trigger type
   - condition: template
@@ -2274,13 +2279,13 @@ conditions:
       {% set tid = trigger.id | default('') %}
       {% if tid == 'scheduled_bedtime' %}
         {# Weekday bedtime — skip if weekend profile is active #}
-        {{ not bedtime_weekend_active and effective_day_key in (run_days_val | default([])) }}
+        {{ not (bedtime_weekend_active | bool) and effective_day_key in (run_days_val | default([])) }}
       {% elif tid == 'scheduled_bedtime_weekend' %}
         {# Weekend bedtime — only if weekend profile active #}
         {{ bedtime_weekend_active }}
       {% elif tid in ['presence_on', 'nag_tick'] %}
         {# Proactive triggers — check proactive weekend gate #}
-        {% if proactive_weekend_blocked %}
+        {% if proactive_weekend_blocked | bool %}
           false
         {% else %}
           {{ effective_day_key in (run_days_val | default([])) }}
@@ -2311,7 +2316,7 @@ actions:
           # --- Gate checks (proactive) ---
           - alias: "Gate: conflict guard — abort if bedtime already running"
             condition: template
-            value_template: "{{ not bedtime_already_active }}"
+            value_template: "{{ not (bedtime_already_active | bool) }}"
 
           - alias: "Gate: presence confirmed"
             condition: template
@@ -2319,7 +2324,7 @@ actions:
 
           - alias: "Gate: media not playing (if blocking enabled)"
             condition: template
-            value_template: "{{ not media_is_playing }}"
+            value_template: "{{ not (media_is_playing | bool) }}"
 
           - alias: "Gate: within time window"
             condition: template
@@ -2327,7 +2332,7 @@ actions:
 
           - alias: "Gate: nags not exhausted"
             condition: template
-            value_template: "{{ not nags_exhausted }}"
+            value_template: "{{ not (nags_exhausted | bool) }}"
 
           # --- Session management ---
           - alias: "Session management — start new or validate existing"
@@ -2335,7 +2340,7 @@ actions:
               - alias: "No active session — initialize"
                 conditions:
                   - condition: template
-                    value_template: "{{ not session_active }}"
+                    value_template: "{{ not (session_active | bool) }}"
                 sequence:
                   - alias: "Set session start timestamp"
                     action: input_datetime.set_datetime
@@ -3484,13 +3489,13 @@ actions:
                   - alias: "Select settling prompt and sensors based on media target"
                     variables:
                       settling_prompt_active: >-
-                        {% if is_kodi_target %}
+                        {% if is_kodi_target | bool %}
                           {{ settling_prompt_kodi_val | default('') }}
                         {% else %}
                           {{ settling_prompt_audiobook_val | default('') }}
                         {% endif %}
                       settling_sensors_active: >-
-                        {% if is_kodi_target %}
+                        {% if is_kodi_target | bool %}
                           {{ settling_sensors_kodi_val | default([]) }}
                         {% else %}
                           {{ settling_sensors_audiobook_val | default([]) }}
@@ -3514,7 +3519,7 @@ actions:
                       text: >-
                         {{ settling_prompt_active }}
 
-                        {% if is_kodi_target %}
+                        {% if is_kodi_target | bool %}
                         Kodi is currently playing: {{ kodi_now_playing }}.
                         {% endif %}
 
