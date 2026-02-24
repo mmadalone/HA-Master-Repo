@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.5.1)
+# Notification Follow-Me (v3.5.3)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.5.1)"
+  name: "Notification Follow-Me (v3.5.3)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,53 +29,14 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
-    - **v3.5.1:** Duck snapshot guard — `_stored_snapshot` now
-      strips `unknown`/`unavailable` helper states to empty string
-      before downstream use; `ducked_players` validates JSON array
-      prefix (`[`) before `from_json` to prevent `ValueError` on
-      uninitialized or corrupt helper values. Fixes crash at step
-      7f when `duck_snapshot_helper` has not yet been written to.
-    - **v3.5:** Duck restore hardening — persistent volume snapshot
-      via input_text helper prevents queued-run race conditions from
-      ratcheting volumes down. Poll-based restore replaces fixed
-      delay timer — waits for satellite to go idle instead of blind
-      sleep. LLM prompt cleanup — sensor context now emits natural-
-      language descriptions instead of raw entity IDs; idle/off
-      media players are excluded from context; prompt guard prevents
-      Rick from reciting sensor data.
-    - **v3.4:** Media type awareness — media detection now captures
-      specific type (Voice message, Photo, Video, etc.) instead of a
-      flat boolean; type shown in TTS and truncated text. Sender alias
-      scrubbing — raw sender names are replaced with aliases in the
-      message body before the LLM sees them, plus hardened prompt
-      instruction. Duck other players — new dedicated player list with
-      configurable duck volume; playing players are snapshot-ducked
-      before TTS and restored after. Extra context entities — optional
-      sensor/entity list passed to the LLM via expand(), ported from
-      Proactive LLM Sensors pattern.
-    - **v3.3:** Sender aliases — map raw contact names to friendly
-      display names via comma-separated Key=Value pairs in the
-      automation config. Converted blocked contacts and junk patterns
-      from helper entity selectors to direct text inputs — all three
-      are now inline config, no external helpers needed. Aliases are
-      applied to all user/LLM-facing output; blocked contacts and
-      system logs retain the raw name.
-    - **v3.2:** Content quality gates — junk notification filter
-      (configurable pattern list), media message behavior selector
-      (drop / short TTS / LLM summary), and optional group chat
-      context toggle to suppress "direct message" LLM commentary.
-    - **v3.1:** Style guide compliance polish — AP-16 default guard on
-      cooldown `states()` call, named trigger ID for trace readability,
-      PII truncation in system log output.
-    - **v3:** Ringer mode volume control — vibrate ducks to quiet volume,
-      silent skips TTS entirely. Corrected announce mode support note
-      (Voice PE supports announce). Defensive hardening on cooldown,
-      attribute fallback, and mobile push service guards.
-    - **v2:** Cooldown fix (timezone-aware math), multi-message support
-      (android.textLines), queued mode, trigger-safe attribute extraction,
-      conditional TTS announce, case-insensitive blocked contacts,
-      today_at guard, variable-based conditions
-    - **v1:** Initial release
+    - **v3.5.3:** User pet names — new optional text input provides
+      the LLM with pet names that refer to the notification
+      recipient (e.g., amor, cariño, babe). Only root forms are
+      needed — the prompt instructs the LLM to recognize
+      diminutives and affectionate variations automatically
+      (amor → amorcito, guapo → guapetón). Prevents the agent
+      from misinterpreting terms of endearment as third-party
+      names. LLM path only; non-LLM routes unaffected.
 
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/notification_follow_me.yaml"
@@ -164,6 +125,22 @@ blueprint:
           selector:
             entity:
               multiple: true
+
+        user_petnames:
+          name: User pet names for LLM context
+          description: >-
+            Optional. Comma-separated pet names that people use to
+            refer to the notification recipient (e.g., "amor, cariño,
+            babe, guapo, mi vida"). These are passed to the LLM so
+            it understands these names mean the user — not a third
+            party. Only root forms are needed — the LLM will
+            recognize diminutives and affectionate variations
+            automatically (amor → amorcito, guapo → guapetón, etc.).
+            Non-LLM paths are unaffected. Leave empty to disable.
+          default: ""
+          selector:
+            text:
+              multiline: true
 
     # =========================================================================
     # ② PRESENCE ROUTING
@@ -319,6 +296,21 @@ blueprint:
           selector:
             text:
               multiline: true
+
+        last_announced_sender_helper:
+          name: Last announced sender helper (optional)
+          description: >-
+            Optional. An input_text helper that stores the sender name
+            from the most recent announcement. When provided, the
+            cooldown gate becomes per-sender: notifications from a
+            different sender always pass, regardless of elapsed time.
+            Only same-sender repeats within the cooldown window are
+            suppressed. Leave empty to use the original time-only
+            cooldown behavior.
+          default: ""
+          selector:
+            entity:
+              domain: input_text
 
         media_message_behavior:
           name: Media message behavior
@@ -579,6 +571,7 @@ variables:
   blocked_contacts_list: !input blocked_contacts
   cooldown: !input cooldown_seconds
   last_announced_entity: !input last_announced_helper
+  last_sender_entity: !input last_announced_sender_helper
   char_limit: !input char_cap
   dnd_entity: !input dnd_sensor
   enable_quiet: !input enable_quiet_hours
@@ -597,6 +590,7 @@ variables:
   include_group: !input include_group_context
   aliases_map: !input sender_aliases
   context_entities_list: !input context_entities
+  user_petnames_list: !input user_petnames
   duck_player_entities: !input duck_player_list
   duck_vol: !input duck_volume
   duck_snapshot_entity: !input duck_snapshot_helper
@@ -748,15 +742,31 @@ actions:
   # ---------------------------------------------------------------------------
   # 3. Cooldown check — suppress if last announcement was too recent
   # ---------------------------------------------------------------------------
-  - alias: "3 · Enforce cooldown between announcements"
+  - alias: "3 · Enforce per-sender cooldown between announcements"
     condition: template
     value_template: >-
-      {% set helper = last_announced_entity | default('') | string %}
-      {% if helper | length == 0 %}
+      {% set ts_helper = last_announced_entity | default('') | string %}
+      {% if ts_helper | length == 0 %}
         true
       {% else %}
-        {% set last_ts = states(helper) | default('') | as_timestamp | default(0) %}
-        {{ (as_timestamp(now()) - last_ts) >= (cooldown | int(60)) }}
+        {% set last_ts = states(ts_helper) | default('')
+            | as_timestamp | default(0) %}
+        {% set within_window = (as_timestamp(now()) - last_ts)
+            < (cooldown | int(60)) %}
+        {% if not within_window %}
+          true
+        {% else %}
+          {% set sender_helper = last_sender_entity | default('') | string %}
+          {% if sender_helper | length == 0 %}
+            false
+          {% else %}
+            {% set last_sender = states(sender_helper)
+                | default('') | string | lower | trim %}
+            {% set current_sender = notif_sender
+                | default('') | string | lower | trim %}
+            {{ last_sender != current_sender }}
+          {% endif %}
+        {% endif %}
       {% endif %}
 
   # ---------------------------------------------------------------------------
@@ -923,6 +933,18 @@ actions:
             {% endif %}
             current_time: {{ now().strftime('%H:%M') }}
             --- END NOTIFICATION DATA ---
+            {% set petnames = user_petnames_list | default('') | string | trim %}
+            {% if petnames | length > 0 %}
+
+            --- PET NAME CONTEXT ---
+            The following are pet names that refer to the person you
+            are speaking to (the notification recipient): {{ petnames }}.
+            Diminutives, augmentatives, and affectionate variations of
+            these names (e.g., amor → amorcito, guapo → guapetón) also
+            refer to the user. Do not treat any of these as third-party
+            names.
+            --- END PET NAME CONTEXT ---
+            {% endif %}
             {% if sensor_context | default('none') != 'none' %}
 
             --- ENVIRONMENT CONTEXT (background awareness only) ---
@@ -1248,7 +1270,7 @@ actions:
   # ---------------------------------------------------------------------------
   # 9. Update cooldown timestamp
   # ---------------------------------------------------------------------------
-  - alias: "9 · Update cooldown timestamp (if helper configured)"
+  - alias: "9 · Update cooldown timestamp and sender"
     if:
       - condition: template
         value_template: "{{ (last_announced_entity | default('') | string | length) > 0 }}"
@@ -1260,6 +1282,18 @@ actions:
           entity_id: "{{ last_announced_entity }}"
         data:
           datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - alias: "9b · Write sender to cooldown sender helper"
+        if:
+          - condition: template
+            value_template: "{{ (last_sender_entity | default('') | string | length) > 0 }}"
+        then:
+          - alias: "Store last announced sender name"
+            action: input_text.set_value
+            continue_on_error: true
+            target:
+              entity_id: "{{ last_sender_entity }}"
+            data:
+              value: "{{ notif_sender | default('') | string }}"
 
   # ---------------------------------------------------------------------------
   # 10. Log successful announcement for debugging

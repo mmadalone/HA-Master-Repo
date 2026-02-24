@@ -1,5 +1,5 @@
 blueprint:
-  name: "Proactive Bedtime Escalation (v1.6) — Presence-based nags with inline bedtime routine"
+  name: "Proactive Bedtime Escalation (v1.7) — Presence-based nags with inline bedtime routine"
   author: madalone
   description: '![Proactive Bedtime Escalation](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive_bedtime_escalation-header.jpeg)
 
@@ -199,6 +199,19 @@ blueprint:
                 - Kitchen
                 - Bathroom
               custom_value: true
+
+        proactive_tts_volume:
+          name: Proactive TTS volume
+          description: >
+            Volume level for the proactive speaker before TTS delivery
+            (0.0 to 1.0). Set to 0 to skip volume adjustment.
+          default: 0.0
+          selector:
+            number:
+              min: 0.0
+              max: 1.0
+              step: 0.05
+              mode: slider
 
     # ===========================================================================
     # ③ AI CONVERSATION
@@ -1827,6 +1840,7 @@ variables:
   block_if_media_val: !input block_if_media_playing
 
   media_player_val: !input media_player
+  proactive_tts_volume_val: !input proactive_tts_volume
   tts_mode_val: !input tts_mode
   tts_entity_val: !input tts_entity
   voice_profile_val: !input elevenlabs_voice_profile
@@ -2193,7 +2207,7 @@ variables:
   presence_gate_passed: >-
     {% set sensors = presence_sensors_val | default([]) %}
     {% if sensors | length == 0 %}
-      true
+      false
     {% else %}
       {% set ns = namespace(any_on=false) %}
       {% for sensor in sensors %}
@@ -2218,7 +2232,7 @@ variables:
   media_is_playing: >-
     {% if block_if_media_val | default(false) | bool
        and media_player_val | default('') | length > 0 %}
-      {{ states(media_player_val) | default('idle') in ['playing', 'paused'] }}
+      {{ states(media_player_val) | default('idle') == 'playing' }}
     {% else %}
       false
     {% endif %}
@@ -2626,7 +2640,7 @@ actions:
                         {% if artist %}{% set detail = '"' ~ title ~ '" by ' ~ artist %}{% endif %}
                         {% if album %}{% set detail = detail ~ ' (album: ' ~ album ~ ')' %}{% endif %}
                         {% if ctype %}{% set detail = detail ~ ' [' ~ ctype ~ ']' %}{% endif %}
-                        {% set ns.lines = ns.lines + [entity ~ ': ' ~ s ~ ' — ' ~ detail] %}
+                        {% set ns.lines = ns.lines + [entity ~ ': ' ~ s ~ ' — program/show title: ' ~ detail] %}
                       {% else %}
                         {% set ns.lines = ns.lines + [entity ~ ': ' ~ s] %}
                       {% endif %}
@@ -2687,7 +2701,11 @@ actions:
                     Area: {{ area_name_val | default('living room') }}
                     User(s): {{ llm_user_reference | default('the user') }}
                     Stage: {{ (current_stage | int(0)) + 1 }} of {{ stage_count_val | int(4) }}
+                    Do not reference stage numbers, internal metadata, or escalation status in your speech.
                     Time: {{ now().strftime('%H:%M') }}
+                    {% if is_sleepy_tv | default(false) | bool %}
+                    Note: User is already watching designated bedtime/wind-down content. Acknowledge they are winding down — soften your tone accordingly.
+                    {% endif %}
                     {{ context_snapshot }}
                     {% if bedtime_history_context | default('') | trim | length > 0 %}
                     ---
@@ -2708,6 +2726,21 @@ actions:
                     {% endif %}
 
               # --- TTS delivery (proactive message) ---
+              - alias: "Set proactive TTS volume"
+                choose:
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ proactive_tts_volume_val | default(0) | float(0) > 0
+                             and media_player_val | default('') | length > 0 }}
+                    sequence:
+                      - action: media_player.volume_set
+                        target:
+                          entity_id: "{{ media_player_val }}"
+                        data:
+                          volume_level: "{{ proactive_tts_volume_val | float(0.5) }}"
+                        continue_on_error: true
+
               - alias: "Deliver proactive message via TTS"
                 choose:
                   - alias: "TTS mode: conversation.process direct"
@@ -2978,7 +3011,13 @@ actions:
                 response_variable: bedtime_announce
                 data:
                   agent_id: "{{ bedtime_conversation_agent }}"
-                  text: "{{ bedtime_prompt_val }}"
+                  text: >-
+                    {% if enable_negotiation_val | default(true) | bool %}
+                      {{ bedtime_prompt_val }}
+                    {% else %}
+                      {{ bedtime_prompt_val | regex_replace('[Aa]sk if the user wants more time\.?\s*', '') | regex_replace('[Oo]ffer more time\.?\s*', '') }}
+                      Do not ask if the user wants more time or offer negotiation.
+                    {% endif %}
 
               - alias: "Extract bedtime message"
                 variables:
