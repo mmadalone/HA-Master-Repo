@@ -376,6 +376,22 @@ actions:
             entity_id: !input ducking_flag
             state: "on"
         sequence:
+          # ── Wait for TTS audio to finish on announcement players ──
+          # The satellite goes idle BEFORE the media player finishes
+          # playing the TTS audio. Without this gate the volume restore
+          # fires while Rick is still talking.
+          - alias: "Wait for announcement players to finish TTS playback"
+            wait_template: >-
+              {% set ann = players[:4]
+                   | rejectattr('player', 'search', 'dummy_placeholder')
+                   | map(attribute='player') | list %}
+              {{ ann | length == 0
+                 or ann | select('is_state', 'playing')
+                        | list | length == 0 }}
+            timeout:
+              seconds: 30
+            continue_on_error: true
+
           - alias: "Restore volumes for all configured players"
             repeat:
               for_each: >-

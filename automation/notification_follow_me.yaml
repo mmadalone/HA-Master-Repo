@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.7.0)
+# Notification Follow-Me (v3.7.1)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.7.0)"
+  name: "Notification Follow-Me (v3.7.1)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,15 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.7.1:** Reaction filter & smart reminder exit —
+      new step 2b drops emoji reaction notifications (liked,
+      loved, emphasized, reacted, tapback) before they reach
+      the LLM pipeline, fixing false "new message" announcements
+      when someone reacts to a message you sent. New optional
+      phone interactive sensor input in §⑧ lets the reminder
+      loop detect when you're actively using your phone and
+      exit early — no more phantom "check your phone" reminders
+      after you've already read the message.
     - **v3.7.0:** Unread message reminders — new optional §⑧ section
       adds a configurable reminder loop after the initial announcement.
       When enabled, the agent re-summarizes the original message at a
@@ -665,6 +674,21 @@ blueprint:
             text:
               multiline: true
 
+        phone_interactive_sensor:
+          name: Phone interactive sensor (optional)
+          description: >-
+            Optional. Binary sensor from the Android Companion App
+            that indicates whether the phone screen is on and the
+            user is actively interacting with it. When configured,
+            the reminder loop exits if the phone is currently
+            active — assuming the user has seen the notification.
+            Dramatically reduces phantom reminders. Leave empty to
+            skip this check and rely on sender-change detection only.
+          default: ""
+          selector:
+            entity:
+              domain: binary_sensor
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
@@ -715,6 +739,7 @@ variables:
   reminder_interval_min: !input reminder_interval
   reminder_max: !input reminder_max_repeats
   reminder_prompt_text: !input reminder_prompt
+  phone_interactive_entity: !input phone_interactive_sensor
 
 # =============================================================================
 # TRIGGERS
@@ -859,6 +884,39 @@ actions:
           {{ not ns.junk }}
         {%- endif -%}
       {%- endif -%}
+
+  # ---------------------------------------------------------------------------
+  # 2b. Reaction filter — drop emoji reactions on outbound messages
+  # ---------------------------------------------------------------------------
+  - alias: "2b · Drop emoji reaction notifications"
+    condition: template
+    value_template: >-
+      {%- set text = notif_text | default('') | string -%}
+      {%- set lower = text | lower -%}
+      {%- set reaction_phrases = [
+            'reacted ', 'liked "', 'loved "',
+            'laughed at "', 'emphasized "',
+            'liked a message', 'loved a message',
+            'laughed at a message', 'emphasized a message',
+            'tapback', 'reacted with',
+            'reaccionó ', 'le gustó', 'le encantó'] -%}
+      {%- set ns = namespace(is_reaction=false) -%}
+      {%- for p in reaction_phrases -%}
+        {%- if p in lower -%}
+          {%- set ns.is_reaction = true -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- if not ns.is_reaction -%}
+        {# single-emoji-only messages (common reaction format) #}
+        {%- set stripped = text | trim -%}
+        {%- if stripped | length <= 4 and stripped | length > 0 -%}
+          {%- set has_letter = stripped | regex_search('[a-zA-Z0-9]') -%}
+          {%- if not has_letter -%}
+            {%- set ns.is_reaction = true -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endif -%}
+      {{ not ns.is_reaction }}
 
   # ---------------------------------------------------------------------------
   # 3. Cooldown check — suppress if last announcement was too recent
@@ -1592,6 +1650,17 @@ actions:
                   {% else %}
                     {{ qe <= now() < qs }}
                   {% endif %}
+                {% endif %}
+
+            - alias: "R3c · Exit if phone is actively being used"
+              condition: template
+              value_template: >-
+                {% set ent = phone_interactive_entity
+                    | default('') | string %}
+                {% if ent | length == 0 %}
+                  true
+                {% else %}
+                  {{ states(ent) | default('off') != 'on' }}
                 {% endif %}
 
             # --- Re-resolve presence (user may have moved rooms) ---

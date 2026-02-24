@@ -1,5 +1,5 @@
 # =============================================================================
-# Email Follow-Me (v1.0.0)
+# Email Follow-Me (v1.1.0)
 # =============================================================================
 # When a new email arrives via IMAP, determines the user's room via FP2
 # presence sensors, routes to the nearest voice satellite, and has the
@@ -12,7 +12,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Email Follow-Me (v1.0.0)"
+  name: "Email Follow-Me (v1.1.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/email-follow-me-header.jpeg)
@@ -30,6 +30,10 @@ blueprint:
     and attachment detection with "check your inbox" fallback.
 
     ### Recent changes
+    - **v1.1.0:** Restore delay overhaul — playback poll uses 60s safety
+      cap, `restore_delay` becomes post-playback grace period. Added
+      unread email reminder loop with IMAP count exit detection, static
+      template TTS, and full duck/restore cycle per iteration.
     - **v1.0.0:** Initial release — IMAP event trigger, blacklist,
       keyword filter (whitelist/blacklist), TTS volume, presence
       routing, LLM summarization, player ducking
@@ -511,15 +515,18 @@ blueprint:
               mode: slider
 
         tts_restore_delay:
-          name: Volume restore delay (seconds)
+          name: Post-playback grace period (seconds)
           description: >-
-            Seconds to wait after TTS delivery before restoring the
-            original volume. Allows streaming TTS engines to finish
-            playback before the volume snaps back.
-          default: 8
+            Grace period AFTER the satellite finishes playing TTS
+            before restoring the original volume. Useful for streaming
+            TTS engines (like ElevenLabs) that briefly report idle
+            between audio chunks. The playback poll itself uses a
+            60-second safety cap — this input only controls the
+            post-playback pause.
+          default: 3
           selector:
             number:
-              min: 1
+              min: 0
               max: 30
               step: 1
               unit_of_measurement: seconds
@@ -575,6 +582,86 @@ blueprint:
             entity:
               domain: input_text
 
+    # =========================================================================
+    # ⑧ UNREAD EMAIL REMINDERS
+    # =========================================================================
+    reminders:
+      name: "⑧ Unread email reminders"
+      icon: mdi:bell-ring-outline
+      description: >-
+        Periodically re-announce unread emails if you haven't checked
+        your inbox. Uses IMAP sensor unread count to detect when you've
+        read the email (count drops → exit). No LLM call — uses a
+        static message template with sender/subject placeholders.
+      collapsed: true
+      input:
+        imap_sensor:
+          name: IMAP sensor entity
+          description: >-
+            Required for reminders. The sensor entity created by your
+            IMAP integration — its state is the unread email count.
+            When the count drops below the snapshot taken at the first
+            announcement, the reminder loop exits (user read the email).
+            Find it at Settings → Integrations → IMAP → Entities.
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+
+        enable_reminders:
+          name: Enable unread email reminders
+          description: >-
+            When enabled, the automation will re-announce unread
+            emails at the configured interval after the initial
+            announcement. The reminder loop exits when the IMAP
+            unread count drops, max retries are hit, or any gate
+            condition fails.
+          default: false
+          selector:
+            boolean: {}
+
+        reminder_interval:
+          name: Reminder interval (minutes)
+          description: >-
+            Minutes between reminder announcements. The first
+            reminder fires this many minutes after the initial
+            announcement.
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 60
+              step: 1
+              unit_of_measurement: minutes
+              mode: slider
+
+        reminder_max_repeats:
+          name: Maximum reminder repeats
+          description: >-
+            Maximum number of reminder announcements before the
+            loop gives up. Does not count the initial announcement
+            — this is reminders only.
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 12
+              step: 1
+              mode: slider
+
+        reminder_message_template:
+          name: Reminder message template
+          description: >-
+            Static TTS message for reminders. Use {display_sender}
+            and {email_subject} as placeholders — they'll be replaced
+            with the actual sender name and subject line.
+          default: >-
+            You still haven't read that email from {display_sender}
+            about {email_subject}. Check your inbox.
+          selector:
+            text:
+              multiline: true
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
@@ -623,6 +710,11 @@ variables:
   duck_player_entities: !input duck_player_list
   duck_vol: !input duck_volume
   duck_snapshot_entity: !input duck_snapshot_helper
+  imap_sensor_entity: !input imap_sensor
+  reminder_enabled: !input enable_reminders
+  reminder_interval_min: !input reminder_interval
+  reminder_max: !input reminder_max_repeats
+  reminder_template: !input reminder_message_template
 
 # =============================================================================
 # TRIGGERS
@@ -693,27 +785,27 @@ actions:
   # ---------------------------------------------------------------------------
   # 0b. Gate — skip initial events (IMAP fires on startup for existing emails)
   # ---------------------------------------------------------------------------
-  - alias: "0b · Gate: skip initial IMAP events"
+  - alias: "0b · Gate: skip duplicate IMAP re-notifications"
     condition: template
     value_template: >-
-      {{ not (trigger.event.data.get('initial', false) | bool(false)) }}
+      {{ trigger.event.data.get('initial', true) | bool(true) }}
 
   # ---------------------------------------------------------------------------
   # 1. Extract email fields from IMAP event data
   # ---------------------------------------------------------------------------
   - alias: "1 · Extract email fields from event data"
     variables:
-      _event: "{{ trigger.event.data if trigger.event is defined else {} }}"
+      _event: "{{ trigger.event.data }}"
       email_sender: >-
-        {{ _event.get('sender', '') | default('Unknown sender', true) }}
+        {{ trigger.event.data.get('sender', '') | default('Unknown sender', true) }}
       email_subject: >-
-        {{ _event.get('subject', '') | default('(no subject)', true) }}
+        {{ trigger.event.data.get('subject', '') | default('(no subject)', true) }}
       email_body_raw: >-
-        {{ _event.get('text', '') | default('', true) }}
+        {{ trigger.event.data.get('text', '') | default('', true) }}
       email_date: >-
-        {{ _event.get('date', '') | default('', true) }}
+        {{ trigger.event.data.get('date', '') | default('', true) }}
       email_uid: >-
-        {{ _event.get('uid', '') | default('', true) }}
+        {{ trigger.event.data.get('uid', '') | default('', true) }}
 
   # ---------------------------------------------------------------------------
   # 1a. Parse sender — extract display name and email address
@@ -940,7 +1032,7 @@ actions:
   - alias: "6 · Prepare email content for LLM"
     variables:
       has_attachments: >-
-        {%- set headers = _event.get('headers', {}) | default({}) -%}
+        {%- set headers = trigger.event.data.get('headers', {}) | default({}) -%}
         {%- set content_type = headers.get('Content-Type', [''])[0]
             | default('') | string | lower -%}
         {%- set body_lower = email_body | default('') | string | lower -%}
@@ -1319,17 +1411,20 @@ actions:
               or tts_output_vol | float(0) > 0
               or ducked_players | default([]) | length > 0) }}
     then:
-      - alias: "Poll satellite state — exit when idle or max wait"
+      - alias: "Poll satellite state — exit when idle (60s safety cap)"
         repeat:
           until:
             - condition: template
               value_template: >-
                 {{ states(target_satellite) | default('idle')
                    not in ['playing']
-                   or repeat.index >= (restore_delay | int(8)) }}
+                   or repeat.index >= 60 }}
           sequence:
             - delay:
                 seconds: 1
+      - alias: "Post-playback grace period before volume restore"
+        delay:
+          seconds: "{{ restore_delay | int(3) }}"
 
   # ---------------------------------------------------------------------------
   # 8a. Restore volume after volume-adjusted TTS
@@ -1447,3 +1542,348 @@ actions:
         {{ target_satellite if has_satellite
            else 'mobile push (' ~ mobile_service ~ ')' }}.
       level: info
+
+
+  # ---------------------------------------------------------------------------
+  # 12. Capture IMAP unread count for reminder exit detection
+  # ---------------------------------------------------------------------------
+  - alias: "12 · Capture IMAP unread snapshot for reminder exit"
+    variables:
+      _imap_snapshot: >-
+        {% set ent = imap_sensor_entity | default('') | string %}
+        {% if ent | length > 0 %}
+          {{ states(ent) | int(-1) }}
+        {% else %}
+          {{ -1 }}
+        {% endif %}
+
+  # ---------------------------------------------------------------------------
+  # 12a. Unread email reminder loop
+  # ---------------------------------------------------------------------------
+  - alias: "12a · Unread email reminder loop"
+    if:
+      - condition: template
+        value_template: >-
+          {{ reminder_enabled | bool(false)
+             and _imap_snapshot | int(-1) >= 0 }}
+    then:
+      - alias: "Reminder repeat-while loop"
+        repeat:
+          while:
+            - condition: template
+              value_template: "{{ repeat.index <= (reminder_max | int(3)) }}"
+          sequence:
+            # --- R1: Wait the configured interval ---
+            - alias: "R1 · Wait reminder interval"
+              delay:
+                minutes: "{{ reminder_interval_min | int(5) }}"
+
+            # --- R2: Check IMAP unread count vs snapshot ---
+            - alias: "R2 · Check if unread count dropped (user read email)"
+              variables:
+                _r_current_count: >-
+                  {{ states(imap_sensor_entity) | int(-1) }}
+
+            - alias: "R2-gate · Exit if user engaged with inbox"
+              condition: template
+              value_template: >-
+                {{ _r_current_count | int(-1)
+                   >= _imap_snapshot | int(0) }}
+
+            # --- R3: Re-check all gates ---
+            - alias: "R3 · Re-check master toggle"
+              condition: template
+              value_template: "{{ is_state(toggle_entity, 'on') }}"
+
+            - alias: "R3a · Re-check DND"
+              condition: template
+              value_template: >-
+                {% set dnd = dnd_entity | default('') | string %}
+                {% if dnd | length == 0 %}
+                  true
+                {% else %}
+                  {{ states(dnd) | default('off')
+                     in ['off', 'unavailable', 'unknown'] }}
+                {% endif %}
+
+            - alias: "R3b · Re-check quiet hours"
+              condition: template
+              value_template: >-
+                {% if not (enable_quiet | bool(false)) %}
+                  true
+                {% else %}
+                  {% set qs = today_at(quiet_start_val
+                      | default('23:00:00')) %}
+                  {% set qe = today_at(quiet_end_val
+                      | default('07:00:00')) %}
+                  {% if qs < qe %}
+                    {{ not (qs <= now() < qe) }}
+                  {% else %}
+                    {{ qe <= now() < qs }}
+                  {% endif %}
+                {% endif %}
+
+            # --- R4: Re-resolve presence ---
+            - alias: "R4 · Re-resolve presence for reminder"
+              variables:
+                _r_active_index: >-
+                  {% set ns = namespace(idx=-1) %}
+                  {% for s in presence_list %}
+                    {% if states(s) | default('off') == 'on'
+                          and ns.idx == -1 %}
+                      {% set ns.idx = loop.index0 %}
+                    {% endif %}
+                  {% endfor %}
+                  {{ ns.idx }}
+                _r_satellite: >-
+                  {% set idx = _r_active_index | int(-1) %}
+                  {% if idx >= 0
+                        and idx < (satellite_list | length) %}
+                    {{ satellite_list[idx] }}
+                  {% else %}
+                    {{ '' }}
+                  {% endif %}
+                _r_has_satellite: >-
+                  {{ (_r_satellite | default('')
+                      | string | length) > 0 }}
+
+            - alias: "R4-gate · Stop if no satellite and no push fallback"
+              condition: template
+              value_template: >-
+                {{ _r_has_satellite
+                   or fallback == 'mobile_push' }}
+            # --- R5: Resolve ringer mode ---
+            - alias: "R5 · Resolve ringer mode for reminder"
+              variables:
+                _r_ringer: >-
+                  {% set ent = ringer_entity | default('')
+                      | string %}
+                  {% if ent | length == 0 %}
+                    normal
+                  {% else %}
+                    {{ states(ent) | default('normal') }}
+                  {% endif %}
+                _r_saved_vol: >-
+                  {% if _r_has_satellite %}
+                    {{ state_attr(_r_satellite, 'volume_level')
+                       | default(0.5) | float(0.5) }}
+                  {% else %}
+                    {{ 0.5 }}
+                  {% endif %}
+
+            - alias: "R5-gate · Skip reminder TTS if phone is silent"
+              condition: template
+              value_template: >-
+                {{ _r_ringer != 'silent'
+                   or (dnd_entity | default('')
+                       | string | length) == 0 }}
+
+            # --- R6: Duck other playing media ---
+            - alias: "R6 · Snapshot and duck playing media for reminder"
+              variables:
+                _r_ducked: >-
+                  {% set players = duck_player_entities
+                      | default([]) %}
+                  {% set ns = namespace(result=[]) %}
+                  {% for p in players %}
+                    {% if states(p) | default('idle')
+                          == 'playing' %}
+                      {% set vol = state_attr(p, 'volume_level')
+                          | default(0.5) | float(0.5) %}
+                      {% set ns.result = ns.result +
+                          [{'entity_id': p, 'volume': vol}] %}
+                    {% endif %}
+                  {% endfor %}
+                  {{ ns.result }}
+
+            - alias: "R6-duck · Duck playing players"
+              if:
+                - condition: template
+                  value_template: "{{ _r_ducked | length > 0 }}"
+              then:
+                - repeat:
+                    for_each: "{{ _r_ducked }}"
+                    sequence:
+                      - action: media_player.volume_set
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ repeat.item.entity_id }}"
+                        data:
+                          volume_level: "{{ duck_vol | float(0.10) }}"
+
+            # --- R7: Set reminder volume ---
+            - alias: "R7 · Set reminder volume (vibrate or output)"
+              choose:
+                - alias: "Vibrate — quiet volume"
+                  conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ _r_ringer == 'vibrate'
+                           and _r_has_satellite }}
+                  sequence:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ _r_satellite }}"
+                      data:
+                        volume_level: "{{ quiet_vol | float(0.15) }}"
+              default:
+                - alias: "Normal ringer — apply output volume if set"
+                  if:
+                    - condition: template
+                      value_template: >-
+                        {{ tts_output_vol | float(0) > 0
+                           and _r_has_satellite }}
+                  then:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ _r_satellite }}"
+                      data:
+                        volume_level: "{{ tts_output_vol | float(0.5) }}"
+
+            # --- R8: Build and deliver reminder TTS ---
+            - alias: "R8 · Build reminder message from template"
+              variables:
+                _r_message: >-
+                  {{ reminder_template
+                     | replace('{display_sender}',
+                         display_sender | default('someone'))
+                     | replace('{email_subject}',
+                         truncated_subject
+                         | default('(no subject)')) }}
+            - alias: "R8a · Deliver reminder via TTS or push"
+              choose:
+                - alias: "Satellite — TTS"
+                  conditions:
+                    - condition: template
+                      value_template: "{{ _r_has_satellite }}"
+                  sequence:
+                    - alias: "Reminder TTS speak"
+                      action: tts.speak
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ tts_entity }}"
+                      data: >-
+                        {% set msg = _r_message %}
+                        {% if tts_mode
+                            == 'elevenlabs_custom_service' %}
+                          {% if tts_announce | bool(false) %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite,
+                                "options":
+                                  {"voice_profile":
+                                    voice_profile},
+                                "announce": true} }}
+                          {% else %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite,
+                                "options":
+                                  {"voice_profile":
+                                    voice_profile}} }}
+                          {% endif %}
+                        {% else %}
+                          {% if tts_announce | bool(false) %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite,
+                                "announce": true} }}
+                          {% else %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite} }}
+                          {% endif %}
+                        {% endif %}
+
+                - alias: "No satellite — mobile push reminder"
+                  conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ not _r_has_satellite
+                           and fallback == 'mobile_push'
+                           and (mobile_service | default('')
+                               | string | length) > 0 }}
+                  sequence:
+                    - action: "{{ mobile_service }}"
+                      continue_on_error: true
+                      data:
+                        title: >-
+                          Reminder: {{ account_label }}
+                          — {{ display_sender }}
+                        message: "{{ _r_message }}"
+
+            # --- R9: Wait for playback (60s cap + grace) ---
+            - alias: "R9 · Wait for reminder playback"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ _r_has_satellite
+                       and (_r_ringer == 'vibrate'
+                            or tts_output_vol | float(0) > 0
+                            or _r_ducked | default([])
+                               | length > 0) }}
+              then:
+                - alias: "Poll satellite until idle (60s cap)"
+                  repeat:
+                    until:
+                      - condition: template
+                        value_template: >-
+                          {{ states(_r_satellite)
+                             | default('idle')
+                             not in ['playing']
+                             or repeat.index >= 60 }}
+                    sequence:
+                      - delay:
+                          seconds: 1
+                - alias: "Post-playback grace period"
+                  delay:
+                    seconds: "{{ restore_delay | int(3) }}"
+
+            # --- R9a: Restore satellite volume ---
+            - alias: "R9a · Restore reminder volume"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (_r_ringer == 'vibrate'
+                        or tts_output_vol | float(0) > 0)
+                       and _r_has_satellite }}
+              then:
+                - action: media_player.volume_set
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ _r_satellite }}"
+                  data:
+                    volume_level: "{{ _r_saved_vol }}"
+
+            # --- R9b: Restore ducked players ---
+            - alias: "R9b · Restore ducked players after reminder"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ _r_ducked | default([]) | length > 0 }}
+              then:
+                - repeat:
+                    for_each: "{{ _r_ducked }}"
+                    sequence:
+                      - action: media_player.volume_set
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ repeat.item.entity_id }}"
+                        data:
+                          volume_level: "{{ repeat.item.volume }}"
+
+            # --- R10: Log reminder ---
+            - alias: "R10 · Log reminder delivery"
+              action: system_log.write
+              continue_on_error: true
+              data:
+                message: >-
+                  Email Follow-Me: reminder
+                  {{ repeat.index }}/{{ reminder_max | int(3) }}
+                  for {{ account_label }} from
+                  {{ display_sender | default('unknown') }}
+                  via {{ _r_satellite if _r_has_satellite
+                  else 'mobile push' }}.
+                level: info
