@@ -13,6 +13,18 @@ blueprint:
 
     ### Recent changes
 
+    - **v6 (2026-02-24):** Audit pass — trimmed whitespace in LLM prompt
+      Jinja (switched to {%- -%} tags), removed redundant | string filters
+      from ElevenLabs conditions, clarified tts_entity silent-exit design
+      in description, added LLM timeout caveat to use_llm_fun_messages
+      description
+
+    - **v5 (2026-02-24):** Fixed Jinja whitespace contamination in
+      ctx_player, time_of_day, and all tts_message branches — switched to
+      whitespace-controlled tags ({%- -%}) so entity IDs and template
+      outputs render without leading/trailing spaces; LLM path now
+      correctly receives playback context
+
     - **v4 (2026-02-24):** Waterfall ctx_player resolution — prefers source
       then target based on who has active media_title; radio detection now
       uses media_content_type (channel/radio/tvshow) with string-match
@@ -45,7 +57,9 @@ blueprint:
           description: >
             The text-to-speech engine to use for announcements.
             Select your ElevenLabs TTS entity if using voice/profile options,
-            or any other TTS entity for basic announcements.
+            or any other TTS entity for basic announcements. If left empty the
+            script exits silently — useful when the calling automation handles
+            TTS independently.
           default: ""
           selector:
             entity:
@@ -93,7 +107,8 @@ blueprint:
             When enabled (and random messages is also on), uses a conversation
             agent to generate context-aware announcements instead of picking
             from the static pool. Falls back to the default message if the
-            LLM call fails.
+            LLM call fails. Note: if the LLM hangs, the script blocks until
+            HA's default timeout — there is no per-action timeout override.
           default: false
           selector:
             boolean: {}
@@ -211,22 +226,22 @@ sequence:
     variables:
       player_name: "{{ state_attr(target_player, 'friendly_name') | default(target_player) }}"
       ctx_player: >-
-        {% set src = source_player if source_player is defined and source_player else '' %}
-        {% if src and state_attr(src, 'media_title') %}
+        {%- set src = source_player if source_player is defined and source_player else '' -%}
+        {%- if src and state_attr(src, 'media_title') -%}
           {{ src }}
-        {% elif state_attr(target_player, 'media_title') %}
+        {%- elif state_attr(target_player, 'media_title') -%}
           {{ target_player }}
-        {% elif src %}
+        {%- elif src -%}
           {{ src }}
-        {% else %}
+        {%- else -%}
           {{ target_player }}
-        {% endif %}
+        {%- endif -%}
       media_title: "{{ state_attr(ctx_player, 'media_title') | default('', true) }}"
       media_artist: "{{ state_attr(ctx_player, 'media_artist') | default('', true) }}"
       media_content_type: "{{ state_attr(ctx_player, 'media_content_type') | default('', true) | lower }}"
       current_time: "{{ now().strftime('%H:%M') }}"
       time_of_day: >-
-        {% set h = now().hour %}
+        {%- set h = now().hour -%}
         {{ 'late night' if h < 6
            else 'morning' if h < 12
            else 'afternoon' if h < 18
@@ -250,32 +265,32 @@ sequence:
                   | replace('{current_time}', current_time)
                   | replace('{time_of_day}', time_of_day)
                 }}
-                {% if use_context and media_title %}
-                {% set is_radio = media_content_type in ['channel', 'radio', 'tvshow']
+                {%- if use_context and media_title %}
+                {%- set is_radio = media_content_type in ['channel', 'radio', 'tvshow']
                    or (media_content_type == '' and ('radio' in media_title | lower or 'radio' in media_artist | lower)) %}
-                {% if is_radio %}
+                {%- if is_radio %}
                 currently tuned to the radio station "{{ media_title }}"{% if media_artist %} ({{ media_artist }}){% endif %}. this is a live radio stream, not a song or track.
-                {% else %}
+                {%- else %}
                 currently playing the track "{{ media_title }}"{% if media_artist %} by {{ media_artist }}{% endif %}.
-                {% endif %}
-                {% endif %}
+                {%- endif %}
+                {%- endif %}
             response_variable: llm_response
             continue_on_error: true
 
           - alias: "Extract LLM response text — fall back to default on failure"
             variables:
               tts_message: >-
-                {% set r = llm_response | default({}) %}
-                {% set resp = r.response | default({}) %}
-                {% if resp.speech is defined
+                {%- set r = llm_response | default({}) -%}
+                {%- set resp = r.response | default({}) -%}
+                {%- if resp.speech is defined
                       and resp.speech.plain is defined
-                      and resp.speech.plain.speech is defined %}
+                      and resp.speech.plain.speech is defined -%}
                   {{ resp.speech.plain.speech | trim }}
-                {% elif resp.text is defined %}
+                {%- elif resp.text is defined -%}
                   {{ resp.text | trim }}
-                {% else %}
+                {%- else -%}
                   {{ default_msg_tpl | replace('{player_name}', player_name) }}
-                {% endif %}
+                {%- endif -%}
 
       - alias: "Static random path — pick from message pool"
         conditions:
@@ -285,12 +300,12 @@ sequence:
           - alias: "Pick a random message and substitute player name"
             variables:
               tts_message: >-
-                {% if custom_msgs %}
+                {%- if custom_msgs -%}
                   {{ custom_msgs | random
                      | replace('{player_name}', player_name) }}
-                {% else %}
+                {%- else -%}
                   {{ default_msg_tpl | replace('{player_name}', player_name) }}
-                {% endif %}
+                {%- endif -%}
 
     default:
       - alias: "Default path — use the static default message"
@@ -308,7 +323,7 @@ sequence:
       - alias: "TTS with voice_profile (ElevenLabs custom profile)"
         conditions:
           - condition: template
-            value_template: "{{ el_voice_profile | default('') | string | length > 0 }}"
+            value_template: "{{ el_voice_profile | default('') | length > 0 }}"
         sequence:
           - alias: "Speak via ElevenLabs with voice profile"
             action: tts.speak
@@ -324,7 +339,7 @@ sequence:
       - alias: "TTS with voice name only (ElevenLabs voice, no profile)"
         conditions:
           - condition: template
-            value_template: "{{ el_voice | default('') | string | length > 0 }}"
+            value_template: "{{ el_voice | default('') | length > 0 }}"
         sequence:
           - alias: "Speak via ElevenLabs with voice name"
             action: tts.speak
