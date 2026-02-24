@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.6.0)
+# Notification Follow-Me (v3.7.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.6.0)"
+  name: "Notification Follow-Me (v3.7.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,20 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.7.0:** Unread message reminders — new optional §⑧ section
+      adds a configurable reminder loop after the initial announcement.
+      When enabled, the agent re-summarizes the original message at a
+      set interval (default 5 min, max 60 min) until a different
+      conversation arrives on the sensor, max retries are hit, or any
+      gate (DND, quiet hours, toggle) deactivates. Each reminder
+      re-reads the notification sensor's LIVE attributes — so if you
+      replied inline, the LLM sees the updated thread including your
+      responses. Presence is re-resolved each iteration so
+      announcements follow you between rooms. The LLM receives
+      escalation context (reminder number and elapsed time) so the
+      agent's personality can progressively intensify. Replying to
+      a message does NOT suppress reminders — only a notification
+      from a different sender/app exits the loop.
     - **v3.6.0:** TTS output volume slider — new optional number
       input in §⑤ lets you set a fixed volume level (0.0–1.0)
       for announcements. The satellite's original volume is
@@ -574,6 +588,83 @@ blueprint:
             entity:
               domain: input_text
 
+    # =========================================================================
+    # ⑧ UNREAD MESSAGE REMINDERS
+    # =========================================================================
+    unread_reminders:
+      name: "⑧ Unread message reminders"
+      icon: mdi:bell-ring
+      description: >-
+        After the initial announcement, optionally re-announce the
+        message at a configurable interval until the notification
+        sensor changes (indicating phone interaction), max retries
+        are reached, or any gate (DND, quiet hours, master toggle)
+        deactivates. Each reminder re-resolves presence and calls
+        the LLM with escalation context so the agent can ramp up
+        urgency naturally.
+      collapsed: true
+      input:
+        enable_reminders:
+          name: Enable unread message reminders
+          description: >-
+            When enabled, the automation will re-announce unread
+            messages at the configured interval after the initial
+            announcement. The reminder loop exits when the
+            notification sensor changes, max retries are hit, or
+            any gate condition fails.
+          default: false
+          selector:
+            boolean: {}
+
+        reminder_interval:
+          name: Reminder interval (minutes)
+          description: >-
+            Minutes between reminder announcements. The first
+            reminder fires this many minutes after the initial
+            announcement.
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 60
+              step: 1
+              unit_of_measurement: minutes
+              mode: slider
+
+        reminder_max_repeats:
+          name: Maximum reminder repeats
+          description: >-
+            Maximum number of reminder announcements before the
+            loop gives up. Does not count the initial announcement
+            — this is reminders only.
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 12
+              step: 1
+              mode: slider
+
+        reminder_prompt:
+          name: Reminder LLM prompt
+          description: >-
+            Instructions for how the AI should deliver reminder
+            announcements. The blueprint appends the original
+            notification data plus escalation context (reminder
+            number and minutes elapsed). Use this to control
+            the agent's tone as reminders escalate.
+          default: >-
+            You already told the user about this message, but they
+            haven't checked their phone yet. Remind them again —
+            re-summarize the message naturally. You can be
+            progressively more insistent with each reminder. Do
+            not read the message verbatim — paraphrase it. If
+            this is reminder 3 or higher, be noticeably more
+            urgent or exasperated.
+          selector:
+            text:
+              multiline: true
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
@@ -620,6 +711,10 @@ variables:
   duck_player_entities: !input duck_player_list
   duck_vol: !input duck_volume
   duck_snapshot_entity: !input duck_snapshot_helper
+  reminder_enabled: !input enable_reminders
+  reminder_interval_min: !input reminder_interval
+  reminder_max: !input reminder_max_repeats
+  reminder_prompt_text: !input reminder_prompt
 
 # =============================================================================
 # TRIGGERS
@@ -868,14 +963,26 @@ actions:
       truncated_text: >-
         {% set text = notif_text | default('') | string %}
         {% set cap = char_limit | int(500) %}
-        {% set alias_differs = (display_sender != notif_sender) %}
-        {% if is_media_message | bool(false) %}
+        {% set raw_aliases = aliases_map | default('') | string | trim %}
+        {% set ns = namespace(body=text) %}
+        {% if raw_aliases | length > 0 %}
+          {% for pair in raw_aliases.split(',') %}
+            {% set parts = pair.split('=', 1) %}
+            {% if parts | length == 2 %}
+              {% set key = parts[0] | trim %}
+              {% set val = parts[1] | trim %}
+              {% if key | length > 0 %}
+                {% set ns.body = ns.body | replace(key, val) %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% if is_media_message | bool(false) and media_behavior != 'llm_summary' %}
           [{{ matched_media_type | default('Media message') }} — check your phone]
-        {% elif text | length > cap %}
-          {% set body = text[:cap] ~ '...' %}
-          {{ body | replace(notif_sender, display_sender) if alias_differs else body }}
+        {% elif ns.body | length > cap %}
+          {{ ns.body[:cap] ~ '...' }}
         {% else %}
-          {{ text | replace(notif_sender, display_sender) if alias_differs else text }}
+          {{ ns.body }}
         {% endif %}
 
       app_label: >-
@@ -1343,6 +1450,424 @@ actions:
               entity_id: "{{ last_sender_entity }}"
             data:
               value: "{{ notif_sender | default('') | string }}"
+
+  # ---------------------------------------------------------------------------
+  # 9c. Unread message reminder loop
+  # ---------------------------------------------------------------------------
+  - alias: "9c · Capture original sender+app identity for reminder exit detection"
+    variables:
+      _trigger_sender: "{{ notif_sender | default('') | string | lower | trim }}"
+      _trigger_package: "{{ notif_package | default('') | string | lower | trim }}"
+
+  - alias: "9d · Unread message reminder loop"
+    if:
+      - condition: template
+        value_template: "{{ reminder_enabled | bool(false) }}"
+    then:
+      - alias: "Reminder repeat-while loop"
+        repeat:
+          while:
+            - condition: template
+              value_template: "{{ repeat.index <= (reminder_max | int(3)) }}"
+          sequence:
+            # --- Wait the configured interval ---
+            - alias: "R1 · Wait reminder interval"
+              delay:
+                minutes: "{{ reminder_interval_min | int(5) }}"
+
+            # --- Re-read live sensor data (captures user replies) ---
+            - alias: "R2 · Re-read sensor attributes for updated thread"
+              variables:
+                _r_attrs: >-
+                  {{ states[sensor_entity].attributes
+                     | default({}) }}
+                _r_sender_raw: >-
+                  {% set raw = _r_attrs.get('android.title', '')
+                      | string %}
+                  {{ 'Unknown sender' if raw in ['null', '']
+                     else raw }}
+                _r_package: >-
+                  {{ _r_attrs.get('package', '') }}
+                _r_text: >-
+                  {% set lines = _r_attrs.get(
+                      'android.textLines', none) %}
+                  {% if lines is iterable
+                        and lines is not string
+                        and lines | length > 0 %}
+                    {{ lines | join(' · ') }}
+                  {% else %}
+                    {% set raw = _r_attrs.get(
+                        'android.text', '') | string %}
+                    {{ '' if raw == 'null' else raw }}
+                  {% endif %}
+                _r_display_sender: >-
+                  {%- set sender = _r_sender_raw | default('')
+                      | string -%}
+                  {%- set raw = aliases_map | default('')
+                      | string | trim -%}
+                  {%- if raw | length == 0 -%}
+                    {{ sender }}
+                  {%- else -%}
+                    {%- set lower_s = sender | lower -%}
+                    {%- set ns = namespace(matched='') -%}
+                    {%- for pair in raw.split(',') -%}
+                      {%- set parts = pair.split('=', 1) -%}
+                      {%- if parts | length == 2 -%}
+                        {%- set key = parts[0] | trim -%}
+                        {%- set val = parts[1] | trim -%}
+                        {%- if key | lower == lower_s
+                              and ns.matched == '' -%}
+                          {%- set ns.matched = val -%}
+                        {%- endif -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                    {{ ns.matched if ns.matched | length > 0
+                       else sender }}
+                  {%- endif -%}
+                _r_truncated: >-
+                  {% set text = _r_text | default('')
+                      | string %}
+                  {% set cap = char_limit | int(500) %}
+                  {% set raw_al = aliases_map | default('')
+                      | string | trim %}
+                  {% set ns = namespace(body=text) %}
+                  {% if raw_al | length > 0 %}
+                    {% for pair in raw_al.split(',') %}
+                      {% set parts = pair.split('=', 1) %}
+                      {% if parts | length == 2 %}
+                        {% set key = parts[0] | trim %}
+                        {% set val = parts[1] | trim %}
+                        {% if key | length > 0 %}
+                          {% set ns.body = ns.body
+                              | replace(key, val) %}
+                        {% endif %}
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                  {% if ns.body | length > cap %}
+                    {{ ns.body[:cap] ~ '...' }}
+                  {% else %}
+                    {{ ns.body }}
+                  {% endif %}
+                _new_conversation: >-
+                  {{ (_r_sender_raw | default('')
+                      | string | lower | trim)
+                     != _trigger_sender
+                     or (_r_package | default('')
+                         | string | lower | trim)
+                        != _trigger_package }}
+
+            - alias: "R2-gate · Stop if a different conversation arrived"
+              condition: template
+              value_template: "{{ not (_new_conversation | bool(false)) }}"
+
+            # --- Re-check all gates (toggle, DND, quiet hours) ---
+            - alias: "R3 · Re-check master toggle"
+              condition: template
+              value_template: "{{ is_state(toggle_entity, 'on') }}"
+
+            - alias: "R3a · Re-check DND"
+              condition: template
+              value_template: >-
+                {% set dnd = dnd_entity | default('') | string %}
+                {% if dnd | length == 0 %}
+                  true
+                {% else %}
+                  {{ states(dnd) | default('off')
+                     in ['off', 'unavailable', 'unknown'] }}
+                {% endif %}
+
+            - alias: "R3b · Re-check quiet hours"
+              condition: template
+              value_template: >-
+                {% if not (enable_quiet | bool(false)) %}
+                  true
+                {% else %}
+                  {% set qs = today_at(quiet_start_val
+                      | default('23:00:00')) %}
+                  {% set qe = today_at(quiet_end_val
+                      | default('07:00:00')) %}
+                  {% if qs < qe %}
+                    {{ not (qs <= now() < qe) }}
+                  {% else %}
+                    {{ qe <= now() < qs }}
+                  {% endif %}
+                {% endif %}
+
+            # --- Re-resolve presence (user may have moved rooms) ---
+            - alias: "R4 · Re-resolve presence for reminder"
+              variables:
+                _r_active_index: >-
+                  {% set ns = namespace(idx=-1) %}
+                  {% for s in presence_list %}
+                    {% if states(s) | default('off') == 'on'
+                          and ns.idx == -1 %}
+                      {% set ns.idx = loop.index0 %}
+                    {% endif %}
+                  {% endfor %}
+                  {{ ns.idx }}
+                _r_satellite: >-
+                  {% set idx = _r_active_index | int(-1) %}
+                  {% if idx >= 0
+                        and idx < (satellite_list | length) %}
+                    {{ satellite_list[idx] }}
+                  {% else %}
+                    {{ '' }}
+                  {% endif %}
+                _r_has_satellite: >-
+                  {{ (_r_satellite | default('')
+                      | string | length) > 0 }}
+
+            - alias: "R4-gate · Stop if no satellite and no push fallback"
+              condition: template
+              value_template: >-
+                {{ _r_has_satellite
+                   or fallback == 'mobile_push' }}
+
+            # --- Resolve ringer mode for reminder ---
+            - alias: "R5 · Resolve ringer mode for reminder"
+              variables:
+                _r_ringer: >-
+                  {% set ent = ringer_entity | default('')
+                      | string %}
+                  {% if ent | length == 0 %}
+                    normal
+                  {% else %}
+                    {{ states(ent) | default('normal') }}
+                  {% endif %}
+                _r_saved_vol: >-
+                  {% if _r_has_satellite %}
+                    {{ state_attr(_r_satellite, 'volume_level')
+                       | default(0.5) | float(0.5) }}
+                  {% else %}
+                    {{ 0.5 }}
+                  {% endif %}
+
+            - alias: "R5-gate · Skip reminder TTS if phone is silent"
+              condition: template
+              value_template: >-
+                {{ _r_ringer != 'silent'
+                   or (dnd_entity | default('')
+                       | string | length) == 0 }}
+
+            # --- Call LLM with reminder-aware prompt ---
+            - alias: "R6 · Call LLM for reminder summary"
+              continue_on_error: true
+              action: conversation.process
+              response_variable: reminder_llm_result
+              data:
+                agent_id: !input conversation_agent
+                text: >-
+                  {{ reminder_prompt_text }}
+
+                  This is reminder number {{ repeat.index }} —
+                  approximately {{ repeat.index
+                  * (reminder_interval_min | int(5)) }} minutes
+                  since the original announcement. The user has
+                  not checked their phone.
+
+                  The message thread below is LIVE and may include
+                  replies the user sent since the last reminder.
+                  If the thread contains user replies, acknowledge
+                  them — but still remind the user to check their
+                  phone for the full conversation.
+
+                  The sender's preferred name is
+                  {{ _r_display_sender }}. Always refer to them
+                  by this name exactly.
+
+                  --- BEGIN NOTIFICATION DATA (LIVE) ---
+                  sender: {{ _r_display_sender
+                      | replace('<', '‹')
+                      | replace('>', '›') }}
+                  app: {{ app_label }}
+                  message: {{ _r_truncated
+                      | replace('<', '‹')
+                      | replace('>', '›') }}
+                  {% if include_group | bool(false) %}
+                  is_group: {{ notif_is_group }}
+                  {% endif %}
+                  current_time: {{ now().strftime('%H:%M') }}
+                  --- END NOTIFICATION DATA ---
+                  {% set petnames = user_petnames_list
+                      | default('') | string | trim %}
+                  {% if petnames | length > 0 %}
+
+                  --- PET NAME CONTEXT ---
+                  {{ petnames }}
+                  --- END PET NAME CONTEXT ---
+                  {% endif %}
+
+            - alias: "R6a · Extract reminder LLM response"
+              variables:
+                _r_announcement: >-
+                  {% if reminder_llm_result is defined
+                        and reminder_llm_result.response
+                            is defined
+                        and reminder_llm_result.response
+                            .speech is defined
+                        and reminder_llm_result.response
+                            .speech.plain is defined
+                        and reminder_llm_result.response
+                            .speech.plain.speech
+                            is defined %}
+                    {{ reminder_llm_result.response
+                       .speech.plain.speech }}
+                  {% else %}
+                    Reminder: you still have an unread
+                    {{ app_label }} message from
+                    {{ _r_display_sender }}. Check your phone.
+                  {% endif %}
+
+            # --- Volume adjust for reminder ---
+            - alias: "R7 · Set reminder volume (vibrate or output)"
+              choose:
+                - alias: "Vibrate — quiet volume"
+                  conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ _r_ringer == 'vibrate'
+                           and _r_has_satellite }}
+                  sequence:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ _r_satellite }}"
+                      data:
+                        volume_level: >-
+                          {{ quiet_vol | float(0.15) }}
+              default:
+                - alias: "Normal ringer — apply output volume if set"
+                  if:
+                    - condition: template
+                      value_template: >-
+                        {{ tts_output_vol | float(0) > 0
+                           and _r_has_satellite }}
+                  then:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ _r_satellite }}"
+                      data:
+                        volume_level: >-
+                          {{ tts_output_vol | float(0.5) }}
+
+            # --- TTS delivery for reminder ---
+            - alias: "R8 · Deliver reminder via TTS or push"
+              choose:
+                - alias: "Satellite — TTS"
+                  conditions:
+                    - condition: template
+                      value_template: "{{ _r_has_satellite }}"
+                  sequence:
+                    - alias: "Reminder TTS speak"
+                      action: tts.speak
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ tts_entity }}"
+                      data: >-
+                        {% set msg = _r_announcement %}
+                        {% if tts_mode
+                            == 'elevenlabs_custom_service' %}
+                          {% if tts_announce | bool(false) %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite,
+                                "options":
+                                  {"voice_profile":
+                                    voice_profile},
+                                "announce": true} }}
+                          {% else %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite,
+                                "options":
+                                  {"voice_profile":
+                                    voice_profile}} }}
+                          {% endif %}
+                        {% else %}
+                          {% if tts_announce | bool(false) %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite,
+                                "announce": true} }}
+                          {% else %}
+                            {{ {"message": msg,
+                                "media_player_entity_id":
+                                  _r_satellite} }}
+                          {% endif %}
+                        {% endif %}
+
+                - alias: "No satellite — mobile push reminder"
+                  conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ not _r_has_satellite
+                           and fallback == 'mobile_push'
+                           and (mobile_service | default('')
+                               | string | length) > 0 }}
+                  sequence:
+                    - action: "{{ mobile_service }}"
+                      continue_on_error: true
+                      data:
+                        title: >-
+                          Reminder: {{ app_label }}
+                          — {{ _r_display_sender }}
+                        message: "{{ _r_announcement }}"
+
+            # --- Wait for playback then restore volume ---
+            - alias: "R9 · Wait for reminder playback"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ _r_has_satellite
+                       and (_r_ringer == 'vibrate'
+                            or tts_output_vol
+                               | float(0) > 0) }}
+              then:
+                - alias: "Poll satellite until idle"
+                  repeat:
+                    until:
+                      - condition: template
+                        value_template: >-
+                          {{ states(_r_satellite)
+                             | default('idle')
+                             not in ['playing']
+                             or repeat.index
+                                >= (restore_delay
+                                    | int(8)) }}
+                    sequence:
+                      - delay:
+                          seconds: 1
+
+            - alias: "R9a · Restore reminder volume"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (_r_ringer == 'vibrate'
+                        or tts_output_vol | float(0) > 0)
+                       and _r_has_satellite }}
+              then:
+                - action: media_player.volume_set
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ _r_satellite }}"
+                  data:
+                    volume_level: "{{ _r_saved_vol }}"
+
+            # --- Log reminder ---
+            - alias: "R10 · Log reminder delivery"
+              action: system_log.write
+              continue_on_error: true
+              data:
+                message: >-
+                  Notification Follow-Me: reminder
+                  {{ repeat.index }}/{{ reminder_max | int(3) }}
+                  for {{ app_label }} from
+                  {{ notif_sender[:20] | default('unknown') }}
+                  via {{ _r_satellite if _r_has_satellite
+                  else 'mobile push' }}.
+                level: info
 
   # ---------------------------------------------------------------------------
   # 10. Log successful announcement for debugging

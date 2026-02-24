@@ -632,8 +632,6 @@ triggers:
     id: email_received
     trigger: event
     event_type: imap_content
-    event_data:
-      entry_id: !input imap_entry_id
 
 # =============================================================================
 # CONDITIONS
@@ -642,13 +640,6 @@ conditions:
   - alias: "Master toggle must be ON"
     condition: template
     value_template: "{{ is_state(toggle_entity, 'on') }}"
-
-  - alias: "Skip initial events (IMAP fires on startup for existing emails)"
-    condition: template
-    value_template: >-
-      {% set evt = trigger.event.data if trigger is defined
-            and trigger.event is defined else {} %}
-      {{ evt.get('initial', false) | bool(false) == false }}
 
   - alias: "DND must not be active (skip check if no DND sensor configured)"
     condition: template
@@ -680,16 +671,39 @@ conditions:
 # =============================================================================
 actions:
   # ---------------------------------------------------------------------------
+  # 0. DEBUG — dump trigger context to system log (remove after testing)
+  # ---------------------------------------------------------------------------
+  - alias: "0 · DEBUG — log trigger context"
+    action: system_log.write
+    continue_on_error: true
+    data:
+      message: >-
+        Email Follow-Me DEBUG: trigger={{ trigger | string | truncate(500) }}
+      level: warning
+
+  # ---------------------------------------------------------------------------
+  # 0a. Gate — entry_id must match this IMAP account
+  # ---------------------------------------------------------------------------
+  - alias: "0a · Gate: IMAP entry_id must match"
+    condition: template
+    value_template: >-
+      {{ trigger.event.data.get('entry_id', '') == imap_entry
+         if trigger.event is defined else false }}
+
+  # ---------------------------------------------------------------------------
+  # 0b. Gate — skip initial events (IMAP fires on startup for existing emails)
+  # ---------------------------------------------------------------------------
+  - alias: "0b · Gate: skip initial IMAP events"
+    condition: template
+    value_template: >-
+      {{ not (trigger.event.data.get('initial', false) | bool(false)) }}
+
+  # ---------------------------------------------------------------------------
   # 1. Extract email fields from IMAP event data
   # ---------------------------------------------------------------------------
   - alias: "1 · Extract email fields from event data"
     variables:
-      _event: >-
-        {% if trigger is defined and trigger.event is defined %}
-          {{ trigger.event.data | default({}) }}
-        {% else %}
-          {{ {} }}
-        {% endif %}
+      _event: "{{ trigger.event.data if trigger.event is defined else {} }}"
       email_sender: >-
         {{ _event.get('sender', '') | default('Unknown sender', true) }}
       email_subject: >-
