@@ -19,7 +19,7 @@ blueprint:
 
     ### Key features
 
-    - 18 configurable input sections (①–⑱), 24 prompts, zero hardcoded strings
+    - 19 configurable input sections (①–⑲), 25 prompts, zero hardcoded strings
 
     - Helper-tracked escalation with configurable cooldown curves
 
@@ -32,6 +32,12 @@ blueprint:
     - Independent weekend overrides for proactive and bedtime layers
 
     ### Recent changes
+
+    - **v1.5:** Bed presence sensor (⑲) — optional binary_sensor that confirms
+      user is in bed, bypassing escalation and running bedtime routine directly.
+      Configurable settling TTS, countdown override (0 = skip), and bathroom
+      guard bypass. Stale mutex safety net clears crashed routines. Removed ⑫
+      Kodi library pre-fetch (freeform/both modes eliminated, curated+preset only).
 
     - **v1.4:** Hybrid escalation prompt gap-fill — stages without explicit
       prompt overlays now get auto-generated behavioural directives based on
@@ -1295,90 +1301,6 @@ blueprint:
             boolean: {}
 
     # ===========================================================================
-    # ⑫ KODI LIBRARY & GENRE PREFERENCES
-    # ===========================================================================
-    kodi_library:
-      name: "⑫ Kodi library & genre preferences"
-      icon: mdi:movie-open
-      description: >
-        Library pre-fetch and genre filtering for Kodi freeform/both modes.
-        The blueprint fetches Kodi's library via JSON-RPC and injects a
-        filtered catalog into the LLM context.
-      collapsed: true
-      input:
-        kodi_library_fetch_enabled:
-          name: Enable library pre-fetch
-          description: >
-            Fetch Kodi library via JSON-RPC for LLM content selection.
-            Disable for curated-only or preset modes.
-          default: true
-          selector:
-            boolean: {}
-
-        kodi_library_fetch_timeout:
-          name: Fetch timeout (seconds)
-          description: >
-            Timeout per JSON-RPC call.
-          default: 10
-          selector:
-            number:
-              min: 5
-              max: 30
-              unit_of_measurement: seconds
-
-        kodi_library_movies_limit:
-          name: Max movies to fetch
-          default: 50
-          selector:
-            number:
-              min: 10
-              max: 200
-
-        kodi_library_shows_limit:
-          name: Max in-progress shows
-          default: 20
-          selector:
-            number:
-              min: 5
-              max: 50
-
-        kodi_library_recent_limit:
-          name: Max recently added episodes
-          default: 20
-          selector:
-            number:
-              min: 5
-              max: 100
-
-        kodi_preferred_genres:
-          name: Preferred bedtime genres
-          description: >
-            Comma-separated preferred genres. The LLM prioritizes matching
-            content. E.g. "Documentary, Comedy, Nature, Animation".
-          default: ""
-          selector:
-            text: {}
-
-        kodi_excluded_genres:
-          name: Excluded genres
-          description: >
-            Comma-separated genres to exclude. Movies matching these are
-            filtered out. In-progress TV shows bypass this filter.
-          default: ""
-          selector:
-            text: {}
-
-        kodi_bedtime_mood:
-          name: Bedtime mood descriptor
-          description: >
-            Freeform text describing ideal bedtime viewing mood. Injected
-            into the LLM prompt.
-          default: "Relaxing, calming content suitable for falling asleep to."
-          selector:
-            text:
-              multiline: true
-
-    # ===========================================================================
     # ⑬ KODI PLAYBACK
     # ===========================================================================
     kodi_playback:
@@ -1413,17 +1335,15 @@ blueprint:
         bedtime_media_mode:
           name: Kodi content selection mode
           description: >
-            How bedtime content is selected on Kodi.
+            How bedtime content is selected on Kodi. Curated uses a
+            voice conversation to let the user pick from a named list.
+            Preset plays a fixed URI directly without conversation.
           default: curated
           selector:
             select:
               options:
-                - label: "Curated list"
+                - label: "Curated list (voice conversation)"
                   value: curated
-                - label: "Freeform (LLM picks from library)"
-                  value: freeform
-                - label: "Both (curated + freeform fallback)"
-                  value: both
                 - label: "Preset (fixed content, no conversation)"
                   value: preset
 
@@ -1808,6 +1728,87 @@ blueprint:
               max: 365
               unit_of_measurement: days
 
+    # ===========================================================================
+    # ⑲ BED PRESENCE SENSOR
+    # ===========================================================================
+    bed_presence:
+      name: "⑲ Bed presence sensor"
+      icon: mdi:bed
+      description: >
+        Early exit ramp — when the bed occupancy sensor reports occupied
+        for a configurable duration, escalation stops and the bedtime
+        routine runs immediately. Also serves as a mutex safety net:
+        if a previous routine crashed and left the conflict guard on,
+        the bed sensor branch clears it and proceeds cleanly.
+      collapsed: true
+      input:
+        bed_presence_sensor:
+          name: Bed presence sensor
+          description: >
+            A binary_sensor that reports ON when the bed is occupied.
+            Leave empty to disable this feature entirely. When
+            configured, bed occupancy for the specified duration
+            bypasses all escalation and runs bedtime directly.
+          default: ""
+          selector:
+            entity:
+              domain: binary_sensor
+
+        bed_presence_minutes:
+          name: Bed presence confirmation (minutes)
+          description: >
+            How long the bed sensor must report ON before triggering
+            bedtime. Acts as a settling filter — prevents false
+            triggers from sitting on the bed briefly.
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 60
+              unit_of_measurement: minutes
+
+        bed_confirm_countdown_minutes:
+          name: Bed sensor countdown (minutes)
+          description: >
+            Minutes to keep the lamp on after bed sensor triggers
+            bedtime. Set to 0 to skip the countdown entirely — lamp
+            turns off right after goodnight TTS. Useful as a short
+            buffer while media starts playing.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 30
+              unit_of_measurement: minutes
+
+        bed_confirm_settling_tts:
+          name: Settling TTS on bed confirmation
+          description: >
+            When enabled, the bed sensor path speaks a settling-in
+            announcement instead of the full bedtime TTS. Tone is
+            gentler — "I see you're already in bed, getting things
+            set up for you."
+          default: true
+          selector:
+            boolean: {}
+
+        bed_confirm_prompt:
+          name: Bed confirmation LLM prompt
+          description: >
+            LLM prompt for the settling-in announcement when the bed
+            sensor triggers bedtime. Only used when settling TTS is
+            enabled above. The AI generates a short, gentle message
+            acknowledging the user is already in bed.
+          default: >
+            The user has just gotten into bed on their own — no nagging
+            was needed. Generate a short, warm settling-in message.
+            Acknowledge they're in bed, let them know you're setting
+            things up (lights, media, etc). Keep it brief and gentle.
+            Do not ask questions — this is informational only.
+          selector:
+            text:
+              multiline: true
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Variables
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1949,18 +1950,6 @@ variables:
   enable_audiobook_offer_val: !input enable_audiobook_offer
 
   # -------------------------------------------------------------------------
-  # Kodi library & genre (⑫)
-  # -------------------------------------------------------------------------
-  kodi_fetch_enabled_val: !input kodi_library_fetch_enabled
-  kodi_fetch_timeout_val: !input kodi_library_fetch_timeout
-  kodi_movies_limit_val: !input kodi_library_movies_limit
-  kodi_shows_limit_val: !input kodi_library_shows_limit
-  kodi_recent_limit_val: !input kodi_library_recent_limit
-  kodi_preferred_genres_val: !input kodi_preferred_genres
-  kodi_excluded_genres_val: !input kodi_excluded_genres
-  kodi_bedtime_mood_val: !input kodi_bedtime_mood
-
-  # -------------------------------------------------------------------------
   # Kodi playback (⑬)
   # -------------------------------------------------------------------------
   kodi_entity_val: !input kodi_entity
@@ -2014,6 +2003,15 @@ variables:
   memory_inject_prompt_val: !input memory_history_inject_prompt
   memory_scope_val: !input memory_scope
   memory_expiration_val: !input memory_expiration_days
+
+  # -------------------------------------------------------------------------
+  # Bed presence sensor (⑲)
+  # -------------------------------------------------------------------------
+  bed_sensor_val: !input bed_presence_sensor
+  bed_presence_minutes_val: !input bed_presence_minutes
+  bed_countdown_val: !input bed_confirm_countdown_minutes
+  bed_settling_tts_val: !input bed_confirm_settling_tts
+  bed_confirm_prompt_val: !input bed_confirm_prompt
 
   # =========================================================================
   # Derived variables — computed at automation run time
@@ -2294,6 +2292,14 @@ triggers:
     at: !input bedtime_weekend_scheduled_time
     id: scheduled_bedtime_weekend
 
+  - alias: "Bed occupied — confirmed early bedtime"
+    trigger: state
+    entity_id: !input bed_presence_sensor
+    to: "on"
+    for:
+      minutes: !input bed_presence_minutes
+    id: bed_confirmed
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Conditions
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2314,6 +2320,9 @@ conditions:
       {% elif tid == 'scheduled_bedtime_weekend' %}
         {# Weekend bedtime — only if weekend profile active #}
         {{ bedtime_weekend_active }}
+      {% elif tid == 'bed_confirmed' %}
+        {# Bed sensor — always passes (physical presence overrides schedule) #}
+        {{ bed_sensor_val | default('') | length > 0 }}
       {% elif tid in ['presence_on', 'nag_tick'] %}
         {# Proactive triggers — check proactive weekend gate #}
         {% if proactive_weekend_blocked | bool %}
@@ -2857,22 +2866,56 @@ actions:
                         {{ current_stage | int(0) + 1 }}.
 
       # =====================================================================
-      # DIRECT BEDTIME — scheduled trigger (weekday or weekend)
+      # BEDTIME EXECUTION — scheduled trigger or bed sensor confirmation
+      # Handles: scheduled_bedtime, scheduled_bedtime_weekend, bed_confirmed
       # =====================================================================
-      - alias: "Direct bedtime — scheduled time trigger"
+      - alias: "Bedtime execution — scheduled or bed-confirmed"
         conditions:
           - condition: trigger
             id:
               - scheduled_bedtime
               - scheduled_bedtime_weekend
+              - bed_confirmed
         sequence:
-          - alias: "Log direct bedtime trigger"
+          # --- Bed sensor: stale mutex safety net (⑲) ---
+          - alias: "Bed sensor — stale mutex cleanup"
+            choose:
+              - alias: "Bed confirmed + conflict guard is stale"
+                conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ trigger.id == 'bed_confirmed'
+                         and conflict_guard_entity_val | default('') | length > 0
+                         and states(conflict_guard_entity_val) | default('off') == 'on' }}
+                sequence:
+                  - alias: "Log stale mutex detected"
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine"
+                      message: >-
+                        ⚠️ Bed sensor detected stale mutex ({{ conflict_guard_entity_val }}).
+                        Previous routine may have crashed. Clearing and proceeding.
+                    continue_on_error: true
+                  - alias: "Clear stale mutex"
+                    action: input_boolean.turn_off
+                    target:
+                      entity_id: "{{ conflict_guard_entity_val }}"
+                    continue_on_error: true
+
+          # --- Entry log (bed sensor vs scheduled) ---
+          - alias: "Log bedtime trigger"
             action: logbook.log
             data:
               name: "Bedtime Routine"
               message: >-
-                Direct bedtime triggered ({{ trigger.id }}).
-                Starting bedtime routine.
+                {% if trigger.id == 'bed_confirmed' %}
+                  Bed sensor confirmed ({{ bed_sensor_val }}) after
+                  {{ bed_presence_minutes_val }} min. Bypassing escalation,
+                  running bedtime routine directly.
+                {% else %}
+                  Direct bedtime triggered ({{ trigger.id }}).
+                  Starting bedtime routine.
+                {% endif %}
 
           # --- Conflict guard activation ---
           - alias: "Activate conflict guard — bedtime_active mutex"
@@ -2920,55 +2963,128 @@ actions:
                   - delay:
                       seconds: 3
 
-          # --- LLM bedtime announcement ---
-          - alias: "Generate bedtime announcement"
-            continue_on_error: true
-            action: conversation.process
-            response_variable: bedtime_announce
-            data:
-              agent_id: "{{ bedtime_conversation_agent }}"
-              text: "{{ bedtime_prompt_val }}"
-
-          - alias: "Extract bedtime message"
-            variables:
-              bedtime_tts_message: >-
-                {% if bedtime_announce is defined
-                   and bedtime_announce.response is defined
-                   and bedtime_announce.response.response_type | default('') != 'error'
-                   and bedtime_announce.response.speech is defined %}
-                  {{ bedtime_announce.response.speech.plain.speech
-                     | default("Time for bed. Lights out in " ~ default_countdown_val ~ " minutes.") }}
-                {% else %}
-                  Time for bed. Lights out in {{ default_countdown_val }} minutes.
-                {% endif %}
-
-          - alias: "Deliver bedtime announcement TTS"
+          # --- LLM bedtime announcement (⑲ bed sensor routing) ---
+          - alias: "Bedtime announcement — route by trigger"
             choose:
-              - alias: "With bedtime voice profile"
+              # --- Bed confirmed: settling TTS or skip ---
+              - alias: "Bed confirmed — settling or silent"
                 conditions:
                   - condition: template
-                    value_template: "{{ bedtime_voice_profile_val | default('') | length > 0 }}"
+                    value_template: "{{ trigger.id == 'bed_confirmed' }}"
                 sequence:
+                  - alias: "Settling TTS gate"
+                    choose:
+                      - alias: "Settling TTS enabled — generate gentle message"
+                        conditions:
+                          - condition: template
+                            value_template: "{{ bed_settling_tts_val | default(true) | bool }}"
+                        sequence:
+                          - alias: "Generate bed-confirmed settling announcement"
+                            continue_on_error: true
+                            action: conversation.process
+                            response_variable: bed_settle_announce
+                            data:
+                              agent_id: "{{ bedtime_conversation_agent }}"
+                              text: "{{ bed_confirm_prompt_val }}"
+
+                          - alias: "Extract settling message"
+                            variables:
+                              bedtime_tts_message: >-
+                                {% if bed_settle_announce is defined
+                                   and bed_settle_announce.response is defined
+                                   and bed_settle_announce.response.response_type | default('') != 'error'
+                                   and bed_settle_announce.response.speech is defined %}
+                                  {{ bed_settle_announce.response.speech.plain.speech
+                                     | default("I see you're already in bed. Let me get things set up for you.") }}
+                                {% else %}
+                                  I see you're already in bed. Let me get things set up for you.
+                                {% endif %}
+
+                          - alias: "Deliver settling TTS"
+                            choose:
+                              - alias: "With bedtime voice profile"
+                                conditions:
+                                  - condition: template
+                                    value_template: "{{ bedtime_voice_profile_val | default('') | length > 0 }}"
+                                sequence:
+                                  - action: tts.speak
+                                    target:
+                                      entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
+                                    data:
+                                      media_player_entity_id: "{{ media_player_val }}"
+                                      message: "{{ bedtime_tts_message }}"
+                                      options:
+                                        voice: "{{ bedtime_voice_profile_val }}"
+                                    continue_on_error: true
+                            default:
+                              - action: tts.speak
+                                target:
+                                  entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
+                                data:
+                                  media_player_entity_id: "{{ media_player_val }}"
+                                  message: "{{ bedtime_tts_message }}"
+                                continue_on_error: true
+
+                          - delay:
+                              seconds: "{{ post_tts_delay_val | int(3) }}"
+                    default:
+                      - alias: "Settling TTS disabled — skip announcement"
+                        action: logbook.log
+                        data:
+                          name: "Bedtime Routine"
+                          message: "Bed sensor settling TTS disabled — skipping announcement."
+                        continue_on_error: true
+
+            default:
+              # --- Normal bedtime triggers: full LLM announcement ---
+              - alias: "Generate bedtime announcement"
+                continue_on_error: true
+                action: conversation.process
+                response_variable: bedtime_announce
+                data:
+                  agent_id: "{{ bedtime_conversation_agent }}"
+                  text: "{{ bedtime_prompt_val }}"
+
+              - alias: "Extract bedtime message"
+                variables:
+                  bedtime_tts_message: >-
+                    {% if bedtime_announce is defined
+                       and bedtime_announce.response is defined
+                       and bedtime_announce.response.response_type | default('') != 'error'
+                       and bedtime_announce.response.speech is defined %}
+                      {{ bedtime_announce.response.speech.plain.speech
+                         | default("Time for bed. Lights out in " ~ default_countdown_val ~ " minutes.") }}
+                    {% else %}
+                      Time for bed. Lights out in {{ default_countdown_val }} minutes.
+                    {% endif %}
+
+              - alias: "Deliver bedtime announcement TTS"
+                choose:
+                  - alias: "With bedtime voice profile"
+                    conditions:
+                      - condition: template
+                        value_template: "{{ bedtime_voice_profile_val | default('') | length > 0 }}"
+                    sequence:
+                      - action: tts.speak
+                        target:
+                          entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
+                        data:
+                          media_player_entity_id: "{{ media_player_val }}"
+                          message: "{{ bedtime_tts_message }}"
+                          options:
+                            voice: "{{ bedtime_voice_profile_val }}"
+                        continue_on_error: true
+                default:
                   - action: tts.speak
                     target:
                       entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
                     data:
                       media_player_entity_id: "{{ media_player_val }}"
                       message: "{{ bedtime_tts_message }}"
-                      options:
-                        voice: "{{ bedtime_voice_profile_val }}"
                     continue_on_error: true
-            default:
-              - action: tts.speak
-                target:
-                  entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
-                data:
-                  media_player_entity_id: "{{ media_player_val }}"
-                  message: "{{ bedtime_tts_message }}"
-                continue_on_error: true
 
-          - delay:
-              seconds: 5
+              - delay:
+                  seconds: 5
 
           # --- TV shutdown stack (skip if Kodi target) ---
           - alias: "TV shutdown stack (skip if Kodi target)"
@@ -3217,268 +3333,18 @@ actions:
                                   message: >-
                                     Preset Kodi content started: {{ kodi_preset_val }}.
 
-                    # --- Kodi: conversational modes (curated/freeform/both) ---
+                    # --- Kodi: curated conversation ---
                     default:
-                      - alias: "Kodi conversational — library pre-fetch"
-                        choose:
-                          - alias: "Library fetch enabled"
-                            conditions:
-                              - condition: template
-                                value_template: "{{ kodi_fetch_enabled_val | default(false) | bool }}"
-                            sequence:
-                              - alias: "Fetch Kodi movies"
-                                continue_on_error: true
-                                action: kodi.call_method
-                                target:
-                                  entity_id: "{{ kodi_entity_val }}"
-                                data:
-                                  method: VideoLibrary.GetMovies
-                                  properties:
-                                    - title
-                                    - genre
-                                    - year
-                                    - file
-                                    - runtime
-                                    - playcount
-                                  limits:
-                                    start: 0
-                                    end: "{{ kodi_movies_limit_val | int(25) }}"
-                                  sort:
-                                    method: random
-                                    order: ascending
-                                    ignorearticle: true
-
-                              - alias: "Pre-fetch: wait for movies result"
-                                wait_for_trigger:
-                                  - trigger: event
-                                    event_type: kodi_call_method_result
-                                    event_data:
-                                      entity_id: "{{ kodi_entity_val }}"
-                                      result_ok: true
-                                timeout:
-                                  seconds: "{{ kodi_fetch_timeout_val | int(10) }}"
-                                continue_on_timeout: true
-
-                              - alias: "Pre-fetch: store movies result"
-                                variables:
-                                  prefetch_movies: >-
-                                    {{ wait.trigger.event.data.result | default({}) if wait.trigger is defined else {} }}
-
-                              - alias: "Fetch Kodi TV shows"
-                                continue_on_error: true
-                                action: kodi.call_method
-                                target:
-                                  entity_id: "{{ kodi_entity_val }}"
-                                data:
-                                  method: VideoLibrary.GetTVShows
-                                  properties:
-                                    - title
-                                    - genre
-                                    - year
-                                    - episode
-                                  limits:
-                                    start: 0
-                                    end: "{{ kodi_shows_limit_val | int(25) }}"
-                                  sort:
-                                    method: random
-                                    order: ascending
-
-                              - alias: "Pre-fetch: wait for TV shows result"
-                                wait_for_trigger:
-                                  - trigger: event
-                                    event_type: kodi_call_method_result
-                                    event_data:
-                                      entity_id: "{{ kodi_entity_val }}"
-                                      result_ok: true
-                                timeout:
-                                  seconds: "{{ kodi_fetch_timeout_val | int(10) }}"
-                                continue_on_timeout: true
-
-                              - alias: "Pre-fetch: store TV shows result"
-                                variables:
-                                  prefetch_shows: >-
-                                    {{ wait.trigger.event.data.result | default({}) if wait.trigger is defined else {} }}
-
-                              - alias: "Fetch recently added"
-                                action: kodi.call_method
-                                target:
-                                  entity_id: "{{ kodi_entity_val }}"
-                                data:
-                                  method: VideoLibrary.GetRecentlyAddedEpisodes
-                                  properties:
-                                    - title
-                                    - showtitle
-                                    - season
-                                    - episode
-                                    - file
-                                    - firstaired
-                                    - playcount
-                                  limits:
-                                    start: 0
-                                    end: "{{ kodi_recent_limit_val | int(20) }}"
-
-                              - alias: "Pre-fetch: wait for recently added result"
-                                wait_for_trigger:
-                                  - trigger: event
-                                    event_type: kodi_call_method_result
-                                    event_data:
-                                      entity_id: "{{ kodi_entity_val }}"
-                                      result_ok: true
-                                timeout:
-                                  seconds: "{{ kodi_fetch_timeout_val | int(10) }}"
-                                continue_on_timeout: true
-
-                              - alias: "Pre-fetch: store recently added result"
-                                variables:
-                                  prefetch_recent: >-
-                                    {{ wait.trigger.event.data.result | default({}) if wait.trigger is defined else {} }}
-
-                              # --- Call 4: Favourites ---
-                              - alias: "Pre-fetch: get favourites"
-                                continue_on_error: true
-                                action: kodi.call_method
-                                target:
-                                  entity_id: "{{ kodi_entity_val }}"
-                                data:
-                                  method: Favourites.GetFavourites
-                                  properties:
-                                    - path
-                                    - thumbnail
-                                    - window
-                                    - windowparameter
-
-                              - alias: "Pre-fetch: wait for favourites result"
-                                wait_for_trigger:
-                                  - trigger: event
-                                    event_type: kodi_call_method_result
-                                    event_data:
-                                      entity_id: "{{ kodi_entity_val }}"
-                                      result_ok: true
-                                timeout:
-                                  seconds: "{{ kodi_fetch_timeout_val | int(10) }}"
-                                continue_on_timeout: true
-
-                              - alias: "Pre-fetch: store favourites result"
-                                variables:
-                                  prefetch_favourites: >-
-                                    {{ wait.trigger.event.data.result | default({}) if wait.trigger is defined else {} }}
-
-                      # =========================================================
-                      # BUILD CATALOG STRING FOR LLM CONTEXT
-                      # =========================================================
-                      - alias: "Build Kodi catalog string — genre-filtered, structured for LLM injection"
-                        variables:
-                          kodi_catalog: >-
-                            {% set excluded = (kodi_excluded_genres_val | default('')).split(',') | map('trim') | map('lower') | reject('eq', '') | list %}
-                            {% set preferred = (kodi_preferred_genres_val | default('')).split(',') | map('trim') | map('lower') | reject('eq', '') | list %}
-
-                            {# ---- Curated content (if curated or both mode) ---- #}
-                            {% set ns_curated = namespace(items=[]) %}
-                            {% if bedtime_media_mode_val in ['curated', 'both'] and kodi_curated_val | default('') | length > 0 %}
-                              {% set lines = kodi_curated_val.split('\n') | reject('eq', '') | list %}
-                              {% for line in lines %}
-                                {% set parts = line.split('=', 1) %}
-                                {% if parts | length == 2 %}
-                                  {% set ns_curated.items = ns_curated.items + [{'name': parts[0] | trim, 'content_id': parts[1] | trim}] %}
-                                {% endif %}
-                              {% endfor %}
-                            {% endif %}
-                            {% set curated_items = ns_curated.items %}
-
-                            {# ---- In-progress TV shows (NO genre filtering) ---- #}
-                            {% set in_progress = prefetch_inprogress.tvshows | default([]) if prefetch_inprogress is defined else [] %}
-
-                            {# ---- Movies (genre filtered) ---- #}
-                            {% set all_movies = prefetch_movies.movies | default([]) if prefetch_movies is defined else [] %}
-                            {% set ns_movies = namespace(items=[]) %}
-                            {% for m in all_movies %}
-                              {% set movie_genres = m.genre | default([]) | map('lower') | list %}
-                              {% set dominated = movie_genres | select('in', excluded) | list %}
-                              {% if not dominated %}
-                                {% set ns_movies.items = ns_movies.items + [m] %}
-                              {% endif %}
-                            {% endfor %}
-                            {% set movies = ns_movies.items %}
-
-                            {# ---- Recent episodes ---- #}
-                            {% set recent_eps = prefetch_recent.episodes | default([]) if prefetch_recent is defined else [] %}
-
-                            {# ---- Favourites ---- #}
-                            {% set favourites = prefetch_favourites.favourites | default([]) if prefetch_favourites is defined else [] %}
-
-                            === KODI LIBRARY CATALOG ===
-
-                            {% if curated_items %}
-                            CURATED BEDTIME OPTIONS (offer these first in curated/both modes):
-                            {% for item in curated_items %}
-                            {{ loop.index }}. {{ item.name }} [content_id: {{ item.content_id }}]
-                            {% endfor %}
-                            {% endif %}
-
-                            {% if in_progress %}
-                            IN-PROGRESS TV SHOWS (currently watching — always offer continuations):
-                            {% for s in in_progress %}
-                            - "{{ s.title }}" — {{ s.watchedepisodes }}/{{ s.episode }} eps watched, last played {{ s.lastplayed | default('unknown') }}, genres: {{ s.genre | default([]) | join(', ') }}
-                            {% endfor %}
-                            {% endif %}
-
-                            {% if movies %}
-                            MOVIES IN LIBRARY ({{ movies | length }} titles{% if excluded %}, excluded genres: {{ excluded | join(', ') }}{% endif %}):
-                            {% for m in movies %}
-                            - "{{ m.title }}" ({{ m.year | default('?') }}) — {{ m.runtime | default('?') }}min, genres: {{ m.genre | default([]) | join(', ') }}, {{ 'watched' if m.playcount | default(0) | int > 0 else 'unwatched' }} [file: {{ m.file | default('') }}]
-                            {% endfor %}
-                            {% endif %}
-
-                            {% if recent_eps %}
-                            RECENTLY ADDED EPISODES:
-                            {% for e in recent_eps %}
-                            - "{{ e.showtitle | default('') }}" S{{ '%02d' | format(e.season | default(0) | int) }}E{{ '%02d' | format(e.episode | default(0) | int) }} "{{ e.title | default('') }}" — aired {{ e.firstaired | default('?') }}, {{ 'watched' if e.playcount | default(0) | int > 0 else 'unwatched' }} [file: {{ e.file | default('') }}]
-                            {% endfor %}
-                            {% endif %}
-
-                            {% if favourites %}
-                            FAVOURITES:
-                            {% for f in favourites %}
-                            {% if f.type | default('') == 'media' %}
-                            - "{{ f.title | default('') }}" ({{ f.type | default('') }}) [path: {{ f.path | default('N/A') }}]
-                            {% endif %}
-                            {% endfor %}
-                            {% endif %}
-
-                            === SELECTION INSTRUCTIONS ===
-                            User mood: {{ kodi_bedtime_mood_val | default('') }}
-                            {% if preferred %}Preferred genres: {{ preferred | join(', ') }}{% endif %}
-                            {% if excluded %}NEVER suggest: {{ excluded | join(', ') }}{% endif %}
-                            Prioritize in-progress shows (offer to continue watching).
-                            For movies, prefer unwatched content matching the mood.
-                            When you've selected content, call the play_bedtime_kodi function with the content details.
-
-                      # =========================================================
-                      # BUILD MODE-SPECIFIC MEDIA PROMPT
-                      # =========================================================
-                      - alias: "Build media selection prompt based on mode"
+                      - alias: "Build curated media selection prompt"
                         variables:
                           media_prompt: >-
-                            {% if bedtime_media_mode_val == 'curated' %}
-                              Ask if they want bedtime content on the TV. Offer ONLY the curated options
-                              from the catalog above. If they decline, say okay. If they pick one, call
-                              the play_bedtime_kodi function with content_type "favourite" and the content_id
-                              from the catalog. If they want none, that's fine.
-                            {% elif bedtime_media_mode_val == 'freeform' %}
-                              Ask if they want bedtime content on the TV. They can request anything from
-                              the library catalog above — a specific movie, continue a TV show, or pick
-                              a favourite. Use the play_bedtime_kodi function with the appropriate
-                              content_type and content_id from the catalog.
-                            {% else %}
-                              Ask if they want bedtime content on the TV. Offer the curated favorites first,
-                              but also mention they can pick from their library. Use the play_bedtime_kodi
-                              function with the appropriate content_type and content_id from the catalog.
-                            {% endif %}
+                            Ask if they want bedtime content on the TV. Offer ONLY
+                            the curated options below. If they decline, say okay.
+                            If they pick one, call the play_bedtime_kodi function
+                            with content_type "favourite" and the content_id from
+                            the list. If they want none, that's fine.
 
-                      # =========================================================
-                      # START SATELLITE CONVERSATION
-                      # =========================================================
-                      - alias: "Pause before media conversation — let satellite settle"
+                      - alias: "Pause before media conversation"
                         delay:
                           seconds: 3
 
@@ -3490,22 +3356,18 @@ actions:
                         data:
                           preannounce: true
                           start_message: >-
-                            {% if bedtime_media_mode_val == 'curated' %}
-                              Want something on the TV for bedtime? I've got your usual options ready.
-                            {% elif bedtime_media_mode_val == 'freeform' %}
-                              Want something on the TV for bedtime? I've got your whole library to pick from.
-                            {% else %}
-                              Want something on the TV for bedtime? I've got your favorites — or anything from the library.
-                            {% endif %}
+                            Want something on the TV for bedtime? I've got your
+                            usual options ready.
                           extra_system_prompt: >-
                             {{ media_prompt }}
 
                             Kodi entity: {{ kodi_entity_val }}
                             Kodi is currently playing: {{ kodi_now_playing }}.
 
-                            {{ kodi_catalog }}
+                            === CURATED CONTENT ===
+                            {{ kodi_curated_val | default('No curated content configured.') }}
 
-                      - alias: "Post-conversation settle delay — satellite needs time for exchange and LLM tool call"
+                      - alias: "Post-conversation settle delay"
                         delay:
                           seconds: "{{ media_settle_delay_val | int(30) }}"
 
@@ -3516,6 +3378,7 @@ actions:
                           name: "Bedtime Routine"
                           message: >-
                             Kodi media conversation settled. Now playing: {{ kodi_now_playing }}.
+
 
             # --- No media target — skip playback entirely ---
             default:
@@ -3708,6 +3571,34 @@ actions:
           # =================================================================
           - alias: "Countdown delay — lamp stays on"
             choose:
+              - alias: "Bed confirmed — configurable short/no countdown"
+                conditions:
+                  - condition: template
+                    value_template: "{{ trigger.id == 'bed_confirmed' }}"
+                sequence:
+                  - choose:
+                      - alias: "Bed countdown > 0 — short delay"
+                        conditions:
+                          - condition: template
+                            value_template: "{{ bed_countdown_val | int(0) > 0 }}"
+                        sequence:
+                          - alias: "Bed sensor countdown"
+                            delay:
+                              minutes: "{{ bed_countdown_val | int(0) }}"
+                          - alias: "Log bed sensor countdown"
+                            continue_on_error: true
+                            action: logbook.log
+                            data:
+                              name: "Bedtime Routine"
+                              message: >-
+                                Bed sensor countdown complete ({{ bed_countdown_val }} min).
+                    default:
+                      - alias: "Bed countdown = 0 — skip delay, lamp off immediately"
+                        continue_on_error: true
+                        action: logbook.log
+                        data:
+                          name: "Bedtime Routine"
+                          message: "Bed sensor countdown set to 0 — skipping delay."
               - alias: "Test mode — compressed countdown (10 seconds)"
                 conditions:
                   - condition: template
@@ -3734,6 +3625,17 @@ actions:
           # =================================================================
           - alias: "Bathroom guard — pause if occupied"
             choose:
+              - alias: "Bed confirmed — skip bathroom guard (user already in bed)"
+                conditions:
+                  - condition: template
+                    value_template: "{{ trigger.id == 'bed_confirmed' }}"
+                sequence:
+                  - alias: "Log bathroom guard skipped (bed sensor)"
+                    continue_on_error: true
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine"
+                      message: "Bathroom guard skipped — bed sensor confirmed, user already in bed."
               - alias: "Test mode — skip bathroom guard"
                 conditions:
                   - condition: template
@@ -4037,7 +3939,7 @@ actions:
           message: >-
             ⚠️ Main router: no trigger matched (trigger.id={{ trigger.id | default('null') }}).
             Manual runs are not supported — automation requires a real trigger
-            (presence_on, nag_tick, scheduled_bedtime, or scheduled_bedtime_weekend).
+            (presence_on, nag_tick, scheduled_bedtime, scheduled_bedtime_weekend, or bed_confirmed).
 
 mode: single
 max_exceeded: silent
