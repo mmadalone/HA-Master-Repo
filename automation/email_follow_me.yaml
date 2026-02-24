@@ -646,8 +646,9 @@ conditions:
   - alias: "Skip initial events (IMAP fires on startup for existing emails)"
     condition: template
     value_template: >-
-      {{ trigger.event.data.get('initial', false) == false
-         or trigger.event.data.get('initial', false) | string | lower == 'false' }}
+      {% set evt = trigger.event.data if trigger is defined
+            and trigger.event is defined else {} %}
+      {{ evt.get('initial', false) | bool(false) == false }}
 
   - alias: "DND must not be active (skip check if no DND sensor configured)"
     condition: template
@@ -683,7 +684,12 @@ actions:
   # ---------------------------------------------------------------------------
   - alias: "1 · Extract email fields from event data"
     variables:
-      _event: "{{ trigger.event.data | default({}) }}"
+      _event: >-
+        {% if trigger is defined and trigger.event is defined %}
+          {{ trigger.event.data | default({}) }}
+        {% else %}
+          {{ {} }}
+        {% endif %}
       email_sender: >-
         {{ _event.get('sender', '') | default('Unknown sender', true) }}
       email_subject: >-
