@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Replay (v1.0)
+# Notification Replay (v1.1.0)
 # =============================================================================
 # On-demand replay of the last notification through the Follow-Me pipeline.
 # Reads the current state of the notification sensor, resolves presence,
@@ -10,7 +10,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Replay (v1.0)"
+  name: "Notification Replay (v1.1.0)"
   author: madalone
   description: >
     # Notification Replay
@@ -24,6 +24,19 @@ blueprint:
     message with full sender alias support.
 
     Call it from a dashboard button, a voice intent, or any automation.
+
+    ### v1.1.0
+    - TTS output volume slider — new optional number input in §③
+      lets you set a fixed volume level (0.0–1.0) for replay
+      announcements. The satellite's original volume is saved
+      before playback and restored afterward. Default 0.0
+      disables the feature (existing behavior unchanged).
+    - User pet names — new optional text input provides the LLM
+      with pet names that refer to the notification recipient
+      (e.g., amor, cariño, babe). Only root forms are needed —
+      the prompt instructs the LLM to recognize diminutives and
+      affectionate variations automatically. Matches the Follow-Me
+      v3.5.3+ behavior.
 
     ### v1.0
     - Initial release — full Follow-Me delivery pipeline (presence routing,
@@ -114,6 +127,22 @@ blueprint:
           selector:
             entity:
               multiple: true
+
+        user_petnames:
+          name: User pet names for LLM context
+          description: >-
+            Optional. Comma-separated pet names that people use to
+            refer to the notification recipient (e.g., "amor, cariño,
+            babe, guapo, mi vida"). These are passed to the LLM so
+            it understands these names mean the user — not a third
+            party. Only root forms are needed — the LLM will
+            recognize diminutives and affectionate variations
+            automatically (amor → amorcito, guapo → guapetón, etc.).
+            Leave empty to disable.
+          default: ""
+          selector:
+            text:
+              multiline: true
 
         char_cap:
           name: Message character cap
@@ -236,6 +265,23 @@ blueprint:
           selector:
             boolean: {}
 
+        tts_output_volume:
+          name: TTS output volume (optional)
+          description: >-
+            Optional. Fixed volume level (0.0–1.0) to set on the
+            target satellite before TTS playback. The player's
+            original volume is saved beforehand and restored after
+            playback finishes. Set to 0 to disable — the satellite
+            plays at whatever volume it's already at (default
+            behavior).
+          default: 0.0
+          selector:
+            number:
+              min: 0.0
+              max: 1.0
+              step: 0.05
+              mode: slider
+
     # =========================================================================
     # ④ DUCK OTHER PLAYERS
     # =========================================================================
@@ -313,10 +359,12 @@ variables:
   tts_entity: !input tts_entity
   voice_profile: !input elevenlabs_voice_profile
   tts_announce: !input tts_announce
+  tts_output_vol: !input tts_output_volume
   notification_prompt: !input notification_prompt
   aliases_map: !input sender_aliases
   include_group: !input include_group_context
   context_entities_list: !input context_entities
+  user_petnames_list: !input user_petnames
   char_limit: !input char_cap
   media_behavior: !input media_message_behavior
   duck_player_entities: !input duck_player_list
@@ -552,6 +600,18 @@ sequence:
             {% endif %}
             current_time: {{ now().strftime('%H:%M') }}
             --- END NOTIFICATION DATA ---
+            {% set petnames = user_petnames_list | default('') | string | trim %}
+            {% if petnames | length > 0 %}
+
+            --- PET NAME CONTEXT ---
+            The following are pet names that refer to the person you
+            are speaking to (the notification recipient): {{ petnames }}.
+            Diminutives, augmentatives, and affectionate variations of
+            these names (e.g., amor → amorcito, guapo → guapetón) also
+            refer to the user. Do not treat any of these as third-party
+            names.
+            --- END PET NAME CONTEXT ---
+            {% endif %}
             {% if sensor_context | default('none') != 'none' %}
 
             --- ENVIRONMENT CONTEXT (background awareness only) ---
@@ -620,6 +680,33 @@ sequence:
               "media_player_entity_id": target_satellite,
               "options": {"voice_profile": voice_profile}} }}
         {% endif %}
+
+  # ---------------------------------------------------------------------------
+  # 7b. Save satellite volume and set output volume (when configured)
+  # ---------------------------------------------------------------------------
+  - alias: "7b · Save satellite volume and set output volume"
+    variables:
+      saved_volume: >-
+        {% if has_satellite %}
+          {{ state_attr(target_satellite, 'volume_level')
+             | default(0.5) | float(0.5) }}
+        {% else %}
+          {{ 0.5 }}
+        {% endif %}
+
+  - alias: "7b-set · Set TTS output volume (when configured)"
+    if:
+      - condition: template
+        value_template: >-
+          {{ tts_output_vol | float(0) > 0 and has_satellite }}
+    then:
+      - alias: "Set satellite to configured output volume"
+        action: media_player.volume_set
+        continue_on_error: true
+        target:
+          entity_id: "{{ target_satellite }}"
+        data:
+          volume_level: "{{ tts_output_vol | float(0.5) }}"
 
   # ---------------------------------------------------------------------------
   # 7a. Snapshot and duck other playing media players
@@ -740,7 +827,8 @@ sequence:
     if:
       - condition: template
         value_template: >-
-          {{ ducked_players | default([]) | length > 0 }}
+          {{ tts_output_vol | float(0) > 0
+             or ducked_players | default([]) | length > 0 }}
     then:
       - alias: "Poll satellite state — exit when idle or max wait reached"
         repeat:
@@ -753,6 +841,23 @@ sequence:
           sequence:
             - delay:
                 seconds: 1
+
+  # ---------------------------------------------------------------------------
+  # 8a-vol. Restore satellite volume after output-volume TTS
+  # ---------------------------------------------------------------------------
+  - alias: "8a-vol · Restore satellite volume after output-volume TTS"
+    if:
+      - condition: template
+        value_template: >-
+          {{ tts_output_vol | float(0) > 0 and has_satellite }}
+    then:
+      - alias: "Restore original satellite volume"
+        action: media_player.volume_set
+        continue_on_error: true
+        target:
+          entity_id: "{{ target_satellite }}"
+        data:
+          volume_level: "{{ saved_volume }}"
 
   # ---------------------------------------------------------------------------
   # 8a. Restore ducked player volumes

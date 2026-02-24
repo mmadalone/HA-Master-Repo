@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.5.3)
+# Notification Follow-Me (v3.6.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.5.3)"
+  name: "Notification Follow-Me (v3.6.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,13 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.6.0:** TTS output volume slider — new optional number
+      input in §⑤ lets you set a fixed volume level (0.0–1.0)
+      for announcements. The satellite's original volume is
+      saved before playback and restored afterward. Default 0.0
+      disables the feature (existing behavior unchanged). When
+      the phone is in vibrate mode, the ringer quiet-volume
+      takes priority.
     - **v3.5.3:** User pet names — new optional text input provides
       the LLM with pet names that refer to the notification
       recipient (e.g., amor, cariño, babe). Only root forms are
@@ -439,6 +446,24 @@ blueprint:
           selector:
             boolean: {}
 
+        tts_output_volume:
+          name: TTS output volume (optional)
+          description: >-
+            Optional. Fixed volume level (0.0–1.0) to set on the
+            target satellite before every TTS announcement. The
+            player's original volume is saved beforehand and restored
+            after playback. Set to 0 to disable — the satellite
+            plays at whatever volume it's already at (default
+            behavior). When the phone is in vibrate mode, the ringer
+            quiet-volume setting takes priority over this value.
+          default: 0.0
+          selector:
+            number:
+              min: 0.0
+              max: 1.0
+              step: 0.05
+              mode: slider
+
     # =========================================================================
     # ⑥ RINGER MODE VOLUME CONTROL
     # =========================================================================
@@ -581,6 +606,7 @@ variables:
   tts_entity: !input tts_entity
   voice_profile: !input elevenlabs_voice_profile
   tts_announce: !input tts_announce
+  tts_output_vol: !input tts_output_volume
   notification_prompt: !input notification_prompt
   ringer_entity: !input ringer_mode_sensor
   quiet_vol: !input quiet_volume
@@ -1060,6 +1086,25 @@ actions:
               volume_level: "{{ quiet_vol | float(0.15) }}"
 
   # ---------------------------------------------------------------------------
+  # 7e2. Set output volume when configured (normal ringer only)
+  # ---------------------------------------------------------------------------
+  - alias: "7e2 · Set TTS output volume (when configured)"
+    if:
+      - condition: template
+        value_template: >-
+          {{ ringer_state != 'vibrate'
+             and tts_output_vol | float(0) > 0
+             and has_satellite }}
+    then:
+      - alias: "Set satellite to configured output volume"
+        action: media_player.volume_set
+        continue_on_error: true
+        target:
+          entity_id: "{{ target_satellite }}"
+        data:
+          volume_level: "{{ tts_output_vol | float(0.5) }}"
+
+  # ---------------------------------------------------------------------------
   # 7f. Snapshot and duck other playing media players during TTS
   # ---------------------------------------------------------------------------
   - alias: "7f · Snapshot and duck other playing media players"
@@ -1203,6 +1248,7 @@ actions:
         value_template: >-
           {{ has_satellite and
              (ringer_state == 'vibrate'
+              or tts_output_vol | float(0) > 0
               or ducked_players | default([]) | length > 0) }}
     then:
       - alias: "Poll satellite state — exit when idle or max wait reached"
@@ -1220,12 +1266,15 @@ actions:
   # ---------------------------------------------------------------------------
   # 8a. Restore volume after vibrate-mode announcement
   # ---------------------------------------------------------------------------
-  - alias: "8a · Restore player volume after vibrate-mode TTS"
+  - alias: "8a · Restore player volume after volume-adjusted TTS"
     choose:
-      - alias: "Vibrate mode was active — restore original volume"
+      - alias: "Volume was adjusted — restore original volume"
         conditions:
           - condition: template
-            value_template: "{{ ringer_state == 'vibrate' and has_satellite }}"
+            value_template: >-
+              {{ (ringer_state == 'vibrate'
+                  or tts_output_vol | float(0) > 0)
+                 and has_satellite }}
         sequence:
           - alias: "Restore original volume level"
             action: media_player.volume_set
