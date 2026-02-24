@@ -23,7 +23,6 @@ blueprint:
     - **v1 (2026-02-14):** Initial version
 
   domain: script
-  icon: mdi:music-note
   source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/announce_music_follow_me_llm.yaml
   homeassistant:
     min_version: "2024.10.0"
@@ -205,9 +204,20 @@ sequence:
   - alias: "Resolve player names, playback context, and time of day"
     variables:
       player_name: "{{ state_attr(target_player, 'friendly_name') | default(target_player) }}"
-      ctx_player: "{{ source_player if source_player is defined and source_player else target_player }}"
+      ctx_player: >-
+        {% set src = source_player if source_player is defined and source_player else '' %}
+        {% if src and state_attr(src, 'media_title') %}
+          {{ src }}
+        {% elif state_attr(target_player, 'media_title') %}
+          {{ target_player }}
+        {% elif src %}
+          {{ src }}
+        {% else %}
+          {{ target_player }}
+        {% endif %}
       media_title: "{{ state_attr(ctx_player, 'media_title') | default('', true) }}"
       media_artist: "{{ state_attr(ctx_player, 'media_artist') | default('', true) }}"
+      media_content_type: "{{ state_attr(ctx_player, 'media_content_type') | default('', true) | lower }}"
       current_time: "{{ now().strftime('%H:%M') }}"
       time_of_day: >-
         {% set h = now().hour %}
@@ -235,7 +245,9 @@ sequence:
                   | replace('{time_of_day}', time_of_day)
                 }}
                 {% if use_context and media_title %}
-                {% if 'radio' in media_title | lower or 'radio' in media_artist | lower %}
+                {% set is_radio = media_content_type in ['channel', 'radio', 'tvshow']
+                   or (media_content_type == '' and ('radio' in media_title | lower or 'radio' in media_artist | lower)) %}
+                {% if is_radio %}
                 currently tuned to the radio station "{{ media_title }}"{% if media_artist %} ({{ media_artist }}){% endif %}. this is a live radio stream, not a song or track.
                 {% else %}
                 currently playing the track "{{ media_title }}"{% if media_artist %} by {{ media_artist }}{% endif %}.
