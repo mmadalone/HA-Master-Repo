@@ -1,5 +1,5 @@
 blueprint:
-  name: "Proactive Bedtime Escalation — Presence-based nags with inline bedtime routine"
+  name: "Proactive Bedtime Escalation (v1.6) — Presence-based nags with inline bedtime routine"
   author: madalone
   description: '![Proactive Bedtime Escalation](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/proactive_bedtime_escalation-header.jpeg)
 
@@ -19,7 +19,7 @@ blueprint:
 
     ### Key features
 
-    - 19 configurable input sections (①–⑲), 25 prompts, zero hardcoded strings
+    - 18 configurable input sections (①–⑪, ⑬–⑲), 25 prompts, zero hardcoded strings
 
     - Helper-tracked escalation with configurable cooldown curves
 
@@ -32,6 +32,12 @@ blueprint:
     - Independent weekend overrides for proactive and bedtime layers
 
     ### Recent changes
+
+    - **v1.6:** Shared bedtime routine refactor (E-02) — autonomous and
+      scheduled paths now fall through to a single shared bedtime routine
+      instead of maintaining duplicate action sequences. Main router default
+      branch exits via stop: to prevent unintended fallthrough. No functional
+      change — same actions, same order, deduplicated structure.
 
     - **v1.5:** Bed presence sensor (⑲) — optional binary_sensor that confirms
       user is in bed, bypassing escalation and running bedtime routine directly.
@@ -2461,6 +2467,7 @@ actions:
 
           # --- Advance escalation stage ---
           - alias: "Advance escalation stage"
+            continue_on_error: true
             action: input_number.set_value
             target:
               entity_id: !input escalation_stage_helper
@@ -2468,6 +2475,7 @@ actions:
               value: "{{ (current_stage | int(0)) + 1 }}"
 
           - alias: "Update session timestamp for cooldown tracking"
+            continue_on_error: true
             action: input_datetime.set_datetime
             target:
               entity_id: !input escalation_session_helper
@@ -2520,41 +2528,46 @@ actions:
                               message: "{{ notify_message_val | default('Bedtime routine started automatically — escalation limit reached.') }}"
                             continue_on_error: true
 
-                  # --- Execute bedtime routine inline ---
-                  - alias: "Execute bedtime routine (autonomous)"
+                  # --- Activate conflict guard before bedtime ---
+                  - alias: "Activate conflict guard (autonomous)"
                     choose:
-                      - alias: "Test mode — skip device actions"
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ conflict_guard_entity_val | default('') | length > 0 }}"
+                        sequence:
+                          - action: homeassistant.turn_on
+                            target:
+                              entity_id: "{{ conflict_guard_entity_val }}"
+                            continue_on_error: true
+
+                  # --- Autonomous bedtime TTS announcement ---
+                  - alias: "Autonomous bedtime TTS (test or full)"
+                    choose:
+                      - alias: "Test mode — abbreviated announcement"
                         conditions:
                           - condition: template
                             value_template: "{{ test_mode_val | default(false) | bool }}"
                         sequence:
-                          - alias: "Test mode: log autonomous bedtime (no device actions)"
+                          - alias: "Test mode: log autonomous bedtime"
                             action: logbook.log
                             data:
                               name: "Proactive Escalation [TEST]"
                               message: >-
-                                TEST MODE: Would execute autonomous bedtime
-                                routine. Media mode: {{ autonomous_media_mode_val }}.
-                                Skipping all device actions.
+                                TEST MODE: Autonomous bedtime triggered.
+                                Media mode: {{ autonomous_media_mode_val }}.
+                                Falling through to shared bedtime routine.
 
-                          - alias: "Test mode: TTS announcement only"
+                          - alias: "Test mode: TTS announcement"
                             action: tts.speak
                             target:
                               entity_id: "{{ media_player_val }}"
                             data:
                               media_player_entity_id: "{{ media_player_val }}"
                               message: >-
-                                Test mode. Autonomous bedtime would execute
-                                now at stage {{ current_stage | int(0) + 1 }}.
+                                Test mode. Autonomous bedtime triggered
+                                at stage {{ current_stage | int(0) + 1 }}.
+                            continue_on_error: true
                     default:
-                      # Full autonomous bedtime — jumps to bedtime routine
-                      # (handled by the bedtime_routine_sequence anchor below)
-                      - alias: "Activate conflict guard"
-                        action: homeassistant.turn_on
-                        target:
-                          entity_id: "{{ conflict_guard_entity_val }}"
-                        continue_on_error: true
-
                       - alias: "Generate autonomous bedtime announcement"
                         continue_on_error: true
                         action: conversation.process
@@ -2585,285 +2598,207 @@ actions:
                         delay:
                           seconds: 5
 
-                      # --- Autonomous bedtime device actions ---
-                      # (TV off, lights off, media stop, then bedtime media)
-                      # This section mirrors the direct bedtime routine below
-                      # but respects the autonomous_media_mode setting
+                  # Autonomous path: falls through main router choose
+                  # into the shared bedtime routine below.
 
-                      - alias: "TV shutdown stack (skip if Kodi target)"
-                        choose:
-                          - alias: "Kodi is bedtime media target — skip TV off"
-                            conditions:
-                              - condition: template
-                                value_template: "{{ is_kodi_target }}"
-                            sequence: []
-                        default:
-                          - alias: "TV off — CEC/software"
-                            choose:
-                              - conditions:
-                                  - condition: template
-                                    value_template: "{{ tv_entity_val | default('') | length > 0 }}"
-                                sequence:
-                                  - action: media_player.turn_off
-                                    target:
-                                      entity_id: "{{ tv_entity_val }}"
-                                    continue_on_error: true
-                          - alias: "TV off — script"
-                            choose:
-                              - conditions:
-                                  - condition: template
-                                    value_template: "{{ tv_off_script_val | default('') | length > 0 }}"
-                                sequence:
-                                  - action: script.turn_on
-                                    target:
-                                      entity_id: "{{ tv_off_script_val }}"
-                                    continue_on_error: true
-                          - alias: "TV off — IR remote"
-                            choose:
-                              - conditions:
-                                  - condition: template
-                                    value_template: "{{ tv_ir_remote_val | default('') | length > 0 }}"
-                                sequence:
-                                  - action: remote.send_command
-                                    target:
-                                      entity_id: "{{ tv_ir_remote_val }}"
-                                    data:
-                                      command: "{{ tv_ir_command_val | default('Power') }}"
-                                      device: "{{ tv_ir_device_val | default('') }}"
-                                    continue_on_error: true
-
-                      - alias: "Lights off (except lamp)"
-                        action: homeassistant.turn_off
-                        target: !input lights_off_target
-                        continue_on_error: true
-
-                      - alias: "Stop additional media players"
-                        action: media_player.media_stop
-                        target: !input media_players_stop
-                        continue_on_error: true
-
-                      - alias: "Log autonomous bedtime actions complete"
-                        action: logbook.log
-                        data:
-                          name: "Proactive Escalation"
-                          message: >-
-                            Autonomous bedtime: devices shut down.
-                            Lamp stays on for countdown.
-
-                  # --- Reset escalation after autonomous execution ---
-                  - alias: "Reset escalation stage to 0"
-                    action: input_number.set_value
-                    target:
-                      entity_id: !input escalation_stage_helper
-                    data:
-                      value: 0
-
-                  - alias: "Clear session timestamp"
-                    action: input_datetime.set_datetime
-                    target:
-                      entity_id: !input escalation_session_helper
-                    data:
-                      datetime: "1970-01-01 00:00:00"
-
-                  - stop: "Autonomous bedtime executed — session complete."
-
-            default: []
-
-          # --- NOT autonomous stage — normal proactive nag ---
-
-          # --- Build context from entities ---
-          - alias: "Build context entity snapshot"
-            variables:
-              context_snapshot: >-
-                {% set entities = context_entities_val | default([]) %}
-                {% set inactive_media = ['idle', 'off', 'standby', 'unavailable'] %}
-                {% set ns = namespace(lines=[]) %}
-                {% for entity in entities %}
-                  {% set s = states(entity) | default('unavailable') %}
-                  {% set is_mp = entity.startswith('media_player.') %}
-                  {% if is_mp and s in inactive_media %}
-                    {# skip inactive media players entirely #}
-                  {% elif is_mp and s in ['playing', 'paused'] %}
-                    {% set title = state_attr(entity, 'media_title') | default('', true) %}
-                    {% set artist = state_attr(entity, 'media_artist') | default('', true) %}
-                    {% set album = state_attr(entity, 'media_album_name') | default('', true) %}
-                    {% set ctype = state_attr(entity, 'media_content_type') | default('', true) %}
-                    {% set detail = title %}
-                    {% if artist %}{% set detail = '"' ~ title ~ '" by ' ~ artist %}{% endif %}
-                    {% if album %}{% set detail = detail ~ ' (album: ' ~ album ~ ')' %}{% endif %}
-                    {% if ctype %}{% set detail = detail ~ ' [' ~ ctype ~ ']' %}{% endif %}
-                    {% set ns.lines = ns.lines + [entity ~ ': ' ~ s ~ ' — ' ~ detail] %}
-                  {% else %}
-                    {% set ns.lines = ns.lines + [entity ~ ': ' ~ s] %}
-                  {% endif %}
-                {% endfor %}
-                {{ ns.lines | join('\n') }}
-
-          # --- Memory history retrieval (⑱) ---
-          - alias: "Retrieve bedtime history from memory tool"
-            variables:
-              bedtime_history_context: ""
-          - alias: "Query memory tool for bedtime history"
-            choose:
-              - alias: "Memory tool enabled and entity configured"
-                conditions:
-                  - condition: template
-                    value_template: >-
-                      {{ enable_memory_val | bool(false)
-                         and memory_tool_entity_val | default('') | length > 0 }}
-                sequence:
-                  - alias: "Search bedtime history via conversation agent"
-                    continue_on_error: true
-                    action: conversation.process
-                    response_variable: memory_history_response
-                    data:
-                      agent_id: "{{ bedtime_conversation_agent }}"
-                      text: >-
-                        Use the memory tool to search for recent entries with tags:
-                        {{ memory_search_tags_val | default('bedtime sleep routine') }}.
-                        Return ONLY the raw data — dates and times. No commentary.
-                        If no entries found, say "no history".
-
-                  - alias: "Extract memory history with fallback"
-                    variables:
-                      bedtime_history_context: >-
-                        {% if memory_history_response is defined
-                           and memory_history_response.response is defined
-                           and memory_history_response.response.response_type | default('') != 'error'
-                           and memory_history_response.response.speech is defined %}
-                          {{ memory_inject_prompt_val | default('Recent bedtime history:') }}
-                          {{ memory_history_response.response.speech.plain.speech | default('no history') }}
-                        {% else %}
-                        {% endif %}
-
-          # --- Generate LLM proactive message ---
-          - alias: "Generate proactive LLM message"
-            continue_on_error: true
-            action: conversation.process
-            response_variable: proactive_response
-            data:
-              agent_id: "{{ proactive_conversation_agent }}"
-              text: >-
-                {{ effective_llm_prompt }}
-                {% if stage_prompt_overlay | default('') | trim != effective_llm_prompt | trim %}
-                Tone: {{ stage_prompt_overlay }}
-                {% endif %}
-                ---
-                Context:
-                Area: {{ area_name_val | default('living room') }}
-                User(s): {{ llm_user_reference | default('the user') }}
-                Stage: {{ (current_stage | int(0)) + 1 }} of {{ stage_count_val | int(4) }}
-                Time: {{ now().strftime('%H:%M') }}
-                {{ context_snapshot }}
-                {% if bedtime_history_context | default('') | trim | length > 0 %}
-                ---
-                {{ bedtime_history_context }}
-                {% endif %}
-
-          - alias: "Extract proactive message with fallback"
-            variables:
-              proactive_message: >-
-                {% if proactive_response is defined
-                   and proactive_response.response is defined
-                   and proactive_response.response.response_type | default('') != 'error'
-                   and proactive_response.response.speech is defined %}
-                  {{ proactive_response.response.speech.plain.speech
-                     | default("Hey, you're still here. Don't you have somewhere to be?") }}
-                {% else %}
-                  Hey, you're still here. Don't you have somewhere to be?
-                {% endif %}
-
-          # --- TTS delivery (proactive message) ---
-          - alias: "Deliver proactive message via TTS"
-            choose:
-              - alias: "TTS mode: conversation.process direct"
-                conditions:
-                  - condition: template
-                    value_template: "{{ tts_mode_val | default('tts_speak') == 'conversation_tts' }}"
-                sequence:
-                  - alias: "Already delivered via conversation.process above"
-                    delay:
-                      seconds: 0
             default:
-              - alias: "TTS speak with optional voice profile"
+
+              # --- NOT autonomous stage — normal proactive nag ---
+
+              # --- Build context from entities ---
+              - alias: "Build context entity snapshot"
+                variables:
+                  context_snapshot: >-
+                    {% set entities = context_entities_val | default([]) %}
+                    {% set inactive_media = ['idle', 'off', 'standby', 'unavailable'] %}
+                    {% set ns = namespace(lines=[]) %}
+                    {% for entity in entities %}
+                      {% set s = states(entity) | default('unavailable') %}
+                      {% set is_mp = entity.startswith('media_player.') %}
+                      {% if is_mp and s in inactive_media %}
+                        {# skip inactive media players entirely #}
+                      {% elif is_mp and s in ['playing', 'paused'] %}
+                        {% set title = state_attr(entity, 'media_title') | default('', true) %}
+                        {% set artist = state_attr(entity, 'media_artist') | default('', true) %}
+                        {% set album = state_attr(entity, 'media_album_name') | default('', true) %}
+                        {% set ctype = state_attr(entity, 'media_content_type') | default('', true) %}
+                        {% set detail = title %}
+                        {% if artist %}{% set detail = '"' ~ title ~ '" by ' ~ artist %}{% endif %}
+                        {% if album %}{% set detail = detail ~ ' (album: ' ~ album ~ ')' %}{% endif %}
+                        {% if ctype %}{% set detail = detail ~ ' [' ~ ctype ~ ']' %}{% endif %}
+                        {% set ns.lines = ns.lines + [entity ~ ': ' ~ s ~ ' — ' ~ detail] %}
+                      {% else %}
+                        {% set ns.lines = ns.lines + [entity ~ ': ' ~ s] %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ ns.lines | join('\n') }}
+
+              # --- Memory history retrieval (⑱) ---
+              - alias: "Retrieve bedtime history from memory tool"
+                variables:
+                  bedtime_history_context: ""
+              - alias: "Query memory tool for bedtime history"
                 choose:
-                  - alias: "With voice profile (ElevenLabs)"
+                  - alias: "Memory tool enabled and entity configured"
                     conditions:
                       - condition: template
-                        value_template: "{{ voice_profile_val | default('') | length > 0 }}"
+                        value_template: >-
+                          {{ enable_memory_val | bool(false)
+                             and memory_tool_entity_val | default('') | length > 0 }}
                     sequence:
+                      - alias: "Search bedtime history via conversation agent"
+                        continue_on_error: true
+                        action: conversation.process
+                        response_variable: memory_history_response
+                        data:
+                          agent_id: "{{ bedtime_conversation_agent }}"
+                          text: >-
+                            Use the memory tool to search for recent entries with tags:
+                            {{ memory_search_tags_val | default('bedtime sleep routine') }}.
+                            Return ONLY the raw data — dates and times. No commentary.
+                            If no entries found, say "no history".
+
+                      - alias: "Extract memory history with fallback"
+                        variables:
+                          bedtime_history_context: >-
+                            {% if memory_history_response is defined
+                               and memory_history_response.response is defined
+                               and memory_history_response.response.response_type | default('') != 'error'
+                               and memory_history_response.response.speech is defined %}
+                              {{ memory_inject_prompt_val | default('Recent bedtime history:') }}
+                              {{ memory_history_response.response.speech.plain.speech | default('no history') }}
+                            {% else %}
+                            {% endif %}
+
+              # --- Generate LLM proactive message ---
+              - alias: "Generate proactive LLM message"
+                continue_on_error: true
+                action: conversation.process
+                response_variable: proactive_response
+                data:
+                  agent_id: "{{ proactive_conversation_agent }}"
+                  text: >-
+                    {{ effective_llm_prompt }}
+                    {% if stage_prompt_overlay | default('') | trim != effective_llm_prompt | trim %}
+                    Tone: {{ stage_prompt_overlay }}
+                    {% endif %}
+                    ---
+                    Context:
+                    Area: {{ area_name_val | default('living room') }}
+                    User(s): {{ llm_user_reference | default('the user') }}
+                    Stage: {{ (current_stage | int(0)) + 1 }} of {{ stage_count_val | int(4) }}
+                    Time: {{ now().strftime('%H:%M') }}
+                    {{ context_snapshot }}
+                    {% if bedtime_history_context | default('') | trim | length > 0 %}
+                    ---
+                    {{ bedtime_history_context }}
+                    {% endif %}
+
+              - alias: "Extract proactive message with fallback"
+                variables:
+                  proactive_message: >-
+                    {% if proactive_response is defined
+                       and proactive_response.response is defined
+                       and proactive_response.response.response_type | default('') != 'error'
+                       and proactive_response.response.speech is defined %}
+                      {{ proactive_response.response.speech.plain.speech
+                         | default("Hey, you're still here. Don't you have somewhere to be?") }}
+                    {% else %}
+                      Hey, you're still here. Don't you have somewhere to be?
+                    {% endif %}
+
+              # --- TTS delivery (proactive message) ---
+              - alias: "Deliver proactive message via TTS"
+                choose:
+                  - alias: "TTS mode: conversation.process direct"
+                    conditions:
+                      - condition: template
+                        value_template: "{{ tts_mode_val | default('tts_speak') == 'conversation_tts' }}"
+                    sequence:
+                      - alias: "Already delivered via conversation.process above"
+                        delay:
+                          seconds: 0
+                default:
+                  - alias: "TTS speak with optional voice profile"
+                    choose:
+                      - alias: "With voice profile (ElevenLabs)"
+                        conditions:
+                          - condition: template
+                            value_template: "{{ voice_profile_val | default('') | length > 0 }}"
+                        sequence:
+                          - action: tts.speak
+                            target:
+                              entity_id: "{{ tts_entity_val }}"
+                            data:
+                              media_player_entity_id: "{{ media_player_val }}"
+                              message: "{{ proactive_message }}"
+                              options:
+                                voice: "{{ voice_profile_val }}"
+                            continue_on_error: true
+                    default:
                       - action: tts.speak
                         target:
                           entity_id: "{{ tts_entity_val }}"
                         data:
                           media_player_entity_id: "{{ media_player_val }}"
                           message: "{{ proactive_message }}"
-                          options:
-                            voice: "{{ voice_profile_val }}"
                         continue_on_error: true
-                default:
-                  - action: tts.speak
-                    target:
-                      entity_id: "{{ tts_entity_val }}"
-                    data:
-                      media_player_entity_id: "{{ media_player_val }}"
-                      message: "{{ proactive_message }}"
-                    continue_on_error: true
 
-              - alias: "Post-TTS delay"
-                delay:
-                  seconds: 5
-
-          # --- Bedtime question (at configurable stage) ---
-          - alias: "Bedtime question — ask if user wants bedtime routine"
-            choose:
-              - alias: "Stage triggers bedtime question"
-                conditions:
-                  - condition: template
-                    value_template: "{{ should_ask_bedtime }}"
-                sequence:
-                  - alias: "Delay before bedtime question"
+                  - alias: "Post-TTS delay"
                     delay:
-                      seconds: "{{ bedtime_question_delay_val | int(30) }}"
+                      seconds: 5
 
-                  - alias: "Start bedtime question conversation"
-                    choose:
-                      - alias: "Use satellite conversation for bedtime question"
-                        conditions:
-                          - condition: template
-                            value_template: >
-                              {{ bedtime_satellite_val | default('') | length > 0 }}
-                        sequence:
-                          - alias: "Start satellite bedtime question"
-                            action: assist_satellite.start_conversation
+              # --- Bedtime question (at configurable stage) ---
+              - alias: "Bedtime question — ask if user wants bedtime routine"
+                choose:
+                  - alias: "Stage triggers bedtime question"
+                    conditions:
+                      - condition: template
+                        value_template: "{{ should_ask_bedtime }}"
+                    sequence:
+                      - alias: "Delay before bedtime question"
+                        delay:
+                          seconds: "{{ bedtime_question_delay_val | int(5) }}"
+
+                      - alias: "Start bedtime question conversation"
+                        choose:
+                          - alias: "Use satellite conversation for bedtime question"
+                            conditions:
+                              - condition: template
+                                value_template: >
+                                  {{ bedtime_satellite_val | default('') | length > 0 }}
+                            sequence:
+                              - alias: "Start satellite bedtime question"
+                                action: assist_satellite.start_conversation
+                                target:
+                                  entity_id: "{{ bedtime_satellite_val }}"
+                                data:
+                                  start_message: "{{ effective_bedtime_question_prompt }}"
+                                  extra_system_prompt: >-
+                                    The user has been present for a while. Ask if they
+                                    want to start bedtime. If yes, respond with exactly
+                                    "BEDTIME_ACCEPTED". If no, respond with "BEDTIME_DECLINED".
+                                    Keep it conversational.
+                                response_variable: bedtime_q_response
+                                continue_on_error: true
+                        default:
+                          - alias: "Fallback: one-shot TTS bedtime question"
+                            action: tts.speak
                             target:
-                              entity_id: "{{ bedtime_satellite_val }}"
+                              entity_id: "{{ tts_entity_val }}"
                             data:
-                              start_message: "{{ effective_bedtime_question_prompt }}"
-                              extra_system_prompt: >-
-                                The user has been present for a while. Ask if they
-                                want to start bedtime. If yes, respond with exactly
-                                "BEDTIME_ACCEPTED". If no, respond with "BEDTIME_DECLINED".
-                                Keep it conversational.
-                            response_variable: bedtime_q_response
+                              media_player_entity_id: "{{ media_player_val }}"
+                              message: "{{ bedtime_question_fallback_val | default('Ready for bed?') }}"
                             continue_on_error: true
-                    default:
-                      - alias: "Fallback: one-shot TTS bedtime question"
-                        action: tts.speak
-                        target:
-                          entity_id: "{{ tts_entity_val }}"
-                        data:
-                          media_player_entity_id: "{{ media_player_val }}"
-                          message: "{{ bedtime_question_fallback_val | default('Ready for bed?') }}"
-                        continue_on_error: true
 
-                  - alias: "Log bedtime question asked"
-                    action: logbook.log
-                    data:
-                      name: "Proactive Escalation"
-                      message: >-
-                        Bedtime question asked at stage
-                        {{ current_stage | int(0) + 1 }}.
+                      - alias: "Log bedtime question asked"
+                        action: logbook.log
+                        data:
+                          name: "Proactive Escalation"
+                          message: >-
+                            Bedtime question asked at stage
+                            {{ current_stage | int(0) + 1 }}.
+              - stop: "Nag complete"
 
       # =====================================================================
       # BEDTIME EXECUTION — scheduled trigger or bed sensor confirmation
@@ -3086,847 +3021,6 @@ actions:
               - delay:
                   seconds: 5
 
-          # --- TV shutdown stack (skip if Kodi target) ---
-          - alias: "TV shutdown stack (skip if Kodi target)"
-            choose:
-              - alias: "Kodi is bedtime target — keep TV on"
-                conditions:
-                  - condition: template
-                    value_template: "{{ is_kodi_target }}"
-                sequence: []
-            default:
-              - alias: "TV off — CEC/software"
-                choose:
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ tv_entity_val | default('') | length > 0 }}"
-                    sequence:
-                      - action: media_player.turn_off
-                        target:
-                          entity_id: "{{ tv_entity_val }}"
-                        continue_on_error: true
-              - alias: "TV off — script"
-                choose:
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ tv_off_script_val | default('') | length > 0 }}"
-                    sequence:
-                      - action: script.turn_on
-                        target:
-                          entity_id: "{{ tv_off_script_val }}"
-                        continue_on_error: true
-              - alias: "TV off — IR remote"
-                choose:
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ tv_ir_remote_val | default('') | length > 0 }}"
-                    sequence:
-                      - action: remote.send_command
-                        target:
-                          entity_id: "{{ tv_ir_remote_val }}"
-                        data:
-                          command: "{{ tv_ir_command_val | default('Power') }}"
-                          device: "{{ tv_ir_device_val | default('') }}"
-                        continue_on_error: true
-
-          # --- Lights off (except lamp) ---
-          - alias: "Lights off (except lamp)"
-            action: homeassistant.turn_off
-            target: !input lights_off_target
-            continue_on_error: true
-
-          # --- Stop additional media players ---
-          - alias: "Stop additional media players"
-            action: media_player.media_stop
-            target: !input media_players_stop
-            continue_on_error: true
-
-          - alias: "Log device shutdown complete"
-            action: logbook.log
-            data:
-              name: "Bedtime Routine"
-              message: >-
-                Devices shut down. Lamp stays on for countdown.
-                Media target: {{ bedtime_media_target_val }}.
-
-          # =================================================================
-          # BEDTIME MEDIA BRANCH — two-axis: target × method
-          # =================================================================
-          - alias: "Bedtime media branch"
-            choose:
-              # ─────────────────────────────────────────────────────────────
-              # TARGET: AUDIOBOOK (Music Assistant)
-              # ─────────────────────────────────────────────────────────────
-              - alias: "Target: audiobook"
-                conditions:
-                  - condition: template
-                    value_template: "{{ is_audiobook_target }}"
-                sequence:
-                  - alias: "Audiobook method branch"
-                    choose:
-                      # --- Audiobook: preset mode ---
-                      - alias: "Audiobook: preset (fixed URI)"
-                        conditions:
-                          - condition: template
-                            value_template: "{{ audiobook_mode_val == 'preset' }}"
-                        sequence:
-                          - alias: "Set audiobook volume"
-                            action: media_player.volume_set
-                            target:
-                              entity_id: "{{ audiobook_player_val }}"
-                            data:
-                              volume_level: "{{ audiobook_volume_val | float(0.25) }}"
-                            continue_on_error: true
-
-                          - alias: "Play preset audiobook via MA"
-                            action: music_assistant.play_media
-                            target:
-                              entity_id: "{{ audiobook_player_val }}"
-                            data:
-                              media_id: "{{ audiobook_preset_uri_val }}"
-                              media_type: "{{ audiobook_media_type_val | default('auto') }}"
-                              enqueue: replace
-                            continue_on_error: true
-
-                          - alias: "Buffer after audiobook play"
-                            delay:
-                              seconds: "{{ kodi_post_play_delay_val | int(3) }}"
-
-                          - alias: "Log preset audiobook started"
-                            action: logbook.log
-                            data:
-                              name: "Bedtime Routine"
-                              message: >-
-                                Preset audiobook started: {{ audiobook_preset_uri_val }}.
-
-                    # --- Audiobook: conversational modes (curated/freeform/both) ---
-                    default:
-                      - alias: "Audiobook conversational — start satellite"
-                        choose:
-                          - alias: "Audiobook offer enabled"
-                            conditions:
-                              - condition: template
-                                value_template: "{{ enable_audiobook_offer_val | default(true) | bool }}"
-                            sequence:
-                              - alias: "Build audiobook selection prompt"
-                                variables:
-                                  audiobook_offer_prompt: >-
-                                    {% if audiobook_mode_val == 'curated' %}
-                                      Offer these audiobooks: {{ curated_audiobooks_val }}.
-                                      Let the user pick one.
-                                    {% elif audiobook_mode_val == 'freeform' %}
-                                      Suggest a bedtime audiobook from your knowledge.
-                                      Something calming and suitable for sleep.
-                                    {% else %}
-                                      Offer these audiobooks: {{ curated_audiobooks_val }}.
-                                      If the user wants something else, suggest alternatives.
-                                    {% endif %}
-
-                              - alias: "Start audiobook satellite conversation"
-                                action: assist_satellite.start_conversation
-                                target:
-                                  entity_id: "{{ assist_satellites_val | first | default('') }}"
-                                data:
-                                  start_message: "{{ audiobook_offer_prompt }}"
-                                  extra_system_prompt: >-
-                                    You are helping choose a bedtime audiobook.
-                                    {{ audiobook_offer_prompt }}
-                                    Use the play_bedtime_audiobook tool to start playback.
-                                response_variable: audiobook_conversation
-                                continue_on_error: true
-
-                              - alias: "Post-conversation settle delay"
-                                delay:
-                                  seconds: "{{ media_settle_delay_val | int(5) }}"
-
-                              - alias: "Ensure audiobook volume after conversation"
-                                action: media_player.volume_set
-                                target:
-                                  entity_id: "{{ audiobook_player_val }}"
-                                data:
-                                  volume_level: "{{ audiobook_volume_val | float(0.25) }}"
-                                continue_on_error: true
-
-                              - alias: "Log audiobook conversation complete"
-                                action: logbook.log
-                                data:
-                                  name: "Bedtime Routine"
-                                  message: "Audiobook conversation complete. Playback started."
-
-                        default:
-                          - alias: "Audiobook offer disabled — skip media"
-                            action: logbook.log
-                            data:
-                              name: "Bedtime Routine"
-                              message: "Audiobook offer disabled. Skipping media playback."
-
-              # ─────────────────────────────────────────────────────────────
-              # TARGET: KODI
-              # ─────────────────────────────────────────────────────────────
-              - alias: "Target: Kodi"
-                conditions:
-                  - condition: template
-                    value_template: "{{ is_kodi_target }}"
-                sequence:
-                  # --- Sleepy TV check ---
-                  - alias: "Check if bedtime content already playing (sleepy TV)"
-                    variables:
-                      sleepy_tv_active: "{{ is_sleepy_tv | default(false) | bool }}"
-
-                  - alias: "Kodi method branch"
-                    choose:
-                      # --- Kodi: preset mode ---
-                      - alias: "Kodi: preset (fixed content)"
-                        conditions:
-                          - condition: template
-                            value_template: "{{ bedtime_media_mode_val == 'preset' }}"
-                        sequence:
-                          - alias: "Kodi preset — handle sleepy TV"
-                            choose:
-                              - alias: "Sleepy TV already playing — adjust volume only"
-                                conditions:
-                                  - condition: template
-                                    value_template: "{{ sleepy_tv_active }}"
-                                sequence:
-                                  - alias: "Set Kodi volume (sleepy TV already on)"
-                                    action: media_player.volume_set
-                                    target:
-                                      entity_id: "{{ kodi_entity_val }}"
-                                    data:
-                                      volume_level: "{{ kodi_volume_val | float(0.15) }}"
-                                    continue_on_error: true
-
-                                  - alias: "Log sleepy TV detected"
-                                    action: logbook.log
-                                    data:
-                                      name: "Bedtime Routine"
-                                      message: >-
-                                        Sleepy TV already playing. Volume adjusted,
-                                        skipping content switch.
-
-                            default:
-                              - alias: "Set Kodi volume"
-                                action: media_player.volume_set
-                                target:
-                                  entity_id: "{{ kodi_entity_val }}"
-                                data:
-                                  volume_level: "{{ kodi_volume_val | float(0.15) }}"
-                                continue_on_error: true
-
-                              - alias: "Play preset Kodi content"
-                                action: media_player.play_media
-                                target:
-                                  entity_id: "{{ kodi_entity_val }}"
-                                data:
-                                  media_content_id: "{{ kodi_preset_val }}"
-                                  media_content_type: "{{ kodi_content_type_val | default('video') }}"
-                                continue_on_error: true
-
-                              - alias: "Buffer after Kodi play"
-                                delay:
-                                  seconds: "{{ kodi_post_play_delay_val | int(3) }}"
-
-                              - alias: "Log preset Kodi started"
-                                action: logbook.log
-                                data:
-                                  name: "Bedtime Routine"
-                                  message: >-
-                                    Preset Kodi content started: {{ kodi_preset_val }}.
-
-                    # --- Kodi: curated conversation ---
-                    default:
-                      - alias: "Build curated media selection prompt"
-                        variables:
-                          media_prompt: >-
-                            Ask if they want bedtime content on the TV. Offer ONLY
-                            the curated options below. If they decline, say okay.
-                            If they pick one, call the play_bedtime_kodi function
-                            with content_type "favourite" and the content_id from
-                            the list. If they want none, that's fine.
-
-                      - alias: "Pause before media conversation"
-                        delay:
-                          seconds: 3
-
-                      - alias: "Start media selection conversation — agent uses tool script for playback"
-                        continue_on_error: true
-                        action: assist_satellite.start_conversation
-                        target:
-                          entity_id: "{{ assist_satellites_val | first | default('') }}"
-                        data:
-                          preannounce: true
-                          start_message: >-
-                            Want something on the TV for bedtime? I've got your
-                            usual options ready.
-                          extra_system_prompt: >-
-                            {{ media_prompt }}
-
-                            Kodi entity: {{ kodi_entity_val }}
-                            Kodi is currently playing: {{ kodi_now_playing }}.
-
-                            === CURATED CONTENT ===
-                            {{ kodi_curated_val | default('No curated content configured.') }}
-
-                      - alias: "Post-conversation settle delay"
-                        delay:
-                          seconds: "{{ media_settle_delay_val | int(30) }}"
-
-                      - alias: "Log media conversation completed"
-                        continue_on_error: true
-                        action: logbook.log
-                        data:
-                          name: "Bedtime Routine"
-                          message: >-
-                            Kodi media conversation settled. Now playing: {{ kodi_now_playing }}.
-
-
-            # --- No media target — skip playback entirely ---
-            default:
-              - alias: "No media target configured — skip playback"
-                action: logbook.log
-                data:
-                  name: "Bedtime Routine"
-                  message: "Media target is 'none'. Skipping media playback."
-                continue_on_error: true
-
-          # =================================================================
-          # SETTLING-IN TTS — optional contextual announcement
-          # =================================================================
-          - alias: "Settling-in TTS — optional contextual announcement after content starts"
-            choose:
-              - alias: "Settling-in TTS is enabled"
-                conditions:
-                  - condition: template
-                    value_template: "{{ enable_settling_val | bool(false) }}"
-                sequence:
-                  - alias: "Select settling prompt and sensors based on media target"
-                    variables:
-                      settling_prompt_active: >-
-                        {% if is_kodi_target | bool %}
-                          {{ settling_prompt_kodi_val | default('') }}
-                        {% else %}
-                          {{ settling_prompt_audiobook_val | default('') }}
-                        {% endif %}
-                      settling_sensors_active: >-
-                        {% if is_kodi_target | bool %}
-                          {{ settling_sensors_kodi_val | default([]) }}
-                        {% else %}
-                          {{ settling_sensors_audiobook_val | default([]) }}
-                        {% endif %}
-
-                  - alias: "Build sensor context string for settling-in prompt"
-                    variables:
-                      settling_sensor_context: >-
-                        {% set ns = namespace(lines=[]) %}
-                        {% for eid in settling_sensors_active | default([]) %}
-                          {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
-                        {% endfor %}
-                        {{ ns.lines | join('\n') }}
-
-                  - alias: "Generate settling-in message via conversation agent"
-                    continue_on_error: true
-                    action: conversation.process
-                    response_variable: settling_response
-                    data:
-                      agent_id: "{{ bedtime_conversation_agent }}"
-                      text: >-
-                        {{ settling_prompt_active }}
-
-                        {% if is_kodi_target | bool %}
-                        Kodi is currently playing: {{ kodi_now_playing }}.
-                        {% endif %}
-
-                        Current sensor readings:
-                        {{ settling_sensor_context }}
-
-                  - alias: "Extract settling-in message with defensive fallback"
-                    variables:
-                      settling_message: >-
-                        {% if settling_response is defined
-                           and settling_response.response is defined
-                           and settling_response.response.response_type | default('') != 'error'
-                           and settling_response.response.speech is defined %}
-                          {{ settling_response.response.speech.plain.speech | default('') }}
-                        {% else %}
-                        {% endif %}
-
-                  - alias: "Deliver settling-in TTS if agent produced a message"
-                    choose:
-                      - alias: "Agent returned a non-empty settling message"
-                        conditions:
-                          - condition: template
-                            value_template: "{{ settling_message | default('') | trim | length > 0 }}"
-                        sequence:
-                          - alias: "Speak settling-in message via TTS"
-                            choose:
-                              - alias: "TTS with voice profile (ElevenLabs)"
-                                conditions:
-                                  - condition: template
-                                    value_template: "{{ bedtime_voice_profile_val | default('') | length > 0 }}"
-                                sequence:
-                                  - action: tts.speak
-                                    target:
-                                      entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
-                                    data:
-                                      media_player_entity_id: "{{ media_player_val }}"
-                                      message: "{{ settling_message }}"
-                                      options:
-                                        voice: "{{ bedtime_voice_profile_val }}"
-                                    continue_on_error: true
-                            default:
-                              - action: tts.speak
-                                target:
-                                  entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
-                                data:
-                                  media_player_entity_id: "{{ media_player_val }}"
-                                  message: "{{ settling_message }}"
-                                continue_on_error: true
-
-                          - alias: "Post-TTS buffer for settling-in"
-                            delay:
-                              seconds: "{{ post_tts_delay_val | int(5) }}"
-
-          # =================================================================
-          # GOODNIGHT + COUNTDOWN
-          # =================================================================
-          - alias: "Re-read countdown helper — agent may have negotiated a different value"
-            variables:
-              final_countdown: >-
-                {% if countdown_helper_val | default('') | length > 0 %}
-                  {{ states(countdown_helper_val) | int(default_countdown_val | int(4)) }}
-                {% else %}
-                  {{ default_countdown_val | int(4) }}
-                {% endif %}
-
-          - alias: "Generate goodnight message via conversation agent"
-            continue_on_error: true
-            action: conversation.process
-            response_variable: goodnight_response
-            data:
-              agent_id: "{{ bedtime_conversation_agent }}"
-              text: "{{ goodnight_prompt_val | default('Say goodnight. Be warm but brief — one or two sentences max.') }}"
-
-          - alias: "Extract goodnight message with defensive fallback"
-            variables:
-              goodnight_message: >-
-                {% if goodnight_response is defined
-                   and goodnight_response.response is defined
-                   and goodnight_response.response.response_type | default('') != 'error'
-                   and goodnight_response.response.speech is defined %}
-                  {{ goodnight_response.response.speech.plain.speech
-                     | default("Goodnight. Sleep well.") }}
-                {% else %}
-                  Goodnight. Sleep well.
-                {% endif %}
-
-          - alias: "Deliver goodnight TTS if enabled and message exists"
-            choose:
-              - alias: "Goodnight TTS is enabled and message is non-empty"
-                conditions:
-                  - condition: template
-                    value_template: >-
-                      {{ enable_goodnight_val | bool(false)
-                         and goodnight_message | default('') | trim | length > 0 }}
-                sequence:
-                  - alias: "Speak goodnight message via TTS"
-                    choose:
-                      - alias: "TTS with voice profile (ElevenLabs)"
-                        conditions:
-                          - condition: template
-                            value_template: "{{ bedtime_voice_profile_val | default('') | length > 0 }}"
-                        sequence:
-                          - action: tts.speak
-                            target:
-                              entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
-                            data:
-                              media_player_entity_id: "{{ media_player_val }}"
-                              message: "{{ goodnight_message }}"
-                              options:
-                                voice: "{{ bedtime_voice_profile_val }}"
-                            continue_on_error: true
-                    default:
-                      - action: tts.speak
-                        target:
-                          entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
-                        data:
-                          media_player_entity_id: "{{ media_player_val }}"
-                          message: "{{ goodnight_message }}"
-                        continue_on_error: true
-
-                  - alias: "Post-TTS buffer for goodnight"
-                    delay:
-                      seconds: "{{ post_tts_delay_val | int(5) }}"
-
-          - alias: "Log goodnight delivered — countdown begins"
-            continue_on_error: true
-            action: logbook.log
-            data:
-              name: "Bedtime Routine"
-              message: >-
-                Goodnight delivered. Countdown: {{ final_countdown }} minutes.
-                Media target: {{ bedtime_media_target_val }}.
-
-          # =================================================================
-          # COUNTDOWN TIMER
-          # =================================================================
-          - alias: "Countdown delay — lamp stays on"
-            choose:
-              - alias: "Bed confirmed — configurable short/no countdown"
-                conditions:
-                  - condition: template
-                    value_template: "{{ trigger.id == 'bed_confirmed' }}"
-                sequence:
-                  - choose:
-                      - alias: "Bed countdown > 0 — short delay"
-                        conditions:
-                          - condition: template
-                            value_template: "{{ bed_countdown_val | int(0) > 0 }}"
-                        sequence:
-                          - alias: "Bed sensor countdown"
-                            delay:
-                              minutes: "{{ bed_countdown_val | int(0) }}"
-                          - alias: "Log bed sensor countdown"
-                            continue_on_error: true
-                            action: logbook.log
-                            data:
-                              name: "Bedtime Routine"
-                              message: >-
-                                Bed sensor countdown complete ({{ bed_countdown_val }} min).
-                    default:
-                      - alias: "Bed countdown = 0 — skip delay, lamp off immediately"
-                        continue_on_error: true
-                        action: logbook.log
-                        data:
-                          name: "Bedtime Routine"
-                          message: "Bed sensor countdown set to 0 — skipping delay."
-              - alias: "Test mode — compressed countdown (10 seconds)"
-                conditions:
-                  - condition: template
-                    value_template: "{{ test_mode_val | default(false) | bool }}"
-                sequence:
-                  - alias: "Test mode compressed countdown"
-                    delay:
-                      seconds: 10
-                  - alias: "Log test mode countdown"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine [TEST]"
-                      message: >-
-                        TEST MODE: Countdown compressed to 10s
-                        (would be {{ final_countdown | int(4) }} min).
-            default:
-              - alias: "Normal countdown"
-                delay:
-                  minutes: "{{ final_countdown | int(4) }}"
-
-          # =================================================================
-          # BATHROOM GUARD — pause lamp-off if bathroom occupied
-          # =================================================================
-          - alias: "Bathroom guard — pause if occupied"
-            choose:
-              - alias: "Bed confirmed — skip bathroom guard (user already in bed)"
-                conditions:
-                  - condition: template
-                    value_template: "{{ trigger.id == 'bed_confirmed' }}"
-                sequence:
-                  - alias: "Log bathroom guard skipped (bed sensor)"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine"
-                      message: "Bathroom guard skipped — bed sensor confirmed, user already in bed."
-              - alias: "Test mode — skip bathroom guard"
-                conditions:
-                  - condition: template
-                    value_template: "{{ test_mode_val | default(false) | bool }}"
-                sequence:
-                  - alias: "Test mode: log bathroom guard skipped"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine [TEST]"
-                      message: "TEST MODE: Bathroom guard skipped."
-              - alias: "Bathroom sensor is configured"
-                conditions:
-                  - condition: template
-                    value_template: "{{ bathroom_sensor_val | default('') | length > 0 }}"
-                sequence:
-                  - alias: "Check if bathroom is currently occupied"
-                    choose:
-                      - alias: "Bathroom is occupied — wait for clear + grace"
-                        conditions:
-                          - condition: template
-                            value_template: "{{ states(bathroom_sensor_val) | default('off') in ['on', 'detected', 'home'] }}"
-                        sequence:
-                          - alias: "Log bathroom guard activated"
-                            continue_on_error: true
-                            action: logbook.log
-                            data:
-                              name: "Bedtime Routine"
-                              message: >-
-                                Bathroom occupied — pausing lamp-off.
-                                Sensor: {{ bathroom_sensor_val }}.
-                                Max timeout: {{ bathroom_max_timeout_val | int(15) }} min.
-
-                          - alias: "Wait for bathroom to clear (with timeout)"
-                            wait_for_trigger:
-                              - trigger: state
-                                entity_id: !input bathroom_sensor
-                                to:
-                                  - "off"
-                                  - "not_detected"
-                                  - "not_home"
-                            timeout:
-                              minutes: "{{ bathroom_max_timeout_val | int(15) }}"
-                            continue_on_error: true
-
-                          - alias: "Bathroom grace period"
-                            delay:
-                              seconds: "{{ bathroom_grace_val | int(60) }}"
-
-                          - alias: "Log bathroom guard released"
-                            continue_on_error: true
-                            action: logbook.log
-                            data:
-                              name: "Bedtime Routine"
-                              message: >-
-                                Bathroom cleared (or timeout hit).
-                                Proceeding to lamp off.
-
-          # =================================================================
-          # LAMP OFF
-          # =================================================================
-          - alias: "Turn off living room lamp"
-            choose:
-              - alias: "Test mode — skip lamp off"
-                conditions:
-                  - condition: template
-                    value_template: "{{ test_mode_val | default(false) | bool }}"
-                sequence:
-                  - alias: "Test mode: log lamp off skipped"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine [TEST]"
-                      message: >-
-                        TEST MODE: Would turn off lamp
-                        {{ living_room_lamp_val | default('not configured') }}.
-                        Skipping.
-              - alias: "Lamp entity is configured"
-                conditions:
-                  - condition: template
-                    value_template: "{{ living_room_lamp_val | default('') | length > 0 }}"
-                sequence:
-                  - action: homeassistant.turn_off
-                    target:
-                      entity_id: "{{ living_room_lamp_val }}"
-                    continue_on_error: true
-
-                  - alias: "Log lamp off"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine"
-                      message: "Lamp off: {{ living_room_lamp_val }}."
-
-          # =================================================================
-          # TV SLEEP TIMER (Kodi mode only)
-          # =================================================================
-          - alias: "TV sleep timer — Kodi mode"
-            choose:
-              - alias: "Test mode — skip TV sleep timer"
-                conditions:
-                  - condition: template
-                    value_template: "{{ test_mode_val | default(false) | bool }}"
-                sequence:
-                  - alias: "Test mode: log TV sleep timer skipped"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine [TEST]"
-                      message: >-
-                        TEST MODE: Would set TV sleep timer for
-                        {{ tv_sleep_timer_val | int(0) }} min. Skipping.
-              - alias: "Kodi target + sleep timer configured"
-                conditions:
-                  - condition: template
-                    value_template: >-
-                      {{ is_kodi_target
-                         and tv_sleep_timer_val | int(0) > 0 }}
-                sequence:
-                  - alias: "Log TV sleep timer started"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine"
-                      message: >-
-                        TV sleep timer set: {{ tv_sleep_timer_val }} minutes.
-
-                  - alias: "Wait for sleep timer duration"
-                    delay:
-                      minutes: "{{ tv_sleep_timer_val | int(0) }}"
-
-                  - alias: "TV off — CEC/software after sleep timer"
-                    choose:
-                      - conditions:
-                          - condition: template
-                            value_template: "{{ tv_entity_val | default('') | length > 0 }}"
-                        sequence:
-                          - action: media_player.turn_off
-                            target:
-                              entity_id: "{{ tv_entity_val }}"
-                            continue_on_error: true
-                  - alias: "TV off — script after sleep timer"
-                    choose:
-                      - conditions:
-                          - condition: template
-                            value_template: "{{ tv_off_script_val | default('') | length > 0 }}"
-                        sequence:
-                          - action: script.turn_on
-                            target:
-                              entity_id: "{{ tv_off_script_val }}"
-                            continue_on_error: true
-
-                  - alias: "TV off — IR remote after sleep timer"
-                    choose:
-                      - conditions:
-                          - condition: template
-                            value_template: "{{ tv_ir_remote_val | default('') | length > 0 }}"
-                        sequence:
-                          - action: remote.send_command
-                            target:
-                              entity_id: "{{ tv_ir_remote_val }}"
-                            data:
-                              command: "{{ tv_ir_command_val | default('Power') }}"
-                              device: "{{ tv_ir_device_val | default('') }}"
-                            continue_on_error: true
-
-                  - alias: "Stop Kodi playback after sleep timer"
-                    choose:
-                      - conditions:
-                          - condition: template
-                            value_template: "{{ kodi_entity_val | default('') | length > 0 }}"
-                        sequence:
-                          - action: kodi.call_method
-                            target:
-                              entity_id: "{{ kodi_entity_val }}"
-                            data:
-                              method: Player.Stop
-                              playerid: 1
-                            continue_on_error: true
-
-                  - alias: "Log TV sleep timer shutdown complete"
-                    continue_on_error: true
-                    action: logbook.log
-                    data:
-                      name: "Bedtime Routine"
-                      message: "TV sleep timer expired. TV and Kodi stopped."
-
-          # =================================================================
-          # MEMORY TOOL — store bedtime timestamp (⑱)
-          # =================================================================
-          - alias: "Memory tool — store bedtime.actual timestamp"
-            choose:
-              - alias: "Memory tool is enabled and entity configured"
-                conditions:
-                  - condition: template
-                    value_template: >-
-                      {{ enable_memory_val | bool(false)
-                         and memory_tool_entity_val | default('') | length > 0 }}
-                sequence:
-                  - alias: "Store bedtime.actual via voice_memory_tool"
-                    continue_on_error: true
-                    action: conversation.process
-                    data:
-                      agent_id: "{{ bedtime_conversation_agent }}"
-                      text: >-
-                        Use the memory tool to store this fact:
-                        Key: {{ memory_store_key_val | default('bedtime.actual') }}
-                        Value: {{ now().strftime('%Y-%m-%d %H:%M') }}
-                        Scope: {{ memory_scope_val | default('user') }}
-                        Tags: {{ memory_search_tags_val | default('bedtime, sleep, routine') }}
-                        {% if memory_expiration_val | default(0) | int > 0 %}
-                        Expiration: {{ memory_expiration_val }} days
-                        {% endif %}
-                        Do not speak — just store the memory silently.
-
-          # =================================================================
-          # CLEANUP — reset state, release guards, log completion
-          # =================================================================
-          - alias: "Reset temporary switches"
-            choose:
-              - alias: "Reset switches target is configured"
-                conditions:
-                  - condition: template
-                    value_template: >-
-                      {{ reset_switches_val is mapping
-                         and (reset_switches_val.get('entity_id', []) | length > 0
-                              or reset_switches_val.get('area_id', []) | length > 0
-                              or reset_switches_val.get('label_id', []) | length > 0) }}
-                sequence:
-                  - action: homeassistant.turn_off
-                    target: !input reset_switches
-                    continue_on_error: true
-
-          - alias: "Release conflict guard"
-            choose:
-              - alias: "Conflict guard entity is configured"
-                conditions:
-                  - condition: template
-                    value_template: "{{ conflict_guard_entity_val | default('') | length > 0 }}"
-                sequence:
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: "{{ conflict_guard_entity_val }}"
-                    continue_on_error: true
-
-          - alias: "Reset escalation stage to 0 (idle)"
-            continue_on_error: true
-            action: input_number.set_value
-            target:
-              entity_id: !input escalation_stage_helper
-            data:
-              value: 0
-
-          - alias: "Clear escalation session timestamp"
-            continue_on_error: true
-            action: input_datetime.set_datetime
-            target:
-              entity_id: !input escalation_session_helper
-            data:
-              datetime: "1970-01-01 00:00:00"
-
-          - alias: "Notify — bedtime routine completed"
-            choose:
-              - alias: "Notification entity is configured"
-                conditions:
-                  - condition: template
-                    value_template: "{{ notify_entity_val | default('') | length > 0 }}"
-                sequence:
-                  - action: notify.send_message
-                    target:
-                      entity_id: "{{ notify_entity_val }}"
-                    data:
-                      message: >-
-                        🛏️ Bedtime routine completed at {{ now().strftime('%H:%M') }}.
-                        Media: {{ bedtime_media_target_val }}.
-                        Countdown: {{ final_countdown | default(countdown_minutes) }} min.
-                        {% if test_mode_val | default(false) | bool %}[TEST MODE]{% endif %}
-                    continue_on_error: true
-
-          - alias: "Log bedtime routine completed"
-            continue_on_error: true
-            action: logbook.log
-            data:
-              name: "Bedtime Routine"
-              message: >-
-                ✅ Bedtime routine completed at {{ now().strftime('%H:%M') }}.
-                Media: {{ bedtime_media_target_val }}.
-                Countdown used: {{ final_countdown | default(countdown_minutes) }} min.
-                Kill switch: {{ kill_switch_entity_val | default('not configured') }}.
-                Test mode: {{ test_mode_val | default(false) }}.
-
     # =====================================================================
     # DEFAULT — no trigger matched (manual run or unknown trigger)
     # =====================================================================
@@ -3940,6 +3034,857 @@ actions:
             ⚠️ Main router: no trigger matched (trigger.id={{ trigger.id | default('null') }}).
             Manual runs are not supported — automation requires a real trigger
             (presence_on, nag_tick, scheduled_bedtime, scheduled_bedtime_weekend, or bed_confirmed).
+      - stop: "No trigger matched"
+
+
+  # =========================================================================
+  # SHARED BEDTIME ROUTINE — reached via fallthrough from proactive or
+  # scheduled branches (default branch exits via stop: before this point)
+  # =========================================================================
+  # --- TV shutdown stack (skip if Kodi target) ---
+  - alias: "TV shutdown stack (skip if Kodi target)"
+    choose:
+      - alias: "Kodi is bedtime target — keep TV on"
+        conditions:
+          - condition: template
+            value_template: "{{ is_kodi_target }}"
+        sequence: []
+    default:
+      - alias: "TV off — CEC/software"
+        choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ tv_entity_val | default('') | length > 0 }}"
+            sequence:
+              - action: media_player.turn_off
+                target:
+                  entity_id: "{{ tv_entity_val }}"
+                continue_on_error: true
+      - alias: "TV off — script"
+        choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ tv_off_script_val | default('') | length > 0 }}"
+            sequence:
+              - action: script.turn_on
+                target:
+                  entity_id: "{{ tv_off_script_val }}"
+                continue_on_error: true
+      - alias: "TV off — IR remote"
+        choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ tv_ir_remote_val | default('') | length > 0 }}"
+            sequence:
+              - action: remote.send_command
+                target:
+                  entity_id: "{{ tv_ir_remote_val }}"
+                data:
+                  command: "{{ tv_ir_command_val | default('Power') }}"
+                  device: "{{ tv_ir_device_val | default('') }}"
+                continue_on_error: true
+
+  # --- Lights off (except lamp) ---
+  - alias: "Lights off (except lamp)"
+    action: homeassistant.turn_off
+    target: !input lights_off_target
+    continue_on_error: true
+
+  # --- Stop additional media players ---
+  - alias: "Stop additional media players"
+    action: media_player.media_stop
+    target: !input media_players_stop
+    continue_on_error: true
+
+  - alias: "Log device shutdown complete"
+    action: logbook.log
+    data:
+      name: "Bedtime Routine"
+      message: >-
+        Devices shut down. Lamp stays on for countdown.
+        Media target: {{ bedtime_media_target_val }}.
+
+  # =================================================================
+  # BEDTIME MEDIA BRANCH — two-axis: target × method
+  # =================================================================
+  - alias: "Bedtime media branch"
+    choose:
+      # ─────────────────────────────────────────────────────────────
+      # TARGET: AUDIOBOOK (Music Assistant)
+      # ─────────────────────────────────────────────────────────────
+      - alias: "Target: audiobook"
+        conditions:
+          - condition: template
+            value_template: "{{ is_audiobook_target }}"
+        sequence:
+          - alias: "Audiobook method branch"
+            choose:
+              # --- Audiobook: preset mode ---
+              - alias: "Audiobook: preset (fixed URI)"
+                conditions:
+                  - condition: template
+                    value_template: "{{ audiobook_mode_val == 'preset' }}"
+                sequence:
+                  - alias: "Set audiobook volume"
+                    action: media_player.volume_set
+                    target:
+                      entity_id: "{{ audiobook_player_val }}"
+                    data:
+                      volume_level: "{{ audiobook_volume_val | float(0.25) }}"
+                    continue_on_error: true
+
+                  - alias: "Play preset audiobook via MA"
+                    action: music_assistant.play_media
+                    target:
+                      entity_id: "{{ audiobook_player_val }}"
+                    data:
+                      media_id: "{{ audiobook_preset_uri_val }}"
+                      media_type: "{{ audiobook_media_type_val | default('auto') }}"
+                      enqueue: replace
+                    continue_on_error: true
+
+                  - alias: "Buffer after audiobook play"
+                    delay:
+                      seconds: "{{ kodi_post_play_delay_val | int(3) }}"
+
+                  - alias: "Log preset audiobook started"
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine"
+                      message: >-
+                        Preset audiobook started: {{ audiobook_preset_uri_val }}.
+
+            # --- Audiobook: conversational modes (curated/freeform/both) ---
+            default:
+              - alias: "Audiobook conversational — start satellite"
+                choose:
+                  - alias: "Audiobook offer enabled"
+                    conditions:
+                      - condition: template
+                        value_template: "{{ enable_audiobook_offer_val | default(true) | bool }}"
+                    sequence:
+                      - alias: "Build audiobook selection prompt"
+                        variables:
+                          audiobook_offer_prompt: >-
+                            {% if audiobook_mode_val == 'curated' %}
+                              Offer these audiobooks: {{ curated_audiobooks_val }}.
+                              Let the user pick one.
+                            {% elif audiobook_mode_val == 'freeform' %}
+                              Suggest a bedtime audiobook from your knowledge.
+                              Something calming and suitable for sleep.
+                            {% else %}
+                              Offer these audiobooks: {{ curated_audiobooks_val }}.
+                              If the user wants something else, suggest alternatives.
+                            {% endif %}
+
+                      - alias: "Start audiobook satellite conversation"
+                        action: assist_satellite.start_conversation
+                        target:
+                          entity_id: >-
+                            {% set eid = assist_satellites_val.entity_id | default([]) %}
+                            {% if eid is string %}{{ eid }}{% else %}{{ eid | first | default('') }}{% endif %}
+                        data:
+                          start_message: "{{ audiobook_offer_prompt }}"
+                          extra_system_prompt: >-
+                            You are helping choose a bedtime audiobook.
+                            {{ audiobook_offer_prompt }}
+                            Use the play_bedtime_audiobook tool to start playback.
+                        response_variable: audiobook_conversation
+                        continue_on_error: true
+
+                      - alias: "Post-conversation settle delay"
+                        delay:
+                          seconds: "{{ media_settle_delay_val | int(5) }}"
+
+                      - alias: "Ensure audiobook volume after conversation"
+                        action: media_player.volume_set
+                        target:
+                          entity_id: "{{ audiobook_player_val }}"
+                        data:
+                          volume_level: "{{ audiobook_volume_val | float(0.25) }}"
+                        continue_on_error: true
+
+                      - alias: "Log audiobook conversation complete"
+                        action: logbook.log
+                        data:
+                          name: "Bedtime Routine"
+                          message: "Audiobook conversation complete. Playback started."
+
+                default:
+                  - alias: "Audiobook offer disabled — skip media"
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine"
+                      message: "Audiobook offer disabled. Skipping media playback."
+
+      # ─────────────────────────────────────────────────────────────
+      # TARGET: KODI
+      # ─────────────────────────────────────────────────────────────
+      - alias: "Target: Kodi"
+        conditions:
+          - condition: template
+            value_template: "{{ is_kodi_target }}"
+        sequence:
+          # --- Sleepy TV check ---
+          - alias: "Check if bedtime content already playing (sleepy TV)"
+            variables:
+              sleepy_tv_active: "{{ is_sleepy_tv | default(false) | bool }}"
+
+          - alias: "Kodi method branch"
+            choose:
+              # --- Kodi: preset mode ---
+              - alias: "Kodi: preset (fixed content)"
+                conditions:
+                  - condition: template
+                    value_template: "{{ bedtime_media_mode_val == 'preset' }}"
+                sequence:
+                  - alias: "Kodi preset — handle sleepy TV"
+                    choose:
+                      - alias: "Sleepy TV already playing — adjust volume only"
+                        conditions:
+                          - condition: template
+                            value_template: "{{ sleepy_tv_active }}"
+                        sequence:
+                          - alias: "Set Kodi volume (sleepy TV already on)"
+                            action: media_player.volume_set
+                            target:
+                              entity_id: "{{ kodi_entity_val }}"
+                            data:
+                              volume_level: "{{ kodi_volume_val | float(0.15) }}"
+                            continue_on_error: true
+
+                          - alias: "Log sleepy TV detected"
+                            action: logbook.log
+                            data:
+                              name: "Bedtime Routine"
+                              message: >-
+                                Sleepy TV already playing. Volume adjusted,
+                                skipping content switch.
+
+                    default:
+                      - alias: "Set Kodi volume"
+                        action: media_player.volume_set
+                        target:
+                          entity_id: "{{ kodi_entity_val }}"
+                        data:
+                          volume_level: "{{ kodi_volume_val | float(0.15) }}"
+                        continue_on_error: true
+
+                      - alias: "Play preset Kodi content"
+                        action: media_player.play_media
+                        target:
+                          entity_id: "{{ kodi_entity_val }}"
+                        data:
+                          media_content_id: "{{ kodi_preset_val }}"
+                          media_content_type: "{{ kodi_content_type_val | default('video') }}"
+                        continue_on_error: true
+
+                      - alias: "Buffer after Kodi play"
+                        delay:
+                          seconds: "{{ kodi_post_play_delay_val | int(3) }}"
+
+                      - alias: "Log preset Kodi started"
+                        action: logbook.log
+                        data:
+                          name: "Bedtime Routine"
+                          message: >-
+                            Preset Kodi content started: {{ kodi_preset_val }}.
+
+            # --- Kodi: curated conversation ---
+            default:
+              - alias: "Build curated media selection prompt"
+                variables:
+                  media_prompt: >-
+                    Ask if they want bedtime content on the TV. Offer ONLY
+                    the curated options below. If they decline, say okay.
+                    If they pick one, call the play_bedtime_kodi function
+                    with content_type "favourite" and the content_id from
+                    the list. If they want none, that's fine.
+
+              - alias: "Pause before media conversation"
+                delay:
+                  seconds: 3
+
+              - alias: "Start media selection conversation — agent uses tool script for playback"
+                continue_on_error: true
+                action: assist_satellite.start_conversation
+                target:
+                  entity_id: >-
+                    {% set eid = assist_satellites_val.entity_id | default([]) %}
+                    {% if eid is string %}{{ eid }}{% else %}{{ eid | first | default('') }}{% endif %}
+                data:
+                  preannounce: true
+                  start_message: >-
+                    Want something on the TV for bedtime? I've got your
+                    usual options ready.
+                  extra_system_prompt: >-
+                    {{ media_prompt }}
+
+                    Kodi entity: {{ kodi_entity_val }}
+                    Kodi is currently playing: {{ kodi_now_playing }}.
+
+                    === CURATED CONTENT ===
+                    {{ kodi_curated_val | default('No curated content configured.') }}
+
+              - alias: "Post-conversation settle delay"
+                delay:
+                  seconds: "{{ media_settle_delay_val | int(30) }}"
+
+              - alias: "Log media conversation completed"
+                continue_on_error: true
+                action: logbook.log
+                data:
+                  name: "Bedtime Routine"
+                  message: >-
+                    Kodi media conversation settled. Now playing: {{ kodi_now_playing }}.
+
+
+    # --- No media target — skip playback entirely ---
+    default:
+      - alias: "No media target configured — skip playback"
+        action: logbook.log
+        data:
+          name: "Bedtime Routine"
+          message: "Media target is 'none'. Skipping media playback."
+        continue_on_error: true
+
+  # =================================================================
+  # SETTLING-IN TTS — optional contextual announcement
+  # =================================================================
+  - alias: "Settling-in TTS — optional contextual announcement after content starts"
+    choose:
+      - alias: "Settling-in TTS is enabled"
+        conditions:
+          - condition: template
+            value_template: "{{ enable_settling_val | bool(false) }}"
+        sequence:
+          - alias: "Select settling prompt and sensors based on media target"
+            variables:
+              settling_prompt_active: >-
+                {% if is_kodi_target | bool %}
+                  {{ settling_prompt_kodi_val | default('') }}
+                {% else %}
+                  {{ settling_prompt_audiobook_val | default('') }}
+                {% endif %}
+              settling_sensors_active: >-
+                {% if is_kodi_target | bool %}
+                  {{ settling_sensors_kodi_val | default([]) }}
+                {% else %}
+                  {{ settling_sensors_audiobook_val | default([]) }}
+                {% endif %}
+
+          - alias: "Build sensor context string for settling-in prompt"
+            variables:
+              settling_sensor_context: >-
+                {% set ns = namespace(lines=[]) %}
+                {% for eid in settling_sensors_active | default([]) %}
+                  {% set ns.lines = ns.lines + [eid ~ ': ' ~ (states(eid) | default('unknown'))] %}
+                {% endfor %}
+                {{ ns.lines | join('\n') }}
+
+          - alias: "Generate settling-in message via conversation agent"
+            continue_on_error: true
+            action: conversation.process
+            response_variable: settling_response
+            data:
+              agent_id: "{{ bedtime_conversation_agent }}"
+              text: >-
+                {{ settling_prompt_active }}
+
+                {% if is_kodi_target | bool %}
+                Kodi is currently playing: {{ kodi_now_playing }}.
+                {% endif %}
+
+                Current sensor readings:
+                {{ settling_sensor_context }}
+
+          - alias: "Extract settling-in message with defensive fallback"
+            variables:
+              settling_message: >-
+                {% if settling_response is defined
+                   and settling_response.response is defined
+                   and settling_response.response.response_type | default('') != 'error'
+                   and settling_response.response.speech is defined %}
+                  {{ settling_response.response.speech.plain.speech | default('') }}
+                {% else %}
+                {% endif %}
+
+          - alias: "Deliver settling-in TTS if agent produced a message"
+            choose:
+              - alias: "Agent returned a non-empty settling message"
+                conditions:
+                  - condition: template
+                    value_template: "{{ settling_message | default('') | trim | length > 0 }}"
+                sequence:
+                  - alias: "Speak settling-in message via TTS"
+                    choose:
+                      - alias: "TTS with voice profile (ElevenLabs)"
+                        conditions:
+                          - condition: template
+                            value_template: "{{ bedtime_voice_profile_val | default('') | length > 0 }}"
+                        sequence:
+                          - action: tts.speak
+                            target:
+                              entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
+                            data:
+                              media_player_entity_id: "{{ media_player_val }}"
+                              message: "{{ settling_message }}"
+                              options:
+                                voice: "{{ bedtime_voice_profile_val }}"
+                            continue_on_error: true
+                    default:
+                      - action: tts.speak
+                        target:
+                          entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
+                        data:
+                          media_player_entity_id: "{{ media_player_val }}"
+                          message: "{{ settling_message }}"
+                        continue_on_error: true
+
+                  - alias: "Post-TTS buffer for settling-in"
+                    delay:
+                      seconds: "{{ post_tts_delay_val | int(5) }}"
+
+  # =================================================================
+  # GOODNIGHT + COUNTDOWN
+  # =================================================================
+  - alias: "Re-read countdown helper — agent may have negotiated a different value"
+    variables:
+      final_countdown: >-
+        {% if countdown_helper_val | default('') | length > 0 %}
+          {{ states(countdown_helper_val) | int(default_countdown_val | int(4)) }}
+        {% else %}
+          {{ default_countdown_val | int(4) }}
+        {% endif %}
+
+  - alias: "Generate goodnight message via conversation agent"
+    continue_on_error: true
+    action: conversation.process
+    response_variable: goodnight_response
+    data:
+      agent_id: "{{ bedtime_conversation_agent }}"
+      text: "{{ goodnight_prompt_val | default('Say goodnight. Be warm but brief — one or two sentences max.') }}"
+
+  - alias: "Extract goodnight message with defensive fallback"
+    variables:
+      goodnight_message: >-
+        {% if goodnight_response is defined
+           and goodnight_response.response is defined
+           and goodnight_response.response.response_type | default('') != 'error'
+           and goodnight_response.response.speech is defined %}
+          {{ goodnight_response.response.speech.plain.speech
+             | default("Goodnight. Sleep well.") }}
+        {% else %}
+          Goodnight. Sleep well.
+        {% endif %}
+
+  - alias: "Deliver goodnight TTS if enabled and message exists"
+    choose:
+      - alias: "Goodnight TTS is enabled and message is non-empty"
+        conditions:
+          - condition: template
+            value_template: >-
+              {{ enable_goodnight_val | bool(false)
+                 and goodnight_message | default('') | trim | length > 0 }}
+        sequence:
+          - alias: "Speak goodnight message via TTS"
+            choose:
+              - alias: "TTS with voice profile (ElevenLabs)"
+                conditions:
+                  - condition: template
+                    value_template: "{{ bedtime_voice_profile_val | default('') | length > 0 }}"
+                sequence:
+                  - action: tts.speak
+                    target:
+                      entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
+                    data:
+                      media_player_entity_id: "{{ media_player_val }}"
+                      message: "{{ goodnight_message }}"
+                      options:
+                        voice: "{{ bedtime_voice_profile_val }}"
+                    continue_on_error: true
+            default:
+              - action: tts.speak
+                target:
+                  entity_id: "{{ bedtime_tts_engine_val | default(tts_entity_val) }}"
+                data:
+                  media_player_entity_id: "{{ media_player_val }}"
+                  message: "{{ goodnight_message }}"
+                continue_on_error: true
+
+          - alias: "Post-TTS buffer for goodnight"
+            delay:
+              seconds: "{{ post_tts_delay_val | int(5) }}"
+
+  - alias: "Log goodnight delivered — countdown begins"
+    continue_on_error: true
+    action: logbook.log
+    data:
+      name: "Bedtime Routine"
+      message: >-
+        Goodnight delivered. Countdown: {{ final_countdown }} minutes.
+        Media target: {{ bedtime_media_target_val }}.
+
+  # =================================================================
+  # COUNTDOWN TIMER
+  # =================================================================
+  - alias: "Countdown delay — lamp stays on"
+    choose:
+      - alias: "Bed confirmed — configurable short/no countdown"
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'bed_confirmed' }}"
+        sequence:
+          - choose:
+              - alias: "Bed countdown > 0 — short delay"
+                conditions:
+                  - condition: template
+                    value_template: "{{ bed_countdown_val | int(0) > 0 }}"
+                sequence:
+                  - alias: "Bed sensor countdown"
+                    delay:
+                      minutes: "{{ bed_countdown_val | int(0) }}"
+                  - alias: "Log bed sensor countdown"
+                    continue_on_error: true
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine"
+                      message: >-
+                        Bed sensor countdown complete ({{ bed_countdown_val }} min).
+            default:
+              - alias: "Bed countdown = 0 — skip delay, lamp off immediately"
+                continue_on_error: true
+                action: logbook.log
+                data:
+                  name: "Bedtime Routine"
+                  message: "Bed sensor countdown set to 0 — skipping delay."
+      - alias: "Test mode — compressed countdown (10 seconds)"
+        conditions:
+          - condition: template
+            value_template: "{{ test_mode_val | default(false) | bool }}"
+        sequence:
+          - alias: "Test mode compressed countdown"
+            delay:
+              seconds: 10
+          - alias: "Log test mode countdown"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine [TEST]"
+              message: >-
+                TEST MODE: Countdown compressed to 10s
+                (would be {{ final_countdown | int(4) }} min).
+    default:
+      - alias: "Normal countdown"
+        delay:
+          minutes: "{{ final_countdown | int(4) }}"
+
+  # =================================================================
+  # BATHROOM GUARD — pause lamp-off if bathroom occupied
+  # =================================================================
+  - alias: "Bathroom guard — pause if occupied"
+    choose:
+      - alias: "Bed confirmed — skip bathroom guard (user already in bed)"
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'bed_confirmed' }}"
+        sequence:
+          - alias: "Log bathroom guard skipped (bed sensor)"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine"
+              message: "Bathroom guard skipped — bed sensor confirmed, user already in bed."
+      - alias: "Test mode — skip bathroom guard"
+        conditions:
+          - condition: template
+            value_template: "{{ test_mode_val | default(false) | bool }}"
+        sequence:
+          - alias: "Test mode: log bathroom guard skipped"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine [TEST]"
+              message: "TEST MODE: Bathroom guard skipped."
+      - alias: "Bathroom sensor is configured"
+        conditions:
+          - condition: template
+            value_template: "{{ bathroom_sensor_val | default('') | length > 0 }}"
+        sequence:
+          - alias: "Check if bathroom is currently occupied"
+            choose:
+              - alias: "Bathroom is occupied — wait for clear + grace"
+                conditions:
+                  - condition: template
+                    value_template: "{{ states(bathroom_sensor_val) | default('off') in ['on', 'detected', 'home'] }}"
+                sequence:
+                  - alias: "Log bathroom guard activated"
+                    continue_on_error: true
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine"
+                      message: >-
+                        Bathroom occupied — pausing lamp-off.
+                        Sensor: {{ bathroom_sensor_val }}.
+                        Max timeout: {{ bathroom_max_timeout_val | int(15) }} min.
+
+                  - alias: "Wait for bathroom to clear (with timeout)"
+                    wait_for_trigger:
+                      - trigger: state
+                        entity_id: !input bathroom_sensor
+                        to:
+                          - "off"
+                          - "not_detected"
+                          - "not_home"
+                    timeout:
+                      minutes: "{{ bathroom_max_timeout_val | int(15) }}"
+                    continue_on_error: true
+
+                  - alias: "Bathroom grace period"
+                    delay:
+                      seconds: "{{ bathroom_grace_val | int(60) }}"
+
+                  - alias: "Log bathroom guard released"
+                    continue_on_error: true
+                    action: logbook.log
+                    data:
+                      name: "Bedtime Routine"
+                      message: >-
+                        Bathroom cleared (or timeout hit).
+                        Proceeding to lamp off.
+
+  # =================================================================
+  # LAMP OFF
+  # =================================================================
+  - alias: "Turn off living room lamp"
+    choose:
+      - alias: "Test mode — skip lamp off"
+        conditions:
+          - condition: template
+            value_template: "{{ test_mode_val | default(false) | bool }}"
+        sequence:
+          - alias: "Test mode: log lamp off skipped"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine [TEST]"
+              message: >-
+                TEST MODE: Would turn off lamp
+                {{ living_room_lamp_val | default('not configured') }}.
+                Skipping.
+      - alias: "Lamp entity is configured"
+        conditions:
+          - condition: template
+            value_template: "{{ living_room_lamp_val | default('') | length > 0 }}"
+        sequence:
+          - action: homeassistant.turn_off
+            target:
+              entity_id: "{{ living_room_lamp_val }}"
+            continue_on_error: true
+
+          - alias: "Log lamp off"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine"
+              message: "Lamp off: {{ living_room_lamp_val }}."
+
+  # =================================================================
+  # TV SLEEP TIMER (Kodi mode only)
+  # =================================================================
+  - alias: "TV sleep timer — Kodi mode"
+    choose:
+      - alias: "Test mode — skip TV sleep timer"
+        conditions:
+          - condition: template
+            value_template: "{{ test_mode_val | default(false) | bool }}"
+        sequence:
+          - alias: "Test mode: log TV sleep timer skipped"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine [TEST]"
+              message: >-
+                TEST MODE: Would set TV sleep timer for
+                {{ tv_sleep_timer_val | int(0) }} min. Skipping.
+      - alias: "Kodi target + sleep timer configured"
+        conditions:
+          - condition: template
+            value_template: >-
+              {{ is_kodi_target
+                 and tv_sleep_timer_val | int(0) > 0 }}
+        sequence:
+          - alias: "Log TV sleep timer started"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine"
+              message: >-
+                TV sleep timer set: {{ tv_sleep_timer_val }} minutes.
+
+          - alias: "Wait for sleep timer duration"
+            delay:
+              minutes: "{{ tv_sleep_timer_val | int(0) }}"
+
+          - alias: "TV off — CEC/software after sleep timer"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tv_entity_val | default('') | length > 0 }}"
+                sequence:
+                  - action: media_player.turn_off
+                    target:
+                      entity_id: "{{ tv_entity_val }}"
+                    continue_on_error: true
+          - alias: "TV off — script after sleep timer"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tv_off_script_val | default('') | length > 0 }}"
+                sequence:
+                  - action: script.turn_on
+                    target:
+                      entity_id: "{{ tv_off_script_val }}"
+                    continue_on_error: true
+
+          - alias: "TV off — IR remote after sleep timer"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tv_ir_remote_val | default('') | length > 0 }}"
+                sequence:
+                  - action: remote.send_command
+                    target:
+                      entity_id: "{{ tv_ir_remote_val }}"
+                    data:
+                      command: "{{ tv_ir_command_val | default('Power') }}"
+                      device: "{{ tv_ir_device_val | default('') }}"
+                    continue_on_error: true
+
+          - alias: "Stop Kodi playback after sleep timer"
+            choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ kodi_entity_val | default('') | length > 0 }}"
+                sequence:
+                  - action: kodi.call_method
+                    target:
+                      entity_id: "{{ kodi_entity_val }}"
+                    data:
+                      method: Player.Stop
+                      playerid: 1
+                    continue_on_error: true
+
+          - alias: "Log TV sleep timer shutdown complete"
+            continue_on_error: true
+            action: logbook.log
+            data:
+              name: "Bedtime Routine"
+              message: "TV sleep timer expired. TV and Kodi stopped."
+
+  # =================================================================
+  # MEMORY TOOL — store bedtime timestamp (⑱)
+  # =================================================================
+  - alias: "Memory tool — store bedtime.actual timestamp"
+    choose:
+      - alias: "Memory tool is enabled and entity configured"
+        conditions:
+          - condition: template
+            value_template: >-
+              {{ enable_memory_val | bool(false)
+                 and memory_tool_entity_val | default('') | length > 0 }}
+        sequence:
+          - alias: "Store bedtime.actual via voice_memory_tool"
+            continue_on_error: true
+            action: conversation.process
+            data:
+              agent_id: "{{ bedtime_conversation_agent }}"
+              text: >-
+                Use the memory tool to store this fact:
+                Key: {{ memory_store_key_val | default('bedtime.actual') }}
+                Value: {{ now().strftime('%Y-%m-%d %H:%M') }}
+                Scope: {{ memory_scope_val | default('user') }}
+                Tags: {{ memory_search_tags_val | default('bedtime, sleep, routine') }}
+                {% if memory_expiration_val | default(0) | int > 0 %}
+                Expiration: {{ memory_expiration_val }} days
+                {% endif %}
+                Do not speak — just store the memory silently.
+
+  # =================================================================
+  # CLEANUP — reset state, release guards, log completion
+  # =================================================================
+  - alias: "Reset temporary switches"
+    choose:
+      - alias: "Reset switches target is configured"
+        conditions:
+          - condition: template
+            value_template: >-
+              {{ reset_switches_val is mapping
+                 and (reset_switches_val.get('entity_id', []) | length > 0
+                      or reset_switches_val.get('area_id', []) | length > 0
+                      or reset_switches_val.get('label_id', []) | length > 0) }}
+        sequence:
+          - action: homeassistant.turn_off
+            target: !input reset_switches
+            continue_on_error: true
+
+  - alias: "Release conflict guard"
+    choose:
+      - alias: "Conflict guard entity is configured"
+        conditions:
+          - condition: template
+            value_template: "{{ conflict_guard_entity_val | default('') | length > 0 }}"
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: "{{ conflict_guard_entity_val }}"
+            continue_on_error: true
+
+  - alias: "Reset escalation stage to 0 (idle)"
+    continue_on_error: true
+    action: input_number.set_value
+    target:
+      entity_id: !input escalation_stage_helper
+    data:
+      value: 0
+
+  - alias: "Clear escalation session timestamp"
+    continue_on_error: true
+    action: input_datetime.set_datetime
+    target:
+      entity_id: !input escalation_session_helper
+    data:
+      datetime: "1970-01-01 00:00:00"
+
+  - alias: "Notify — bedtime routine completed"
+    choose:
+      - alias: "Notification entity is configured"
+        conditions:
+          - condition: template
+            value_template: "{{ notify_entity_val | default('') | length > 0 }}"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: "{{ notify_entity_val }}"
+            data:
+              message: >-
+                🛏️ Bedtime routine completed at {{ now().strftime('%H:%M') }}.
+                Media: {{ bedtime_media_target_val }}.
+                Countdown: {{ final_countdown | default(countdown_minutes) }} min.
+                {% if test_mode_val | default(false) | bool %}[TEST MODE]{% endif %}
+            continue_on_error: true
+
+  - alias: "Log bedtime routine completed"
+    continue_on_error: true
+    action: logbook.log
+    data:
+      name: "Bedtime Routine"
+      message: >-
+        ✅ Bedtime routine completed at {{ now().strftime('%H:%M') }}.
+        Media: {{ bedtime_media_target_val }}.
+        Countdown used: {{ final_countdown | default(countdown_minutes) }} min.
+        Kill switch: {{ kill_switch_entity_val | default('not configured') }}.
+        Test mode: {{ test_mode_val | default(false) }}.
 
 mode: single
 max_exceeded: silent
