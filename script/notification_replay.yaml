@@ -15,6 +15,8 @@ blueprint:
   description: >
     # Notification Replay
 
+    ![Notification Replay header](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification_replay-header.jpeg)
+
     Replays the last phone notification on demand — same pipeline as
     Notification Follow-Me minus the trigger, cooldown, and filtering gates.
     Resolves your current room via FP2 presence sensors, routes to the
@@ -28,6 +30,10 @@ blueprint:
       sender aliases, media detection, LLM summary, TTS, duck/restore)
       without trigger, cooldown, blocked contacts, junk patterns, quiet
       hours, DND, or ringer mode gates.
+    - AP-08 accepted: sequence block exceeds 200-line guideline (~544
+      lines including variables/comments). Flow is linear, well-aliased,
+      and mirrors Notification Follow-Me structure. Refactoring into
+      sub-scripts would add indirection without readability benefit.
 
   domain: script
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/script/notification_replay.yaml"
