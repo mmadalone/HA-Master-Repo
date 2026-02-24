@@ -13,16 +13,18 @@ blueprint:
 
     ### Recent changes
 
-    - **v3:** Bumped min_version to 2024.10.0; added default to tts_entity
+    - **v3 (2026-02-18):** Bumped min_version to 2024.10.0; added default to tts_entity
       and collapsed properties on all sections; fixed time_of_day whitespace;
       added continue_on_error to TTS speak actions
 
-    - **v2:** Fixed voice_profile crash on non-ElevenLabs engines; migrated
+    - **v2 (2026-02-15):** Fixed voice_profile crash on non-ElevenLabs engines; migrated
       to action: syntax; added collapsible sections, aliases, and descriptions
 
-    - **v1:** Initial version
+    - **v1 (2026-02-14):** Initial version
 
   domain: script
+  icon: mdi:music-note
+  source_url: https://github.com/mmadalone/HA-Master-Repo/blob/main/script/announce_music_follow_me_llm.yaml
   homeassistant:
     min_version: "2024.10.0"
 
@@ -152,7 +154,7 @@ blueprint:
             that supports conversation.process.
           default: ""
           selector:
-            conversation_agent:
+            conversation_agent: {}
 
 mode: queued
 max_exceeded: silent
@@ -265,10 +267,12 @@ sequence:
           - alias: "Pick a random message and substitute player name"
             variables:
               tts_message: >-
-                {{
-                  custom_msgs | random
-                  | replace('{player_name}', player_name)
-                }}
+                {% if custom_msgs %}
+                  {{ custom_msgs | random
+                     | replace('{player_name}', player_name) }}
+                {% else %}
+                  {{ default_msg_tpl | replace('{player_name}', player_name) }}
+                {% endif %}
 
     default:
       - alias: "Default path — use the static default message"
