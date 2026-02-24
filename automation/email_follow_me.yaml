@@ -1,5 +1,5 @@
 # =============================================================================
-# Email Follow-Me (v1.1.0)
+# Email Follow-Me (v1.2.0)
 # =============================================================================
 # When a new email arrives via IMAP, determines the user's room via FP2
 # presence sensors, routes to the nearest voice satellite, and has the
@@ -12,7 +12,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Email Follow-Me (v1.1.0)"
+  name: "Email Follow-Me (v1.2.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/email-follow-me-header.jpeg)
@@ -30,6 +30,10 @@ blueprint:
     and attachment detection with "check your inbox" fallback.
 
     ### Recent changes
+    - **v1.2.0:** Added ducking flag integration — sets a shared
+      input_boolean ON during duck cycles (main + reminder) so
+      external volume-sync automations back off. Prevents race
+      conditions with Alexa ↔ MA volume sync.
     - **v1.1.0:** Restore delay overhaul — playback poll uses 60s safety
       cap, `restore_delay` becomes post-playback grace period. Added
       unread email reminder loop with IMAP count exit detection, static
@@ -582,6 +586,21 @@ blueprint:
             entity:
               domain: input_text
 
+        ducking_flag:
+          name: Volume ducking flag (input_boolean)
+          description: >-
+            Optional but recommended. The same input_boolean used by
+            the Voice PE duck/restore and Alexa ↔ MA volume sync
+            blueprints. When provided, the flag is set ON during duck
+            cycles and OFF after restore — signaling other automations
+            to back off. Prevents race conditions where volume-sync
+            automations immediately undo the duck. Leave empty to
+            skip (not recommended if using volume sync).
+          default: ""
+          selector:
+            entity:
+              domain: input_boolean
+
     # =========================================================================
     # ⑧ UNREAD EMAIL REMINDERS
     # =========================================================================
@@ -710,6 +729,7 @@ variables:
   duck_player_entities: !input duck_player_list
   duck_vol: !input duck_volume
   duck_snapshot_entity: !input duck_snapshot_helper
+  ducking_flag_entity: !input ducking_flag
   imap_sensor_entity: !input imap_sensor
   reminder_enabled: !input enable_reminders
   reminder_interval_min: !input reminder_interval
@@ -1313,6 +1333,19 @@ actions:
         data:
           value: "{{ ducked_players | to_json }}"
 
+  - alias: "7f-flag · Set ducking flag ON (signal volume-sync to back off)"
+    if:
+      - condition: template
+        value_template: >-
+          {{ (ducking_flag_entity | default('') | string | length) > 0
+             and ducked_players | length > 0 }}
+    then:
+      - alias: "Turn ducking flag ON"
+        action: input_boolean.turn_on
+        continue_on_error: true
+        target:
+          entity_id: "{{ ducking_flag_entity }}"
+
   - alias: "7f-duck · Set ducked players to duck volume"
     if:
       - condition: template
@@ -1479,6 +1512,18 @@ actions:
               entity_id: "{{ _duck_helper }}"
             data:
               value: ""
+
+  - alias: "8c · Clear ducking flag after restore"
+    if:
+      - condition: template
+        value_template: >-
+          {{ (ducking_flag_entity | default('') | string | length) > 0 }}
+    then:
+      - alias: "Turn ducking flag OFF"
+        action: input_boolean.turn_off
+        continue_on_error: true
+        target:
+          entity_id: "{{ ducking_flag_entity }}"
 
   # ---------------------------------------------------------------------------
   # 9. Mark email as seen (optional)
@@ -1696,6 +1741,19 @@ actions:
                   {% endfor %}
                   {{ ns.result }}
 
+            - alias: "R6-flag · Set ducking flag ON for reminder"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (ducking_flag_entity | default('')
+                        | string | length) > 0
+                       and _r_ducked | length > 0 }}
+              then:
+                - action: input_boolean.turn_on
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ ducking_flag_entity }}"
+
             - alias: "R6-duck · Duck playing players"
               if:
                 - condition: template
@@ -1873,6 +1931,18 @@ actions:
                           entity_id: "{{ repeat.item.entity_id }}"
                         data:
                           volume_level: "{{ repeat.item.volume }}"
+
+            - alias: "R9c · Clear ducking flag after reminder restore"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (ducking_flag_entity | default('')
+                        | string | length) > 0 }}
+              then:
+                - action: input_boolean.turn_off
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ ducking_flag_entity }}"
 
             # --- R10: Log reminder ---
             - alias: "R10 · Log reminder delivery"
