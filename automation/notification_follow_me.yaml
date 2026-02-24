@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.5)
+# Notification Follow-Me (v3.5.1)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.5)"
+  name: "Notification Follow-Me (v3.5.1)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,12 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.5.1:** Duck snapshot guard — `_stored_snapshot` now
+      strips `unknown`/`unavailable` helper states to empty string
+      before downstream use; `ducked_players` validates JSON array
+      prefix (`[`) before `from_json` to prevent `ValueError` on
+      uninitialized or corrupt helper values. Fixes crash at step
+      7f when `duck_snapshot_helper` has not yet been written to.
     - **v3.5:** Duck restore hardening — persistent volume snapshot
       via input_text helper prevents queued-run race conditions from
       ratcheting volumes down. Poll-based restore replaces fixed
@@ -1039,7 +1045,8 @@ actions:
       _duck_helper: "{{ duck_snapshot_entity | default('') | string }}"
       _stored_snapshot: >-
         {% if _duck_helper | length > 0 %}
-          {{ states(_duck_helper) | default('') | string | trim }}
+          {% set raw = states(_duck_helper) | default('') | string | trim %}
+          {{ '' if raw in ['unknown', 'unavailable', ''] else raw }}
         {% else %}
           
         {% endif %}
@@ -1056,7 +1063,8 @@ actions:
         {% endfor %}
         {{ ns.result }}
       ducked_players: >-
-        {% if _stored_snapshot | length > 2 %}
+        {% if _stored_snapshot | length > 2
+              and _stored_snapshot[0:1] == '[' %}
           {{ _stored_snapshot | from_json | default(_fresh_snapshot) }}
         {% else %}
           {{ _fresh_snapshot }}
