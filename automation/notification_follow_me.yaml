@@ -1011,7 +1011,7 @@ actions:
   # ---------------------------------------------------------------------------
   - alias: "7d · Gate: skip TTS when phone is in silent mode"
     condition: template
-    value_template: "{{ ringer_state != 'silent' }}"
+    value_template: "{{ ringer_state != 'silent' or (dnd_entity | default('') | string | length) == 0 }}"
 
   # ---------------------------------------------------------------------------
   # 7e. Duck volume when phone is in vibrate mode
