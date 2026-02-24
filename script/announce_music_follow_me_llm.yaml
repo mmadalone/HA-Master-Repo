@@ -13,6 +13,12 @@ blueprint:
 
     ### Recent changes
 
+    - **v4 (2026-02-24):** Waterfall ctx_player resolution — prefers source
+      then target based on who has active media_title; radio detection now
+      uses media_content_type (channel/radio/tvshow) with string-match
+      fallback only when content_type is empty; removed invalid top-level
+      icon key
+
     - **v3 (2026-02-18):** Bumped min_version to 2024.10.0; added default to tts_entity
       and collapsed properties on all sections; fixed time_of_day whitespace;
       added continue_on_error to TTS speak actions
