@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.12.0)
+# Notification Follow-Me (v3.12.1)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.12.0)"
+  name: "Notification Follow-Me (v3.12.1)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,15 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.12.1:** Outgoing message gate (Issue 5 partial) —
+      New `self_names` input accepts a comma-separated list of
+      the user's own display names. Step 1b drops two categories
+      of self-generated noise: notifications with
+      `category: transport` (Signal voice notes, media controls)
+      and notifications where the sender name matches any entry
+      in the self-names list (case-insensitive). Outgoing text
+      prefix detection (Check 3) deferred — blocked on WhatsApp
+      format capture.
     - **v3.12.0:** Trigger-timestamp cooldown + zombie supersede —
       Step 9a now writes `trigger.to_state.last_changed` instead of
       `now()` to the cooldown helper, so cooldown gates compare
@@ -298,6 +307,21 @@ blueprint:
           selector:
             text:
               multiline: true
+
+        self_names:
+          name: "Your name(s) — outgoing message filter"
+          description: >-
+            Comma-separated list of names that identify YOU as the
+            sender (e.g., "Miquel Madalone,Miquel"). When the
+            notification sender matches any of these names, the
+            message is treated as outgoing and silently dropped.
+            Also drops notifications with category "transport"
+            (Signal voice notes you send). Case-insensitive.
+            Leave empty to disable outgoing message filtering.
+          default: ""
+          selector:
+            text:
+              multiline: false
 
         sender_aliases:
           name: Sender alias map
@@ -1018,6 +1042,7 @@ variables:
   fallback: !input fallback_mode
   mobile_service: !input mobile_notify_service
   blocked_contacts_list: !input blocked_contacts
+  self_names_list: !input self_names
   cooldown: !input cooldown_seconds
   last_announced_entity: !input last_announced_helper
   last_sender_entity: !input last_announced_sender_helper
@@ -1165,6 +1190,34 @@ actions:
           {%- endfor -%}
           {{ ns.matched if ns.matched | length > 0 else sender }}
         {%- endif -%}
+
+  # ---------------------------------------------------------------------------
+  # 1b. Outgoing / self-sent message gate — drop notifications you sent
+  # ---------------------------------------------------------------------------
+  - alias: "1b · Drop outgoing messages (self-sent)"
+    condition: template
+    value_template: >-
+      {%- set self_list = self_names_list
+          | default('') | string | trim -%}
+      {%- if self_list | length == 0 -%}
+        true
+      {%- else -%}
+        {%- set cat = _attrs.get('category', '')
+            | string | lower | trim -%}
+        {%- if cat == 'transport' -%}
+          false
+        {%- else -%}
+          {%- set sender = notif_sender
+              | default('') | string | lower | trim -%}
+          {%- set ns = namespace(is_self=false) -%}
+          {%- for name in self_list.split(',') -%}
+            {%- if name | trim | lower == sender -%}
+              {%- set ns.is_self = true -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ not ns.is_self }}
+        {%- endif -%}
+      {%- endif -%}
 
   # ---------------------------------------------------------------------------
   # 2. Blocked contacts filter — drop notifications from blacklisted senders
