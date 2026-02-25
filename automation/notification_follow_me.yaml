@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.11.0)
+# Notification Follow-Me (v3.12.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.11.0)"
+  name: "Notification Follow-Me (v3.12.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -2104,7 +2104,9 @@ actions:
         target:
           entity_id: "{{ last_announced_entity }}"
         data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          datetime: >-
+            {{ trigger.to_state.last_changed | as_timestamp
+               | timestamp_custom('%Y-%m-%d %H:%M:%S') }}
       - alias: "9b · Write sender to cooldown sender helper"
         if:
           - condition: template
@@ -2128,6 +2130,8 @@ actions:
       _trigger_post_time: >-
         {% set pt = _attrs.get('post_time', 0) | int(0) %}
         {{ pt }}
+      _trigger_ts: >-
+        {{ trigger.to_state.last_changed | as_timestamp }}
 
   - alias: "9d · Unread message reminder loop"
     if:
@@ -2141,6 +2145,17 @@ actions:
           while:
             - condition: template
               value_template: "{{ repeat.index <= (reminder_max | int(3)) }}"
+            - alias: "R0-supersede · Exit if newer cycle owns the helper"
+              condition: template
+              value_template: >-
+                {% set h = last_announced_entity
+                    | default('') %}
+                {% if h | length == 0 %}true
+                {% else %}
+                  {% set helper_ts = states(h)
+                      | as_timestamp | default(0) %}
+                  {{ helper_ts <= (_trigger_ts | float(0)) }}
+                {% endif %}
           sequence:
             # --- Wait the configured interval ---
             - alias: "R1 · Wait reminder interval"
@@ -2885,6 +2900,18 @@ actions:
                     {% set elapsed = (as_timestamp(now())
                         - (_rem_start_ts | float)) / 60 %}
                     {{ elapsed < (ceiling_min | int(240)) }}
+                - alias: "LT0-supersede · Exit if newer cycle owns the helper"
+                  condition: template
+                  value_template: >-
+                    {% set h = last_announced_entity
+                        | default('') %}
+                    {% if h | length == 0 %}true
+                    {% else %}
+                      {% set helper_ts = states(h)
+                          | as_timestamp | default(0) %}
+                      {{ helper_ts
+                         <= (_trigger_ts | float(0)) }}
+                    {% endif %}
               sequence:
                 # --- Wait long-tail interval ---
                 - alias: "LT1 · Wait long-tail interval"
@@ -3043,6 +3070,20 @@ actions:
                                      and elapsed
                                      < (ceiling_min
                                          | int(240)) }}
+                              - alias: "FR0-supersede · Exit if newer cycle owns the helper"
+                                condition: template
+                                value_template: >-
+                                  {% set h = last_announced_entity
+                                      | default('') %}
+                                  {% if h | length == 0 %}true
+                                  {% else %}
+                                    {% set helper_ts = states(h)
+                                        | as_timestamp
+                                        | default(0) %}
+                                    {{ helper_ts
+                                       <= (_trigger_ts
+                                           | float(0)) }}
+                                  {% endif %}
                             sequence:
                               - alias: "FR-R1 · Wait fast interval"
                                 delay:
