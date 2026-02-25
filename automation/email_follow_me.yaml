@@ -1,5 +1,5 @@
 # =============================================================================
-# Email Follow-Me (v1.2.0)
+# Email Follow-Me (v1.3.0)
 # =============================================================================
 # When a new email arrives via IMAP, determines the user's room via FP2
 # presence sensors, routes to the nearest voice satellite, and has the
@@ -12,7 +12,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Email Follow-Me (v1.2.0)"
+  name: "Email Follow-Me (v1.3.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/email-follow-me-header.jpeg)
@@ -30,6 +30,18 @@ blueprint:
     and attachment detection with "check your inbox" fallback.
 
     ### Recent changes
+    - **v1.3.0:** Agent self-awareness + playback poll race fix.
+      New optional `agent_display_name` input in §① lets the LLM
+      know its own name. Injected into the summarization prompt so
+      the agent recognizes references to itself in email content
+      (e.g., "Rick is dumb") without hardcoding any persona name.
+      Default empty — falls back to generic assistant phrasing.
+      Playback poll (step 8-wait and R9) upgraded to two-phase:
+      Phase 1 waits for the satellite to enter `playing` state
+      (5s cap), Phase 2 waits for it to leave `playing` (60s cap).
+      Fixes premature volume restore when the TTS stream hasn't
+      started buffering yet — especially noticeable with longer
+      LLM-generated email summaries.
     - **v1.2.0:** Added ducking flag integration — sets a shared
       input_boolean ON during duck cycles (main + reminder) so
       external volume-sync automations back off. Prevents race
@@ -101,6 +113,20 @@ blueprint:
           default: ""
           selector:
             conversation_agent:
+
+        agent_display_name:
+          name: Agent display name (optional)
+          description: >-
+            Optional. The name the conversation agent goes by
+            (e.g., "Rick", "Quark", "Jarvis"). Injected into the
+            LLM summarization prompt so the agent recognizes
+            references to itself in email content — no hardcoded
+            persona names needed. When empty, the prompt uses
+            generic "assistant" phrasing instead.
+          default: ""
+          selector:
+            text:
+              multiline: false
 
         email_prompt:
           name: LLM summarization prompt
@@ -716,6 +742,7 @@ variables:
   tts_announce: !input tts_announce
   tts_output_vol: !input tts_output_volume
   email_prompt: !input email_prompt
+  agent_name: !input agent_display_name
   ringer_entity: !input ringer_mode_sensor
   quiet_vol: !input quiet_volume
   restore_delay: !input tts_restore_delay
@@ -1132,6 +1159,12 @@ actions:
           text: >-
             {{ email_prompt }}
 
+            {% if (agent_name | default('') | string | trim) | length > 0 %}
+            Your name is {{ agent_name }}. If the email mentions your
+            name, refers to "the AI", "the assistant", or otherwise
+            addresses you — acknowledge it naturally in your summary.
+            {% endif %}
+
             The sender's preferred name is {{ display_sender }}. Always
             refer to them by this name exactly — do not use any other
             name found in the email.
@@ -1444,7 +1477,18 @@ actions:
               or tts_output_vol | float(0) > 0
               or ducked_players | default([]) | length > 0) }}
     then:
-      - alias: "Poll satellite state — exit when idle (60s safety cap)"
+      - alias: "Phase 1 — wait for satellite to START playing (5s cap)"
+        repeat:
+          until:
+            - condition: template
+              value_template: >-
+                {{ states(target_satellite) | default('idle')
+                   in ['playing']
+                   or repeat.index >= 5 }}
+          sequence:
+            - delay:
+                seconds: 1
+      - alias: "Phase 2 — wait for satellite to STOP playing (60s cap)"
         repeat:
           until:
             - condition: template
@@ -1883,7 +1927,19 @@ actions:
                             or _r_ducked | default([])
                                | length > 0) }}
               then:
-                - alias: "Poll satellite until idle (60s cap)"
+                - alias: "Phase 1 — wait for satellite to START playing (5s cap)"
+                  repeat:
+                    until:
+                      - condition: template
+                        value_template: >-
+                          {{ states(_r_satellite)
+                             | default('idle')
+                             in ['playing']
+                             or repeat.index >= 5 }}
+                    sequence:
+                      - delay:
+                          seconds: 1
+                - alias: "Phase 2 — wait for satellite to STOP playing (60s cap)"
                   repeat:
                     until:
                       - condition: template

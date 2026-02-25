@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.7.5)
+# Notification Follow-Me (v3.7.6)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.7.5)"
+  name: "Notification Follow-Me (v3.7.6)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,16 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.7.6:** Stale dismissal fix — R3d now compares the
+      `post_time` attribute of the removed notification against
+      the triggering notification's `post_time`. Previously,
+      the sender+package match had no temporal awareness, so a
+      dismissed notification from the same contact would
+      permanently suppress all future reminders from that
+      contact until a different sender's notification was
+      dismissed. Now only dismissals with `post_time` >= the
+      trigger's `post_time` exit the loop. Step 9c captures
+      `_trigger_post_time` for the comparison.
     - **v3.7.5:** Notification dismissal exit — new optional
       `last_removed_notification` sensor input in §⑧. The
       reminder loop now checks if the user dismissed the
@@ -1635,6 +1645,9 @@ actions:
     variables:
       _trigger_sender: "{{ notif_sender | default('') | string | lower | trim }}"
       _trigger_package: "{{ notif_package | default('') | string | lower | trim }}"
+      _trigger_post_time: >-
+        {% set pt = _attrs.get('post_time', 0) | int(0) %}
+        {{ pt }}
 
   - alias: "9d · Unread message reminder loop"
     if:
@@ -1798,8 +1811,13 @@ actions:
                   {% set rm_pkg = rm_attrs.get(
                       'package', '') | string
                       | lower | trim %}
+                  {% set rm_post = rm_attrs.get(
+                      'post_time', 0) | int(0) %}
+                  {% set trig_post = _trigger_post_time
+                      | int(0) %}
                   {{ not (rm_sender == _trigger_sender
-                          and rm_pkg == _trigger_package) }}
+                          and rm_pkg == _trigger_package
+                          and rm_post >= trig_post) }}
                 {% endif %}
 
             # --- Re-resolve presence (user may have moved rooms) ---
