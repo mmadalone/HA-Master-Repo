@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.10.2)
+# Notification Follow-Me (v3.11.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.10.2)"
+  name: "Notification Follow-Me (v3.11.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,18 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.11.0:** Duck refcount (parallel burst guard) — new optional
+      `duck_refcount_helper` input_number in §⑦. Tracks how many
+      active duck cycles are in flight across parallel runs. Only
+      the last run to finish TTS delivery restores volumes —
+      preventing burst messages from prematurely undoing the duck
+      while other announcements are still playing. Applied to
+      all four duck/restore paths: main announcement (7f→8),
+      standard reminders (R5b→R9), long-tail single_check
+      (LT6b→LT8), and full_restart (FR-duck→FR-restore).
+      Helper-aware restore resolution reads from shared snapshot
+      helpers when available, falling back to per-run snapshots.
+      Requires the duck snapshot helper to be configured.
     - **v3.10.2:** Ducking flag integration — new optional
       `ducking_flag` input_boolean in §⑦. Set ON during duck
       cycles and OFF after restore, signaling external volume-sync
@@ -777,6 +789,26 @@ blueprint:
             entity:
               domain: input_boolean
 
+        duck_refcount_helper:
+          name: Duck cycle reference counter (input_number)
+          description: >-
+            Optional but strongly recommended when mode is parallel.
+            An input_number helper that tracks how many active duck
+            cycles are in flight. Only the last run to finish its
+            TTS delivery restores the original volumes — preventing
+            burst messages from prematurely undoing the duck while
+            other announcements are still playing. Configure the
+            helper with min: 0, max: 20, step: 1, initial: 0.
+            Requires the duck snapshot helper (above) to be
+            configured — the refcount controls WHEN to restore,
+            the snapshot controls WHAT to restore. Leave empty to
+            disable (first run to finish restores immediately,
+            regardless of other active runs).
+          default: ""
+          selector:
+            entity:
+              domain: input_number
+
     # =========================================================================
     # ⑧ UNREAD MESSAGE REMINDERS
     # =========================================================================
@@ -1012,6 +1044,7 @@ variables:
   duck_vol: !input duck_volume
   duck_snapshot_entity: !input duck_snapshot_helper
   ducking_flag_entity: !input ducking_flag
+  duck_refcount_entity: !input duck_refcount_helper
   reminder_enabled: !input enable_reminders
   reminder_interval_min: !input reminder_interval
   reminder_max: !input reminder_max_repeats
@@ -1821,6 +1854,18 @@ actions:
         data:
           value: "{{ ducked_players | to_json }}"
 
+  - alias: "7f-ref · Increment duck refcount (parallel guard)"
+    if:
+      - condition: template
+        value_template: >-
+          {{ (duck_refcount_entity | default('') | string | length) > 0
+             and ducked_players | length > 0 }}
+    then:
+      - action: input_number.increment
+        continue_on_error: true
+        target:
+          entity_id: "{{ duck_refcount_entity }}"
+
   - alias: "7f-flag · Set ducking flag ON (signal volume-sync to back off)"
     if:
       - condition: template
@@ -1943,6 +1988,27 @@ actions:
                 seconds: 1
 
   # ---------------------------------------------------------------------------
+  # 8-ref. Decrement duck refcount and compute restore gate
+  # ---------------------------------------------------------------------------
+  - alias: "8-ref · Decrement duck refcount after TTS"
+    if:
+      - condition: template
+        value_template: >-
+          {{ (duck_refcount_entity | default('') | string | length) > 0
+             and ducked_players | default([]) | length > 0 }}
+    then:
+      - action: input_number.decrement
+        continue_on_error: true
+        target:
+          entity_id: "{{ duck_refcount_entity }}"
+
+  - alias: "8-ref-gate · Resolve restore permission"
+    variables:
+      _is_last_duck: >-
+        {% set rc = duck_refcount_entity | default('') | string %}
+        {{ rc | length == 0 or states(rc) | int(0) <= 0 }}
+
+  # ---------------------------------------------------------------------------
   # 8a. Restore volume after vibrate-mode announcement
   # ---------------------------------------------------------------------------
   - alias: "8a · Restore player volume after volume-adjusted TTS"
@@ -1951,8 +2017,9 @@ actions:
         conditions:
           - condition: template
             value_template: >-
-              {{ (ringer_state == 'vibrate'
-                  or tts_output_vol | float(0) > 0)
+              {{ _is_last_duck | bool(true)
+                 and (ringer_state == 'vibrate'
+                      or tts_output_vol | float(0) > 0)
                  and has_satellite }}
         sequence:
           - alias: "Restore original volume level"
@@ -1982,7 +2049,9 @@ actions:
   - alias: "8b · Restore ducked player volumes"
     if:
       - condition: template
-        value_template: "{{ ducked_players | default([]) | length > 0 }}"
+        value_template: >-
+          {{ _is_last_duck | bool(true)
+             and ducked_players | default([]) | length > 0 }}
     then:
       - alias: "Restore each ducked player"
         repeat:
@@ -2012,7 +2081,8 @@ actions:
     if:
       - condition: template
         value_template: >-
-          {{ (ducking_flag_entity | default('') | string | length) > 0 }}
+          {{ _is_last_duck | bool(true)
+             and (ducking_flag_entity | default('') | string | length) > 0 }}
     then:
       - alias: "Turn ducking flag OFF"
         action: input_boolean.turn_off
@@ -2305,6 +2375,19 @@ actions:
                     {% endif %}
                   {% endfor %}
                   {{ ns.result }}
+
+            - alias: "R5b-ref · Increment duck refcount for reminder"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (duck_refcount_entity | default('')
+                        | string | length) > 0
+                       and _r_ducked | length > 0 }}
+              then:
+                - action: input_number.increment
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ duck_refcount_entity }}"
 
             - alias: "R5b-flag · Set ducking flag ON for reminder"
               if:
@@ -2637,12 +2720,64 @@ actions:
                       - delay:
                           seconds: 1
 
+            - alias: "R9-ref · Decrement duck refcount after reminder"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (duck_refcount_entity | default('')
+                        | string | length) > 0
+                       and _r_ducked | default([]) | length > 0 }}
+              then:
+                - action: input_number.decrement
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ duck_refcount_entity }}"
+
+            - alias: "R9-ref-gate · Resolve reminder restore permission"
+              variables:
+                _r_is_last_duck: >-
+                  {% set rc = duck_refcount_entity | default('')
+                      | string %}
+                  {{ rc | length == 0
+                     or states(rc) | int(0) <= 0 }}
+                _r_restore_sat_vol: >-
+                  {% set helper = sat_vol_snapshot_entity
+                      | default('') | string %}
+                  {% if helper | length > 0 %}
+                    {% set raw = states(helper) | default('')
+                        | string | trim %}
+                    {% if raw not in ['unknown', 'unavailable', ''] %}
+                      {{ raw | float(0.5) }}
+                    {% else %}
+                      {{ _r_saved_vol | float(0.5) }}
+                    {% endif %}
+                  {% else %}
+                    {{ _r_saved_vol | float(0.5) }}
+                  {% endif %}
+                _r_restore_players: >-
+                  {% set helper = duck_snapshot_entity
+                      | default('') | string %}
+                  {% if helper | length > 0 %}
+                    {% set raw = states(helper) | default('')
+                        | string | trim %}
+                    {% if raw not in ['unknown', 'unavailable', '']
+                          and raw[0:1] == '[' %}
+                      {{ raw | from_json
+                         | default(_r_ducked | default([])) }}
+                    {% else %}
+                      {{ _r_ducked | default([]) }}
+                    {% endif %}
+                  {% else %}
+                    {{ _r_ducked | default([]) }}
+                  {% endif %}
+
             - alias: "R9a · Restore reminder volume"
               if:
                 - condition: template
                   value_template: >-
-                    {{ (_r_ringer == 'vibrate'
-                        or tts_output_vol | float(0) > 0)
+                    {{ _r_is_last_duck | bool(true)
+                       and (_r_ringer == 'vibrate'
+                            or tts_output_vol | float(0) > 0)
                        and _r_has_satellite }}
               then:
                 - action: media_player.volume_set
@@ -2650,16 +2785,18 @@ actions:
                   target:
                     entity_id: "{{ _r_satellite }}"
                   data:
-                    volume_level: "{{ _r_saved_vol }}"
+                    volume_level: "{{ _r_restore_sat_vol }}"
 
             - alias: "R9b · Restore ducked players after reminder"
               if:
                 - condition: template
                   value_template: >-
-                    {{ _r_ducked | default([]) | length > 0 }}
+                    {{ _r_is_last_duck | bool(true)
+                       and _r_restore_players | default([])
+                          | length > 0 }}
               then:
                 - repeat:
-                    for_each: "{{ _r_ducked }}"
+                    for_each: "{{ _r_restore_players }}"
                     sequence:
                       - action: media_player.volume_set
                         continue_on_error: true
@@ -2672,13 +2809,45 @@ actions:
               if:
                 - condition: template
                   value_template: >-
-                    {{ (ducking_flag_entity | default('')
-                        | string | length) > 0 }}
+                    {{ _r_is_last_duck | bool(true)
+                       and (ducking_flag_entity | default('')
+                            | string | length) > 0 }}
               then:
                 - action: input_boolean.turn_off
                   continue_on_error: true
                   target:
                     entity_id: "{{ ducking_flag_entity }}"
+
+            - alias: "R9d · Clear snapshot helpers (last duck cleanup)"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ _r_is_last_duck | bool(true) }}
+              then:
+                - if:
+                    - condition: template
+                      value_template: >-
+                        {{ (sat_vol_snapshot_entity | default('')
+                            | string | length) > 0 }}
+                  then:
+                    - action: input_text.set_value
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ sat_vol_snapshot_entity }}"
+                      data:
+                        value: ""
+                - if:
+                    - condition: template
+                      value_template: >-
+                        {{ (duck_snapshot_entity | default('')
+                            | string | length) > 0 }}
+                  then:
+                    - action: input_text.set_value
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ duck_snapshot_entity }}"
+                      data:
+                        value: ""
 
             # --- Log reminder ---
             - alias: "R10 · Log reminder delivery"
@@ -3020,6 +3189,22 @@ actions:
                                       {% endif %}
                                     {% endfor %}
                                     {{ ns.result }}
+                              - alias: "FR-ref · Increment duck refcount"
+                                if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ (duck_refcount_entity
+                                          | default('')
+                                          | string | length) > 0
+                                         and _fr_ducked
+                                            | default([])
+                                            | length > 0 }}
+                                then:
+                                  - action: input_number.increment
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: >-
+                                        {{ duck_refcount_entity }}
                               - if:
                                   - condition: template
                                     value_template: >-
@@ -3121,12 +3306,92 @@ actions:
                               - delay:
                                   seconds: >-
                                     {{ restore_delay | int(8) }}
+                              - alias: "FR-deref · Decrement refcount"
+                                if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ (duck_refcount_entity
+                                          | default('')
+                                          | string | length) > 0
+                                         and _fr_ducked
+                                            | default([])
+                                            | length > 0 }}
+                                then:
+                                  - action: input_number.decrement
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: >-
+                                        {{ duck_refcount_entity }}
+                              - alias: "FR-gate · Resolve restore permission"
+                                variables:
+                                  _fr_is_last_duck: >-
+                                    {% set rc =
+                                        duck_refcount_entity
+                                        | default('')
+                                        | string %}
+                                    {{ rc | length == 0
+                                       or states(rc)
+                                          | int(0) <= 0 }}
+                                  _fr_restore_sat_vol: >-
+                                    {% set helper =
+                                        sat_vol_snapshot_entity
+                                        | default('')
+                                        | string %}
+                                    {% if helper | length > 0 %}
+                                      {% set raw = states(helper)
+                                          | default('')
+                                          | string | trim %}
+                                      {% if raw not in
+                                            ['unknown',
+                                             'unavailable',
+                                             ''] %}
+                                        {{ raw | float(0.5) }}
+                                      {% else %}
+                                        {{ _lt_saved_vol
+                                           | float(0.5) }}
+                                      {% endif %}
+                                    {% else %}
+                                      {{ _lt_saved_vol
+                                         | float(0.5) }}
+                                    {% endif %}
+                                  _fr_restore_players: >-
+                                    {% set helper =
+                                        duck_snapshot_entity
+                                        | default('')
+                                        | string %}
+                                    {% if helper | length > 0 %}
+                                      {% set raw = states(helper)
+                                          | default('')
+                                          | string | trim %}
+                                      {% if raw not in
+                                            ['unknown',
+                                             'unavailable',
+                                             '']
+                                            and raw[0:1]
+                                                == '[' %}
+                                        {{ raw | from_json
+                                           | default(
+                                              _fr_ducked
+                                              | default([]))
+                                        }}
+                                      {% else %}
+                                        {{ _fr_ducked
+                                           | default([]) }}
+                                      {% endif %}
+                                    {% else %}
+                                      {{ _fr_ducked
+                                         | default([]) }}
+                                    {% endif %}
                               - if:
                                   - condition: template
                                     value_template: >-
-                                      {{ _lt_ringer == 'vibrate'
-                                         or tts_output_vol
-                                            | float(0) > 0 }}
+                                      {{ _fr_is_last_duck
+                                         | bool(true)
+                                         and (_lt_ringer
+                                              == 'vibrate'
+                                              or tts_output_vol
+                                                 | float(0) > 0)
+                                      }}
                                 then:
                                   - action: media_player.volume_set
                                     continue_on_error: true
@@ -3135,16 +3400,19 @@ actions:
                                         {{ _lt_satellite }}
                                     data:
                                       volume_level: >-
-                                        {{ _lt_saved_vol }}
+                                        {{ _fr_restore_sat_vol }}
                               - if:
                                   - condition: template
                                     value_template: >-
-                                      {{ _fr_ducked | default([])
-                                         | length > 0 }}
+                                      {{ _fr_is_last_duck
+                                         | bool(true)
+                                         and _fr_restore_players
+                                            | default([])
+                                            | length > 0 }}
                                 then:
                                   - repeat:
                                       for_each: >-
-                                        {{ _fr_ducked }}
+                                        {{ _fr_restore_players }}
                                       sequence:
                                         - action: media_player.volume_set
                                           continue_on_error: true
@@ -3157,15 +3425,55 @@ actions:
                               - if:
                                   - condition: template
                                     value_template: >-
-                                      {{ (ducking_flag_entity
-                                          | default('')
-                                          | string | length) > 0 }}
+                                      {{ _fr_is_last_duck
+                                         | bool(true)
+                                         and (ducking_flag_entity
+                                              | default('')
+                                              | string
+                                              | length) > 0 }}
                                 then:
                                   - action: input_boolean.turn_off
                                     continue_on_error: true
                                     target:
                                       entity_id: >-
                                         {{ ducking_flag_entity }}
+                              - alias: "FR-cleanup · Clear helpers (last duck)"
+                                if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ _fr_is_last_duck
+                                         | bool(true) }}
+                                then:
+                                  - if:
+                                      - condition: template
+                                        value_template: >-
+                                          {{ (sat_vol_snapshot_entity
+                                              | default('')
+                                              | string
+                                              | length) > 0 }}
+                                    then:
+                                      - action: input_text.set_value
+                                        continue_on_error: true
+                                        target:
+                                          entity_id: >-
+                                            {{ sat_vol_snapshot_entity }}
+                                        data:
+                                          value: ""
+                                  - if:
+                                      - condition: template
+                                        value_template: >-
+                                          {{ (duck_snapshot_entity
+                                              | default('')
+                                              | string
+                                              | length) > 0 }}
+                                    then:
+                                      - action: input_text.set_value
+                                        continue_on_error: true
+                                        target:
+                                          entity_id: >-
+                                            {{ duck_snapshot_entity }}
+                                        data:
+                                          value: ""
                               - action: system_log.write
                                 continue_on_error: true
                                 data:
@@ -3260,6 +3568,20 @@ actions:
                             {% endif %}
                           {% endfor %}
                           {{ ns.result }}
+                    - alias: "LT6b-ref · Increment duck refcount"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ (duck_refcount_entity | default('')
+                                | string | length) > 0
+                               and _lt_ducked | default([])
+                                  | length > 0 }}
+                      then:
+                        - action: input_number.increment
+                          continue_on_error: true
+                          target:
+                            entity_id: >-
+                              {{ duck_refcount_entity }}
                     - alias: "LT6b-flag · Set ducking flag ON"
                       if:
                         - condition: template
@@ -3412,33 +3734,95 @@ actions:
                             sequence:
                               - delay:
                                   seconds: 1
+                    - alias: "LT8-ref · Decrement duck refcount"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ (duck_refcount_entity | default('')
+                                | string | length) > 0
+                               and _lt_ducked | default([])
+                                  | length > 0 }}
+                      then:
+                        - action: input_number.decrement
+                          continue_on_error: true
+                          target:
+                            entity_id: >-
+                              {{ duck_refcount_entity }}
+                    - alias: "LT8-gate · Resolve restore permission"
+                      variables:
+                        _lt_is_last_duck: >-
+                          {% set rc = duck_refcount_entity
+                              | default('') | string %}
+                          {{ rc | length == 0
+                             or states(rc) | int(0) <= 0 }}
+                        _lt_restore_sat_vol: >-
+                          {% set helper = sat_vol_snapshot_entity
+                              | default('') | string %}
+                          {% if helper | length > 0 %}
+                            {% set raw = states(helper)
+                                | default('')
+                                | string | trim %}
+                            {% if raw not in
+                                  ['unknown',
+                                   'unavailable', ''] %}
+                              {{ raw | float(0.5) }}
+                            {% else %}
+                              {{ _lt_saved_vol
+                                 | float(0.5) }}
+                            {% endif %}
+                          {% else %}
+                            {{ _lt_saved_vol | float(0.5) }}
+                          {% endif %}
+                        _lt_restore_players: >-
+                          {% set helper = duck_snapshot_entity
+                              | default('') | string %}
+                          {% if helper | length > 0 %}
+                            {% set raw = states(helper)
+                                | default('')
+                                | string | trim %}
+                            {% if raw not in
+                                  ['unknown',
+                                   'unavailable', '']
+                                  and raw[0:1] == '[' %}
+                              {{ raw | from_json
+                                 | default(_lt_ducked
+                                    | default([])) }}
+                            {% else %}
+                              {{ _lt_ducked | default([]) }}
+                            {% endif %}
+                          {% else %}
+                            {{ _lt_ducked | default([]) }}
+                          {% endif %}
                     - alias: "LT8a · Restore volume"
                       if:
                         - condition: template
                           value_template: >-
-                            {{ (_lt_ringer == 'vibrate'
-                                or tts_output_vol
-                                   | float(0) > 0)
+                            {{ _lt_is_last_duck | bool(true)
+                               and (_lt_ringer == 'vibrate'
+                                    or tts_output_vol
+                                       | float(0) > 0)
                                and _lt_has_sat
                                    | bool(false) }}
                       then:
                         - action: media_player.volume_set
                           continue_on_error: true
                           target:
-                            entity_id: >-
-                              {{ _lt_satellite }}
+                            entity_id: "{{ _lt_satellite }}"
                           data:
                             volume_level: >-
-                              {{ _lt_saved_vol }}
+                              {{ _lt_restore_sat_vol }}
                     - alias: "LT8b · Restore ducked players"
                       if:
                         - condition: template
                           value_template: >-
-                            {{ _lt_ducked | default([])
-                               | length > 0 }}
+                            {{ _lt_is_last_duck | bool(true)
+                               and _lt_restore_players
+                                  | default([])
+                                  | length > 0 }}
                       then:
                         - repeat:
-                            for_each: "{{ _lt_ducked }}"
+                            for_each: >-
+                              {{ _lt_restore_players }}
                             sequence:
                               - action: media_player.volume_set
                                 continue_on_error: true
@@ -3452,13 +3836,49 @@ actions:
                       if:
                         - condition: template
                           value_template: >-
-                            {{ (ducking_flag_entity | default('')
-                                | string | length) > 0 }}
+                            {{ _lt_is_last_duck | bool(true)
+                               and (ducking_flag_entity
+                                    | default('')
+                                    | string | length) > 0 }}
                       then:
                         - action: input_boolean.turn_off
                           continue_on_error: true
                           target:
                             entity_id: "{{ ducking_flag_entity }}"
+                    - alias: "LT8d · Clear helpers (last duck)"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ _lt_is_last_duck | bool(true) }}
+                      then:
+                        - if:
+                            - condition: template
+                              value_template: >-
+                                {{ (sat_vol_snapshot_entity
+                                    | default('')
+                                    | string | length) > 0 }}
+                          then:
+                            - action: input_text.set_value
+                              continue_on_error: true
+                              target:
+                                entity_id: >-
+                                  {{ sat_vol_snapshot_entity }}
+                              data:
+                                value: ""
+                        - if:
+                            - condition: template
+                              value_template: >-
+                                {{ (duck_snapshot_entity
+                                    | default('')
+                                    | string | length) > 0 }}
+                          then:
+                            - action: input_text.set_value
+                              continue_on_error: true
+                              target:
+                                entity_id: >-
+                                  {{ duck_snapshot_entity }}
+                              data:
+                                value: ""
                     # Log
                     - alias: "LT9 · Log long-tail reminder"
                       action: system_log.write
