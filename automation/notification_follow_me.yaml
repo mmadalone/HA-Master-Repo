@@ -29,6 +29,16 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.12.0:** Trigger-timestamp cooldown + zombie supersede —
+      Step 9a now writes `trigger.to_state.last_changed` instead of
+      `now()` to the cooldown helper, so cooldown gates compare
+      trigger timestamps rather than wall-clock time (Issue 4).
+      All three reminder loops (standard R0, long-tail LT0,
+      full-restart FR0) now include a supersede check: each
+      iteration reads the helper timestamp and self-terminates
+      if a newer cycle has written a more recent value, preventing
+      zombie loops from squatting in parallel slots and starving
+      new notifications (Issue 6).
     - **v3.11.0:** Duck refcount (parallel burst guard) — new optional
       `duck_refcount_helper` input_number in §⑦. Tracks how many
       active duck cycles are in flight across parallel runs. Only
