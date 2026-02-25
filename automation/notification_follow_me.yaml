@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.7.1)
+# Notification Follow-Me (v3.7.4)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.7.1)"
+  name: "Notification Follow-Me (v3.7.4)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,30 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.7.4:** Satellite volume race-condition fix — new optional
+      input_text helper in §⑤ stores the target satellite's original
+      volume using first-write-wins logic. When rapid-fire
+      notifications trigger parallel runs, the second run reads
+      the true pre-duck volume from the helper instead of
+      snapshotting the already-adjusted level. Cleared after
+      restore. Same pattern as the duck_snapshot_helper in §⑦.
+      Leave empty for per-run snapshots (original behavior).
+    - **v3.7.3:** Thread reply context — added "You:" prefix
+      instruction to both the initial (step 7) and reminder (R6)
+      LLM prompts. The agent now understands that lines prefixed
+      with "You:" are the recipient's own outbound replies, not
+      a third-party sender. Prevents misidentification of inline
+      reply text as person names (e.g., replying "Val" no longer
+      triggers the agent to announce a message from someone named
+      Val). Prompt-only change — no logic or input modifications.
+    - **v3.7.2:** Zombie queue prevention — switched execution mode
+      from `queued` (max 5) to `parallel` (max 10). When an external
+      API call (OpenAI conversation agent, ElevenLabs TTS) hangs
+      without returning, queued mode caused stuck runs to fill the
+      queue and block all new notifications. Parallel mode lets each
+      notification run independently — a hung run in one instance
+      cannot block others. The existing per-sender cooldown (step 3)
+      already prevents duplicate announcements.
     - **v3.7.1:** Reaction filter & smart reminder exit —
       new step 2b drops emoji reaction notifications (liked,
       loved, emphasized, reacted, tapback) before they reach
@@ -487,6 +511,24 @@ blueprint:
               step: 0.05
               mode: slider
 
+        satellite_volume_snapshot:
+          name: Satellite volume snapshot helper (optional)
+          description: >-
+            Optional. An input_text helper that stores the target
+            satellite's original volume before any TTS volume
+            adjustment. In parallel execution mode, multiple
+            notification runs can overlap — the second run may
+            snapshot the already-ducked volume instead of the
+            true original. This helper uses first-write-wins
+            logic: the first run saves the real volume, subsequent
+            runs read from it. Cleared after volume restore.
+            Leave empty to use per-run snapshots (simpler but
+            vulnerable to parallel race conditions).
+          default: ""
+          selector:
+            entity:
+              domain: input_text
+
     # =========================================================================
     # ⑥ RINGER MODE VOLUME CONTROL
     # =========================================================================
@@ -692,8 +734,8 @@ blueprint:
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
-mode: queued
-max: 5
+mode: parallel
+max: 10
 
 trace:
   stored_traces: 10
@@ -722,6 +764,7 @@ variables:
   voice_profile: !input elevenlabs_voice_profile
   tts_announce: !input tts_announce
   tts_output_vol: !input tts_output_volume
+  sat_vol_snapshot_entity: !input satellite_volume_snapshot
   notification_prompt: !input notification_prompt
   ringer_entity: !input ringer_mode_sensor
   quiet_vol: !input quiet_volume
@@ -1124,6 +1167,14 @@ actions:
             {% endif %}
             current_time: {{ now().strftime('%H:%M') }}
             --- END NOTIFICATION DATA ---
+
+            --- THREAD FORMAT CONTEXT ---
+            Lines in the message thread prefixed with "You:" are
+            messages sent BY the notification recipient (the person
+            you are speaking to) — not from the sender or any third
+            party. Do not treat the text after "You:" as a person's
+            name. These are the user's own outbound replies.
+            --- END THREAD FORMAT CONTEXT ---
             {% set petnames = user_petnames_list | default('') | string | trim %}
             {% if petnames | length > 0 %}
 
@@ -1217,13 +1268,43 @@ actions:
         {% else %}
           {{ states(ent) | default('normal') }}
         {% endif %}
+      _sat_snap_helper: "{{ sat_vol_snapshot_entity | default('') | string }}"
+      _sat_stored_vol: >-
+        {% if _sat_snap_helper | length > 0 %}
+          {% set raw = states(_sat_snap_helper) | default('') | string | trim %}
+          {{ '' if raw in ['unknown', 'unavailable', ''] else raw }}
+        {% else %}
+          
+        {% endif %}
       saved_volume: >-
-        {% if has_satellite %}
+        {% if _sat_stored_vol | length > 0 %}
+          {{ _sat_stored_vol | float(0.5) }}
+        {% elif has_satellite %}
           {{ state_attr(target_satellite, 'volume_level')
              | default(0.5) | float(0.5) }}
         {% else %}
           {{ 0.5 }}
         {% endif %}
+      _sat_snap_is_fresh: >-
+        {{ _sat_stored_vol | length == 0 }}
+
+  - alias: "7c-save · Persist satellite volume snapshot (first run only)"
+    if:
+      - condition: template
+        value_template: >-
+          {{ _sat_snap_helper | length > 0
+             and _sat_snap_is_fresh | bool(true)
+             and has_satellite
+             and (ringer_state == 'vibrate'
+                  or tts_output_vol | float(0) > 0) }}
+    then:
+      - alias: "Write original satellite volume to snapshot helper"
+        action: input_text.set_value
+        continue_on_error: true
+        target:
+          entity_id: "{{ _sat_snap_helper }}"
+        data:
+          value: "{{ saved_volume }}"
 
   # ---------------------------------------------------------------------------
   # 7d. Gate — skip TTS entirely when phone is silent
@@ -1448,6 +1529,19 @@ actions:
               entity_id: "{{ target_satellite }}"
             data:
               volume_level: "{{ saved_volume }}"
+          - alias: "Clear satellite volume snapshot helper"
+            if:
+              - condition: template
+                value_template: >-
+                  {{ _sat_snap_helper | default('') | length > 0 }}
+            then:
+              - alias: "Reset satellite snapshot helper to empty"
+                action: input_text.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ _sat_snap_helper }}"
+                data:
+                  value: ""
 
   # ---------------------------------------------------------------------------
   # 8b. Restore ducked players to original volumes
@@ -1758,6 +1852,15 @@ actions:
                   {% endif %}
                   current_time: {{ now().strftime('%H:%M') }}
                   --- END NOTIFICATION DATA ---
+
+                  --- THREAD FORMAT CONTEXT ---
+                  Lines in the message thread prefixed with "You:"
+                  are messages sent BY the notification recipient
+                  (the person you are speaking to) — not from the
+                  sender or any third party. Do not treat the text
+                  after "You:" as a person's name. These are the
+                  user's own outbound replies.
+                  --- END THREAD FORMAT CONTEXT ---
                   {% set petnames = user_petnames_list
                       | default('') | string | trim %}
                   {% if petnames | length > 0 %}
