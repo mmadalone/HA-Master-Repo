@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.7.6)
+# Notification Follow-Me (v3.7.7)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.7.6)"
+  name: "Notification Follow-Me (v3.7.7)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,13 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.7.7:** Agent display name — new optional text input
+      in §① lets you specify the persona name the conversation
+      agent goes by (e.g., "Rick", "Quark", "Jarvis"). Injected
+      into both the initial LLM prompt (step 7) and the reminder
+      prompt (R6) so the agent recognizes references to itself
+      in notification content without hardcoding persona names.
+      Leave empty for generic "assistant" phrasing.
     - **v3.7.6:** Stale dismissal fix — R3d now compares the
       `post_time` attribute of the removed notification against
       the triggering notification's `post_time`. Previously,
@@ -55,60 +62,6 @@ blueprint:
       snapshotting the already-adjusted level. Cleared after
       restore. Same pattern as the duck_snapshot_helper in §⑦.
       Leave empty for per-run snapshots (original behavior).
-    - **v3.7.3:** Thread reply context — added "You:" prefix
-      instruction to both the initial (step 7) and reminder (R6)
-      LLM prompts. The agent now understands that lines prefixed
-      with "You:" are the recipient's own outbound replies, not
-      a third-party sender. Prevents misidentification of inline
-      reply text as person names (e.g., replying "Val" no longer
-      triggers the agent to announce a message from someone named
-      Val). Prompt-only change — no logic or input modifications.
-    - **v3.7.2:** Zombie queue prevention — switched execution mode
-      from `queued` (max 5) to `parallel` (max 10). When an external
-      API call (OpenAI conversation agent, ElevenLabs TTS) hangs
-      without returning, queued mode caused stuck runs to fill the
-      queue and block all new notifications. Parallel mode lets each
-      notification run independently — a hung run in one instance
-      cannot block others. The existing per-sender cooldown (step 3)
-      already prevents duplicate announcements.
-    - **v3.7.1:** Reaction filter & smart reminder exit —
-      new step 2b drops emoji reaction notifications (liked,
-      loved, emphasized, reacted, tapback) before they reach
-      the LLM pipeline, fixing false "new message" announcements
-      when someone reacts to a message you sent. New optional
-      phone interactive sensor input in §⑧ lets the reminder
-      loop detect when you're actively using your phone and
-      exit early — no more phantom "check your phone" reminders
-      after you've already read the message.
-    - **v3.7.0:** Unread message reminders — new optional §⑧ section
-      adds a configurable reminder loop after the initial announcement.
-      When enabled, the agent re-summarizes the original message at a
-      set interval (default 5 min, max 60 min) until a different
-      conversation arrives on the sensor, max retries are hit, or any
-      gate (DND, quiet hours, toggle) deactivates. Each reminder
-      re-reads the notification sensor's LIVE attributes — so if you
-      replied inline, the LLM sees the updated thread including your
-      responses. Presence is re-resolved each iteration so
-      announcements follow you between rooms. The LLM receives
-      escalation context (reminder number and elapsed time) so the
-      agent's personality can progressively intensify. Replying to
-      a message does NOT suppress reminders — only a notification
-      from a different sender/app exits the loop.
-    - **v3.6.0:** TTS output volume slider — new optional number
-      input in §⑤ lets you set a fixed volume level (0.0–1.0)
-      for announcements. The satellite's original volume is
-      saved before playback and restored afterward. Default 0.0
-      disables the feature (existing behavior unchanged). When
-      the phone is in vibrate mode, the ringer quiet-volume
-      takes priority.
-    - **v3.5.3:** User pet names — new optional text input provides
-      the LLM with pet names that refer to the notification
-      recipient (e.g., amor, cariño, babe). Only root forms are
-      needed — the prompt instructs the LLM to recognize
-      diminutives and affectionate variations automatically
-      (amor → amorcito, guapo → guapetón). Prevents the agent
-      from misinterpreting terms of endearment as third-party
-      names. LLM path only; non-LLM routes unaffected.
 
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/notification_follow_me.yaml"
@@ -156,6 +109,20 @@ blueprint:
           default: ""
           selector:
             conversation_agent:
+
+        agent_display_name:
+          name: Agent display name (optional)
+          description: >-
+            Optional. The name the conversation agent goes by
+            (e.g., "Rick", "Quark", "Jarvis"). Injected into the
+            LLM summarization prompt so the agent recognizes
+            references to itself in notification content — no
+            hardcoded persona names needed. When empty, the prompt
+            uses generic "assistant" phrasing instead.
+          default: ""
+          selector:
+            text:
+              multiline: false
 
         notification_prompt:
           name: LLM summarization prompt
@@ -800,6 +767,7 @@ variables:
   tts_output_vol: !input tts_output_volume
   sat_vol_snapshot_entity: !input satellite_volume_snapshot
   notification_prompt: !input notification_prompt
+  agent_name: !input agent_display_name
   ringer_entity: !input ringer_mode_sensor
   quiet_vol: !input quiet_volume
   restore_delay: !input tts_restore_delay
@@ -1188,6 +1156,12 @@ actions:
           agent_id: !input conversation_agent
           text: >-
             {{ notification_prompt }}
+
+            {% if (agent_name | default('') | string | trim) | length > 0 %}
+            Your name is {{ agent_name }}. If the message mentions your
+            name, refers to "the AI", "the assistant", or otherwise
+            addresses you — acknowledge it naturally in your summary.
+            {% endif %}
 
             The sender's preferred name is {{ display_sender }}. Always
             refer to them by this name exactly — do not use any other
@@ -1885,6 +1859,12 @@ actions:
                 agent_id: !input conversation_agent
                 text: >-
                   {{ reminder_prompt_text }}
+
+                  {% if (agent_name | default('') | string | trim) | length > 0 %}
+                  Your name is {{ agent_name }}. If the message mentions your
+                  name, refers to "the AI", "the assistant", or otherwise
+                  addresses you — acknowledge it naturally in your reminder.
+                  {% endif %}
 
                   This is reminder number {{ repeat.index }} —
                   approximately {{ repeat.index

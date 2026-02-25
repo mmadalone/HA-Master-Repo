@@ -30,18 +30,23 @@ blueprint:
     and attachment detection with "check your inbox" fallback.
 
     ### Recent changes
-    - **v1.3.0:** Agent self-awareness + playback poll race fix.
-      New optional `agent_display_name` input in §① lets the LLM
-      know its own name. Injected into the summarization prompt so
-      the agent recognizes references to itself in email content
-      (e.g., "Rick is dumb") without hardcoding any persona name.
-      Default empty — falls back to generic assistant phrasing.
-      Playback poll (step 8-wait and R9) upgraded to two-phase:
-      Phase 1 waits for the satellite to enter `playing` state
-      (5s cap), Phase 2 waits for it to leave `playing` (60s cap).
-      Fixes premature volume restore when the TTS stream hasn't
-      started buffering yet — especially noticeable with longer
-      LLM-generated email summaries.
+    - **v1.3.0:** Agent self-awareness + playback poll race fix +
+      LLM-powered reminders. New optional `agent_display_name` input
+      in §① lets the LLM know its own name — injected into both the
+      initial summarization prompt and reminder prompts so the agent
+      recognizes references to itself in email content (e.g., "Rick
+      is dumb") without hardcoding any persona name. Default empty —
+      falls back to generic assistant phrasing. Playback poll (step
+      8-wait and R9) upgraded to two-phase: Phase 1 waits for the
+      satellite to enter `playing` state (5s cap), Phase 2 waits for
+      it to leave `playing` (60s cap). Fixes premature volume restore
+      when the TTS stream hasn't started buffering yet. Reminders
+      upgraded from static template to full LLM call — the agent
+      re-summarizes with escalation context (reminder number and
+      elapsed time), maintaining personality and self-awareness across
+      all reminder iterations. Static fallback preserved for LLM
+      failures. Replaces `reminder_message_template` input with
+      `reminder_prompt`.
     - **v1.2.0:** Added ducking flag integration — sets a shared
       input_boolean ON during duck cycles (main + reminder) so
       external volume-sync automations back off. Prevents race
@@ -694,15 +699,23 @@ blueprint:
               step: 1
               mode: slider
 
-        reminder_message_template:
-          name: Reminder message template
+        reminder_prompt:
+          name: Reminder LLM prompt
           description: >-
-            Static TTS message for reminders. Use {display_sender}
-            and {email_subject} as placeholders — they'll be replaced
-            with the actual sender name and subject line.
+            Instructions for how the AI should deliver reminder
+            announcements. The blueprint appends the original
+            email data plus escalation context (reminder number
+            and minutes elapsed). Use this to control the agent's
+            tone as reminders escalate. The agent receives its
+            own name (if configured) for self-awareness.
           default: >-
-            You still haven't read that email from {display_sender}
-            about {email_subject}. Check your inbox.
+            You already told the user about this email, but they
+            haven't checked their inbox yet. Remind them again —
+            re-summarize the email naturally. You can be
+            progressively more insistent with each reminder. Do
+            not read the email verbatim — paraphrase the main
+            idea. If this is reminder 3 or higher, be noticeably
+            more urgent or exasperated.
           selector:
             text:
               multiline: true
@@ -761,7 +774,7 @@ variables:
   reminder_enabled: !input enable_reminders
   reminder_interval_min: !input reminder_interval
   reminder_max: !input reminder_max_repeats
-  reminder_template: !input reminder_message_template
+  reminder_prompt_text: !input reminder_prompt
 
 # =============================================================================
 # TRIGGERS
@@ -1844,17 +1857,60 @@ actions:
                       data:
                         volume_level: "{{ tts_output_vol | float(0.5) }}"
 
-            # --- R8: Build and deliver reminder TTS ---
-            - alias: "R8 · Build reminder message from template"
+            # --- R8: Generate reminder via LLM ---
+            - alias: "R8 · Call conversation agent for reminder summary"
+              continue_on_error: true
+              action: conversation.process
+              response_variable: _r_llm_result
+              data:
+                agent_id: !input conversation_agent
+                text: >-
+                  {{ reminder_prompt_text }}
+
+                  {% if (agent_name | default('') | string | trim)
+                        | length > 0 %}
+                  Your name is {{ agent_name }}. If the email mentions
+                  your name, refers to "the AI", "the assistant", or
+                  otherwise addresses you — acknowledge it naturally.
+                  {% endif %}
+
+                  This is reminder {{ repeat.index }} of
+                  {{ reminder_max | int(3) }}
+                  ({{ (repeat.index * reminder_interval_min | int(5))
+                      | string }} minutes since the first announcement).
+
+                  The sender's preferred name is {{ display_sender }}.
+                  Always refer to them by this name exactly.
+
+                  --- BEGIN ORIGINAL EMAIL DATA ---
+                  account: {{ account_label }}
+                  sender: {{ display_sender | replace('<', '‹')
+                      | replace('>', '›') }}
+                  subject: {{ truncated_subject | replace('<', '‹')
+                      | replace('>', '›') }}
+                  body: {{ truncated_body | replace('<', '‹')
+                      | replace('>', '›') }}
+                  --- END ORIGINAL EMAIL DATA ---
+
+            - alias: "R8a · Extract reminder response with fallback"
               variables:
                 _r_message: >-
-                  {{ reminder_template
-                     | replace('{display_sender}',
-                         display_sender | default('someone'))
-                     | replace('{email_subject}',
-                         truncated_subject
-                         | default('(no subject)')) }}
-            - alias: "R8a · Deliver reminder via TTS or push"
+                  {% if _r_llm_result is defined
+                        and _r_llm_result.response is defined
+                        and _r_llm_result.response.speech is defined
+                        and _r_llm_result.response.speech.plain
+                            is defined
+                        and _r_llm_result.response.speech.plain.speech
+                            is defined %}
+                    {{ _r_llm_result.response.speech.plain.speech }}
+                  {% else %}
+                    You still haven't read that email from
+                    {{ display_sender | default('someone') }} about
+                    {{ truncated_subject | default('(no subject)') }}.
+                    Check your inbox.
+                  {% endif %}
+
+            - alias: "R8b · Deliver reminder via TTS or push"
               choose:
                 - alias: "Satellite — TTS"
                   conditions:
