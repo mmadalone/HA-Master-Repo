@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.10.1)
+# Notification Follow-Me (v3.10.2)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.10.1)"
+  name: "Notification Follow-Me (v3.10.2)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,17 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.10.2:** Ducking flag integration — new optional
+      `ducking_flag` input_boolean in §⑦. Set ON during duck
+      cycles and OFF after restore, signaling external volume-sync
+      automations (Alexa ↔ MA, Voice PE duck/restore) to back off.
+      Shared with Email Follow-Me for cross-blueprint coordination.
+      Also adds full duck/restore cycles for other media players
+      in the standard reminder loop (R5b/R9b/R9c), long-tail
+      single_check (LT6b/LT8b/LT8c), and full_restart (FR-duck)
+      paths — previously only the main announcement path ducked
+      other players, leaving reminders competing with background
+      music at full volume.
     - **v3.7.7:** Agent display name — new optional text input
       in §① lets you specify the persona name the conversation
       agent goes by (e.g., "Rick", "Quark", "Jarvis"). Injected
@@ -749,6 +760,23 @@ blueprint:
             entity:
               domain: input_text
 
+        ducking_flag:
+          name: Volume ducking flag (input_boolean)
+          description: >-
+            Optional but recommended. The same input_boolean used by
+            the Voice PE duck/restore and Alexa ↔ MA volume sync
+            blueprints. When provided, the flag is set ON during duck
+            cycles and OFF after restore — signaling other automations
+            to back off. Prevents race conditions where volume-sync
+            automations immediately undo the duck. Share the same
+            entity across Email Follow-Me and Notification Follow-Me
+            for cross-blueprint coordination. Leave empty to skip
+            (not recommended if using volume sync).
+          default: ""
+          selector:
+            entity:
+              domain: input_boolean
+
     # =========================================================================
     # ⑧ UNREAD MESSAGE REMINDERS
     # =========================================================================
@@ -983,6 +1011,7 @@ variables:
   duck_player_entities: !input duck_player_list
   duck_vol: !input duck_volume
   duck_snapshot_entity: !input duck_snapshot_helper
+  ducking_flag_entity: !input ducking_flag
   reminder_enabled: !input enable_reminders
   reminder_interval_min: !input reminder_interval
   reminder_max: !input reminder_max_repeats
@@ -1792,6 +1821,19 @@ actions:
         data:
           value: "{{ ducked_players | to_json }}"
 
+  - alias: "7f-flag · Set ducking flag ON (signal volume-sync to back off)"
+    if:
+      - condition: template
+        value_template: >-
+          {{ (ducking_flag_entity | default('') | string | length) > 0
+             and ducked_players | length > 0 }}
+    then:
+      - alias: "Turn ducking flag ON"
+        action: input_boolean.turn_on
+        continue_on_error: true
+        target:
+          entity_id: "{{ ducking_flag_entity }}"
+
   - alias: "7f-duck · Set ducked players to duck volume"
     if:
       - condition: template
@@ -1965,6 +2007,18 @@ actions:
               entity_id: "{{ _duck_helper }}"
             data:
               value: ""
+
+  - alias: "8c · Clear ducking flag after restore"
+    if:
+      - condition: template
+        value_template: >-
+          {{ (ducking_flag_entity | default('') | string | length) > 0 }}
+    then:
+      - alias: "Turn ducking flag OFF"
+        action: input_boolean.turn_off
+        continue_on_error: true
+        target:
+          entity_id: "{{ ducking_flag_entity }}"
 
   # ---------------------------------------------------------------------------
   # 9. Update cooldown timestamp
@@ -2233,6 +2287,52 @@ actions:
                 {{ _r_ringer != 'silent'
                    or (dnd_entity | default('')
                        | string | length) == 0 }}
+
+            # --- R5b: Duck other playing media for reminder ---
+            - alias: "R5b · Snapshot and duck playing media for reminder"
+              variables:
+                _r_ducked: >-
+                  {% set players = duck_player_entities
+                      | default([]) %}
+                  {% set ns = namespace(result=[]) %}
+                  {% for p in players %}
+                    {% if states(p) | default('idle')
+                          == 'playing' %}
+                      {% set vol = state_attr(p, 'volume_level')
+                          | default(0.5) | float(0.5) %}
+                      {% set ns.result = ns.result +
+                          [{'entity_id': p, 'volume': vol}] %}
+                    {% endif %}
+                  {% endfor %}
+                  {{ ns.result }}
+
+            - alias: "R5b-flag · Set ducking flag ON for reminder"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (ducking_flag_entity | default('')
+                        | string | length) > 0
+                       and _r_ducked | length > 0 }}
+              then:
+                - action: input_boolean.turn_on
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ ducking_flag_entity }}"
+
+            - alias: "R5b-duck · Duck playing players for reminder"
+              if:
+                - condition: template
+                  value_template: "{{ _r_ducked | length > 0 }}"
+              then:
+                - repeat:
+                    for_each: "{{ _r_ducked }}"
+                    sequence:
+                      - action: media_player.volume_set
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ repeat.item.entity_id }}"
+                        data:
+                          volume_level: "{{ duck_vol | float(0.10) }}"
 
             # --- Call LLM with reminder-aware prompt ---
             - alias: "R6 · Call LLM for reminder summary"
@@ -2518,7 +2618,9 @@ actions:
                     {{ _r_has_satellite
                        and (_r_ringer == 'vibrate'
                             or tts_output_vol
-                               | float(0) > 0) }}
+                               | float(0) > 0
+                            or _r_ducked | default([])
+                               | length > 0) }}
               then:
                 - alias: "Poll satellite until idle"
                   repeat:
@@ -2549,6 +2651,34 @@ actions:
                     entity_id: "{{ _r_satellite }}"
                   data:
                     volume_level: "{{ _r_saved_vol }}"
+
+            - alias: "R9b · Restore ducked players after reminder"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ _r_ducked | default([]) | length > 0 }}
+              then:
+                - repeat:
+                    for_each: "{{ _r_ducked }}"
+                    sequence:
+                      - action: media_player.volume_set
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ repeat.item.entity_id }}"
+                        data:
+                          volume_level: "{{ repeat.item.volume }}"
+
+            - alias: "R9c · Clear ducking flag after reminder restore"
+              if:
+                - condition: template
+                  value_template: >-
+                    {{ (ducking_flag_entity | default('')
+                        | string | length) > 0 }}
+              then:
+                - action: input_boolean.turn_off
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ ducking_flag_entity }}"
 
             # --- Log reminder ---
             - alias: "R10 · Log reminder delivery"
@@ -2865,6 +2995,65 @@ actions:
                                       from {{ display_sender }}.
                                       Check your phone.
                                     {% endif %}
+                              # Duck other playing media
+                              - alias: "FR-duck · Snapshot and duck"
+                                variables:
+                                  _fr_ducked: >-
+                                    {% set players =
+                                        duck_player_entities
+                                        | default([]) %}
+                                    {% set ns =
+                                        namespace(result=[]) %}
+                                    {% for p in players %}
+                                      {% if states(p)
+                                            | default('idle')
+                                            == 'playing' %}
+                                        {% set vol =
+                                            state_attr(p,
+                                            'volume_level')
+                                            | default(0.5)
+                                            | float(0.5) %}
+                                        {% set ns.result =
+                                            ns.result +
+                                            [{'entity_id': p,
+                                              'volume': vol}] %}
+                                      {% endif %}
+                                    {% endfor %}
+                                    {{ ns.result }}
+                              - if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ (ducking_flag_entity
+                                          | default('')
+                                          | string | length) > 0
+                                         and _fr_ducked
+                                            | default([])
+                                            | length > 0 }}
+                                then:
+                                  - action: input_boolean.turn_on
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: >-
+                                        {{ ducking_flag_entity }}
+                              - if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ _fr_ducked | default([])
+                                         | length > 0 }}
+                                then:
+                                  - repeat:
+                                      for_each: >-
+                                        {{ _fr_ducked }}
+                                      sequence:
+                                        - action: media_player.volume_set
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: >-
+                                              {{ repeat.item.entity_id }}
+                                          data:
+                                            volume_level: >-
+                                              {{ duck_vol
+                                                 | float(0.10) }}
                               # Volume + TTS + restore
                               - choose:
                                   - conditions:
@@ -2947,6 +3136,36 @@ actions:
                                     data:
                                       volume_level: >-
                                         {{ _lt_saved_vol }}
+                              - if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ _fr_ducked | default([])
+                                         | length > 0 }}
+                                then:
+                                  - repeat:
+                                      for_each: >-
+                                        {{ _fr_ducked }}
+                                      sequence:
+                                        - action: media_player.volume_set
+                                          continue_on_error: true
+                                          target:
+                                            entity_id: >-
+                                              {{ repeat.item.entity_id }}
+                                          data:
+                                            volume_level: >-
+                                              {{ repeat.item.volume }}
+                              - if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ (ducking_flag_entity
+                                          | default('')
+                                          | string | length) > 0 }}
+                                then:
+                                  - action: input_boolean.turn_off
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: >-
+                                        {{ ducking_flag_entity }}
                               - action: system_log.write
                                 continue_on_error: true
                                 data:
@@ -3022,6 +3241,56 @@ actions:
                             from {{ display_sender }}.
                             Check your phone.
                           {% endif %}
+                    # Duck other playing media
+                    - alias: "LT6b · Snapshot and duck for long-tail"
+                      variables:
+                        _lt_ducked: >-
+                          {% set players = duck_player_entities
+                              | default([]) %}
+                          {% set ns = namespace(result=[]) %}
+                          {% for p in players %}
+                            {% if states(p) | default('idle')
+                                  == 'playing' %}
+                              {% set vol = state_attr(p,
+                                  'volume_level')
+                                  | default(0.5) | float(0.5) %}
+                              {% set ns.result = ns.result +
+                                  [{'entity_id': p,
+                                    'volume': vol}] %}
+                            {% endif %}
+                          {% endfor %}
+                          {{ ns.result }}
+                    - alias: "LT6b-flag · Set ducking flag ON"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ (ducking_flag_entity | default('')
+                                | string | length) > 0
+                               and _lt_ducked | default([])
+                                  | length > 0 }}
+                      then:
+                        - action: input_boolean.turn_on
+                          continue_on_error: true
+                          target:
+                            entity_id: "{{ ducking_flag_entity }}"
+                    - alias: "LT6b-duck · Duck playing players"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ _lt_ducked | default([])
+                               | length > 0 }}
+                      then:
+                        - repeat:
+                            for_each: "{{ _lt_ducked }}"
+                            sequence:
+                              - action: media_player.volume_set
+                                continue_on_error: true
+                                target:
+                                  entity_id: >-
+                                    {{ repeat.item.entity_id }}
+                                data:
+                                  volume_level: >-
+                                    {{ duck_vol | float(0.10) }}
                     # Volume adjust
                     - choose:
                         - conditions:
@@ -3126,7 +3395,9 @@ actions:
                             {{ _lt_has_sat | bool(false)
                                and (_lt_ringer == 'vibrate'
                                     or tts_output_vol
-                                       | float(0) > 0) }}
+                                       | float(0) > 0
+                                    or _lt_ducked | default([])
+                                       | length > 0) }}
                       then:
                         - repeat:
                             until:
@@ -3159,6 +3430,35 @@ actions:
                           data:
                             volume_level: >-
                               {{ _lt_saved_vol }}
+                    - alias: "LT8b · Restore ducked players"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ _lt_ducked | default([])
+                               | length > 0 }}
+                      then:
+                        - repeat:
+                            for_each: "{{ _lt_ducked }}"
+                            sequence:
+                              - action: media_player.volume_set
+                                continue_on_error: true
+                                target:
+                                  entity_id: >-
+                                    {{ repeat.item.entity_id }}
+                                data:
+                                  volume_level: >-
+                                    {{ repeat.item.volume }}
+                    - alias: "LT8c · Clear ducking flag"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ (ducking_flag_entity | default('')
+                                | string | length) > 0 }}
+                      then:
+                        - action: input_boolean.turn_off
+                          continue_on_error: true
+                          target:
+                            entity_id: "{{ ducking_flag_entity }}"
                     # Log
                     - alias: "LT9 · Log long-tail reminder"
                       action: system_log.write
