@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.7.4)
+# Notification Follow-Me (v3.7.5)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.7.4)"
+  name: "Notification Follow-Me (v3.7.5)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,14 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.7.5:** Notification dismissal exit — new optional
+      `last_removed_notification` sensor input in §⑧. The
+      reminder loop now checks if the user dismissed the
+      notification matching the original sender AND app. Only
+      an exact sender + package match exits the loop —
+      dismissing unrelated notifications (Gmail, YouTube, etc.)
+      is safely ignored. Fixes reminders persisting after the
+      user has already read and dismissed the message.
     - **v3.7.4:** Satellite volume race-condition fix — new optional
       input_text helper in §⑤ stores the target satellite's original
       volume using first-write-wins logic. When rapid-fire
@@ -731,6 +739,22 @@ blueprint:
             entity:
               domain: binary_sensor
 
+        last_removed_sensor:
+          name: Last removed notification sensor (optional)
+          description: >-
+            Optional. The Android Companion App
+            `last_removed_notification` sensor. When configured,
+            the reminder loop exits if the user dismissed the
+            notification for the same sender and app that
+            triggered the current reminder cycle. Dismissals
+            from other apps or senders are ignored — only an
+            exact sender + package match exits the loop. Leave
+            empty to skip this check.
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
@@ -783,6 +807,7 @@ variables:
   reminder_max: !input reminder_max_repeats
   reminder_prompt_text: !input reminder_prompt
   phone_interactive_entity: !input phone_interactive_sensor
+  last_removed_entity: !input last_removed_sensor
 
 # =============================================================================
 # TRIGGERS
@@ -1755,6 +1780,26 @@ actions:
                   true
                 {% else %}
                   {{ states(ent) | default('off') != 'on' }}
+                {% endif %}
+
+            - alias: "R3d · Exit if user dismissed this notification"
+              condition: template
+              value_template: >-
+                {% set ent = last_removed_entity
+                    | default('') | string %}
+                {% if ent | length == 0 %}
+                  true
+                {% else %}
+                  {% set rm_attrs = states[ent].attributes
+                      | default({}) %}
+                  {% set rm_sender = rm_attrs.get(
+                      'android.title', '') | string
+                      | lower | trim %}
+                  {% set rm_pkg = rm_attrs.get(
+                      'package', '') | string
+                      | lower | trim %}
+                  {{ not (rm_sender == _trigger_sender
+                          and rm_pkg == _trigger_package) }}
                 {% endif %}
 
             # --- Re-resolve presence (user may have moved rooms) ---
