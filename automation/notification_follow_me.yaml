@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.12.1)
+# Notification Follow-Me (v3.12.2)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.12.1)"
+  name: "Notification Follow-Me (v3.12.2)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,14 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.12.2:** Satellite snapshot float-cast fix — the
+      `_sat_stored_vol` variable could resolve to a float when the
+      snapshot helper contained a numeric string (e.g. "0.46"),
+      causing `TypeError: object of type 'float' has no len()` on
+      the `saved_volume` and `_sat_snap_is_fresh` length checks.
+      Added `| string` before `| length` on both uses. Latent bug
+      exposed by stranded duck state (Issue 7) leaving stale data
+      in the snapshot helper.
     - **v3.12.1:** Outgoing message gate (Issue 5 partial) —
       New `self_names` input accepts a comma-separated list of
       the user's own display names. Step 1b drops two categories
@@ -1793,7 +1801,7 @@ actions:
           
         {% endif %}
       saved_volume: >-
-        {% if _sat_stored_vol | length > 0 %}
+        {% if _sat_stored_vol | string | length > 0 %}
           {{ _sat_stored_vol | float(0.5) }}
         {% elif has_satellite %}
           {{ state_attr(target_satellite, 'volume_level')
@@ -1802,7 +1810,7 @@ actions:
           {{ 0.5 }}
         {% endif %}
       _sat_snap_is_fresh: >-
-        {{ _sat_stored_vol | length == 0 }}
+        {{ _sat_stored_vol | string | length == 0 }}
 
   - alias: "7c-save · Persist satellite volume snapshot (first run only)"
     if:
