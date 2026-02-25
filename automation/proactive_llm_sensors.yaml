@@ -726,12 +726,14 @@ conditions:
   - condition: template
     alias: "Allowed on this day"
     value_template: >
-      {% if effective_day_key not in (run_days | default([])) %}
+      {% if weekend_blocked %}
         false
-      {% elif weekend_blocked %}
-        false
-      {% else %}
+      {% elif effective_day_key in (run_days | default([])) %}
         true
+      {% elif effective_day_key in (weekend_days | default([])) %}
+        true
+      {% else %}
+        false
       {% endif %}
 
   # Time window (supports windows that cross midnight)
