@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.7.7)
+# Notification Follow-Me (v3.10.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.7.7)"
+  name: "Notification Follow-Me (v3.10.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -351,6 +351,43 @@ blueprint:
             entity:
               domain: input_text
 
+        burst_handling:
+          name: Burst message handling mode
+          description: >-
+            How to handle multiple messages arriving in rapid
+            succession from the same sender. "thread_aware" (default)
+            — the LLM always sees the full message thread and
+            summarizes what's new since the last announcement.
+            "debounce" — waits a configurable window after the last
+            state change, then announces the full burst in one call.
+            "catch_up" — announces the first message immediately,
+            then schedules a deferred catch-up read after the
+            cooldown expires to pick up anything that was missed.
+          default: thread_aware
+          selector:
+            select:
+              options:
+                - thread_aware
+                - debounce
+                - catch_up
+
+        debounce_window:
+          name: Debounce window (seconds)
+          description: >-
+            Only used when burst handling is "debounce". After the
+            first state change, waits this many seconds for the
+            burst to settle before announcing. The sensor accumulates
+            messages during the wait, so the LLM sees the full burst.
+            Shorter = faster response, longer = catches more messages.
+          default: 15
+          selector:
+            number:
+              min: 5
+              max: 60
+              step: 5
+              unit_of_measurement: seconds
+              mode: slider
+
         media_message_behavior:
           name: Media message behavior
           description: >-
@@ -513,6 +550,82 @@ blueprint:
           selector:
             entity:
               domain: input_text
+
+        tts_engine_type:
+          name: TTS engine capability
+          description: >-
+            Controls whether the LLM may emit inline audio tags
+            (e.g., [laughs], [whispers]) for dramatization. "basic"
+            produces clean spoken text only — safe for any TTS engine.
+            "elevenlabs_v3" enables ElevenLabs v3 audio tags for
+            expressive delivery. Only select elevenlabs_v3 if your
+            TTS entity points to an ElevenLabs Eleven v3 voice —
+            older models will read the tags literally.
+          default: basic
+          selector:
+            select:
+              options:
+                - basic
+                - elevenlabs_v3
+
+        expressive_sensitivity:
+          name: Expressive text interpretation
+          description: >-
+            How aggressively the LLM interprets informal text
+            (laughter, elongation, emoji-only messages) for spoken
+            delivery. "conservative" — only obvious patterns like
+            hahaha/jajaja. "moderate" — most informal text including
+            emoji clusters and elongated words. "aggressive" —
+            interprets nearly all informal text as expressive intent.
+          default: moderate
+          selector:
+            select:
+              options:
+                - conservative
+                - moderate
+                - aggressive
+
+        expressive_patterns:
+          name: Expressive text reference (cultural patterns)
+          description: >-
+            Comma-separated cheat sheet of culturally specific
+            expression patterns for the LLM. Format each entry as
+            "pattern=meaning". The LLM uses this to interpret
+            informal text instead of reading it literally. Edit
+            to match your language/culture. These are hints, not
+            regex — the LLM generalizes from the examples.
+          default: >-
+            jajaja=laughter (Spanish),
+            hahaha=laughter (English),
+            kkkkk=laughter (Brazilian),
+            wwww=laughter (Japanese),
+            muaaa=kiss/affection,
+            😂😂😂=laughing hard,
+            ❤️❤️❤️=strong affection,
+            🔥🔥=excitement/approval,
+            nooooo=exaggerated disbelief,
+            siiii=enthusiastic yes,
+            ayyyy=exclamation/surprise
+          selector:
+            text:
+              multiline: true
+
+        audio_tag_style:
+          name: Audio tag density (ElevenLabs v3 only)
+          description: >-
+            Only used when TTS engine is "elevenlabs_v3". Controls
+            how liberally the LLM inserts audio performance tags.
+            "minimal" — rare, only for strong emotional content.
+            "moderate" — balanced, 1-2 tags per announcement.
+            "dramatic" — frequent tags for theatrical delivery.
+            Ignored when engine is "basic".
+          default: moderate
+          selector:
+            select:
+              options:
+                - minimal
+                - moderate
+                - dramatic
 
     # =========================================================================
     # ⑥ RINGER MODE VOLUME CONTROL
@@ -732,6 +845,55 @@ blueprint:
             entity:
               domain: sensor
 
+        long_tail_interval:
+          name: Long-tail reminder interval (minutes)
+          description: >-
+            After the fast-cadence reminders are exhausted, the
+            system switches to a slower long-tail interval. Set
+            to 0 to disable long-tail reminders entirely and stop
+            after the fast-cadence max is reached.
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 120
+              step: 5
+              unit_of_measurement: min
+              mode: slider
+
+        reminder_ceiling:
+          name: Reminder ceiling (minutes)
+          description: >-
+            Maximum total time the reminder system will run from
+            the first reminder. After this, the system stops
+            entirely until a new message arrives. Covers both
+            fast-cadence and long-tail phases.
+          default: 240
+          selector:
+            number:
+              min: 30
+              max: 1440
+              step: 30
+              unit_of_measurement: min
+              mode: slider
+
+        presence_retrigger_mode:
+          name: Presence re-trigger mode
+          description: >-
+            Controls behavior when presence is detected during
+            the long-tail phase. "Single check" fires one
+            reminder per interval. "Full restart" resets the
+            fast-cadence counter and re-enters the rapid
+            reminder loop.
+          default: single_check
+          selector:
+            select:
+              options:
+                - label: "Single check (one-shot nag)"
+                  value: single_check
+                - label: "Full restart (reset counter)"
+                  value: full_restart
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
@@ -755,6 +917,8 @@ variables:
   cooldown: !input cooldown_seconds
   last_announced_entity: !input last_announced_helper
   last_sender_entity: !input last_announced_sender_helper
+  burst_mode: !input burst_handling
+  debounce_secs: !input debounce_window
   char_limit: !input char_cap
   dnd_entity: !input dnd_sensor
   enable_quiet: !input enable_quiet_hours
@@ -766,6 +930,10 @@ variables:
   tts_announce: !input tts_announce
   tts_output_vol: !input tts_output_volume
   sat_vol_snapshot_entity: !input satellite_volume_snapshot
+  tts_engine: !input tts_engine_type
+  expressive_sens: !input expressive_sensitivity
+  expressive_ref: !input expressive_patterns
+  audio_tag_density: !input audio_tag_style
   notification_prompt: !input notification_prompt
   agent_name: !input agent_display_name
   ringer_entity: !input ringer_mode_sensor
@@ -786,6 +954,9 @@ variables:
   reminder_prompt_text: !input reminder_prompt
   phone_interactive_entity: !input phone_interactive_sensor
   last_removed_entity: !input last_removed_sensor
+  long_tail_min: !input long_tail_interval
+  ceiling_min: !input reminder_ceiling
+  retrigger_mode: !input presence_retrigger_mode
 
 # =============================================================================
 # TRIGGERS
@@ -967,7 +1138,90 @@ actions:
   # ---------------------------------------------------------------------------
   # 3. Cooldown check — suppress if last announcement was too recent
   # ---------------------------------------------------------------------------
-  - alias: "3 · Enforce per-sender cooldown between announcements"
+  # 3. Burst-aware cooldown gate
+  # ---------------------------------------------------------------------------
+  # Three modes (burst_mode input):
+  #   thread_aware — no delay, cooldown applies as normal, LLM prompt
+  #                  instructs summarization of new-since-last content
+  #   debounce     — waits debounce_secs for burst to settle, then
+  #                  re-reads sensor before cooldown check
+  #   catch_up     — if within same-sender cooldown, waits remaining
+  #                  time then re-reads; cooldown re-check deduplicates
+  #                  parallel instances automatically
+  # ---------------------------------------------------------------------------
+
+  - alias: "3-burst · Burst handling delay"
+    choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ burst_mode == 'debounce' }}"
+        sequence:
+          - alias: "Debounce — wait for burst to settle"
+            delay:
+              seconds: "{{ debounce_secs | int(15) }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ burst_mode == 'catch_up' }}"
+        sequence:
+          - variables:
+              _cd_last_ts: >-
+                {% set h = last_announced_entity | default('') | string %}
+                {% if h | length == 0 %}0
+                {% else %}{{ states(h) | as_timestamp | default(0) }}{% endif %}
+              _cd_elapsed: >-
+                {{ as_timestamp(now()) - (_cd_last_ts | float(0)) }}
+              _cd_remaining: >-
+                {{ [0, (cooldown | int(60))
+                    - (_cd_elapsed | float(0))] | max | int }}
+              _cd_same_sender: >-
+                {% set sh = last_sender_entity | default('') | string %}
+                {% if sh | length == 0 %}false
+                {% else %}
+                  {% set ls = states(sh)
+                      | default('') | lower | trim %}
+                  {% set cs = notif_sender
+                      | default('') | lower | trim %}
+                  {{ ls == cs and (_cd_elapsed | float(0))
+                      < (cooldown | int(60)) }}
+                {% endif %}
+          - if:
+              - condition: template
+                value_template: "{{ _cd_same_sender | bool(false) }}"
+            then:
+              - alias: "Catch-up — wait remaining cooldown"
+                delay:
+                  seconds: "{{ _cd_remaining }}"
+
+  - alias: "3a · Refresh message text after burst delay"
+    variables:
+      notif_text: >-
+        {% if burst_mode in ['debounce', 'catch_up'] %}
+          {% set fresh = states[sensor_entity].attributes
+              | default({}) %}
+          {% set lines = fresh.get('android.textLines', none) %}
+          {% if lines is iterable and lines is not string
+                and lines | length > 0 %}
+            {{ lines | join(' · ') }}
+          {% else %}
+            {% set raw = fresh.get('android.text', '') | string %}
+            {{ '' if raw == 'null' else raw }}
+          {% endif %}
+        {% else %}
+          {{ notif_text }}
+        {% endif %}
+
+  - alias: "3b · Recompute truncated text after refresh"
+    variables:
+      truncated_text: >-
+        {% if burst_mode in ['debounce', 'catch_up'] %}
+          {% set text = notif_text | default('') | string %}
+          {% set cap = char_limit | int(500) %}
+          {{ text[:cap] ~ '...' if text | length > cap else text }}
+        {% else %}
+          {{ truncated_text }}
+        {% endif %}
+
+  - alias: "3c · Enforce per-sender cooldown"
     condition: template
     value_template: >-
       {% set ts_helper = last_announced_entity | default('') | string %}
@@ -1204,6 +1458,94 @@ actions:
             notification — never list or recite this data.
             {{ sensor_context }}
             --- END ENVIRONMENT CONTEXT ---
+            {% endif %}
+            {% set _expr_sens = expressive_sens | default('moderate') %}
+
+            --- EXPRESSIVE TEXT INTERPRETATION ---
+            The message may contain informal, expressive text that
+            is NOT meant to be read literally. Interpret these
+            patterns naturally for spoken delivery:
+            {% if _expr_sens == 'conservative' %}
+            Only interpret obvious laughter patterns (hahaha, jajaja,
+            LOL) and explicit emoji-only messages. Leave other
+            informal text as-is.
+            {% elif _expr_sens == 'aggressive' %}
+            Aggressively interpret ALL informal text as expressive
+            intent — elongated words, emoji clusters, repeated
+            punctuation, slang abbreviations, and any text that
+            looks more emotional than informational. Convert
+            everything into natural spoken language.
+            {% else %}
+            Interpret laughter, elongated words (nooooo, siiii),
+            emoji clusters, and other clearly expressive text as
+            emotional intent. Describe what the sender is expressing
+            rather than spelling out the characters.
+            {% endif %}
+
+            Key rules:
+            - Laughter patterns → describe as laughter, never
+              spell out syllables (no "ja ja ja")
+            - Emoji-only messages → describe the emotional
+              sentiment, never name individual emoji
+            - Elongated words → interpret the emphasis, don't
+              reproduce the stretching
+            - Repeated punctuation (!!!, ???) → convey the
+              energy through your delivery, not by reading
+              the punctuation
+            {% set _expr_ref = expressive_ref | default('') | string | trim %}
+            {% if _expr_ref | length > 0 %}
+
+            Cultural reference patterns (format: pattern=meaning):
+            {{ _expr_ref }}
+            Use these as hints — generalize to similar patterns
+            the sender might use.
+            {% endif %}
+            --- END EXPRESSIVE TEXT INTERPRETATION ---
+            {% if tts_engine | default('basic') == 'elevenlabs_v3' %}
+            {% set _tag_style = audio_tag_density | default('moderate') %}
+
+            --- TTS PERFORMANCE DIRECTIVES (ElevenLabs v3) ---
+            Your output will be spoken by an ElevenLabs v3 voice.
+            You may insert audio tags in square brackets to direct
+            the voice performance. Available tags include:
+            [laughs], [whispers], [shouts], [sighs], [pauses],
+            [sarcastic], [excited], [gasps], [cheerfully],
+            [deadpan], [playfully], [hesitates].
+            {% if _tag_style == 'minimal' %}
+            Use tags sparingly — only for strong emotional moments.
+            Most announcements should have zero tags. Reserve them
+            for content that genuinely demands dramatization.
+            {% elif _tag_style == 'dramatic' %}
+            Use tags liberally for theatrical delivery. Add
+            performance cues wherever they enhance the emotional
+            texture — reactions, pauses, tone shifts, laughter.
+            Make it a performance.
+            {% else %}
+            Use tags in moderation — typically 1-2 per announcement
+            for natural emphasis. React to emotional content with
+            appropriate tags but don't overdo it.
+            {% endif %}
+
+            Important: Tags go INLINE with your text, not on
+            separate lines. Example: "[laughs] She thinks that's
+            hilarious." Never put tags where they'd interrupt a
+            word or break a sentence unnaturally. Never end your
+            response with an audio tag — always follow tags with
+            spoken text so the voice has something to transition into.
+            --- END TTS PERFORMANCE DIRECTIVES ---
+            {% endif %}
+            {% if burst_mode | default('thread_aware') == 'thread_aware' %}
+
+            --- THREAD-AWARE BURST HANDLING ---
+            Multiple messages may have arrived in rapid succession.
+            You are seeing the FULL message thread, which may
+            include messages already announced in a previous call.
+            Focus on what is NEW — summarize only the messages that
+            arrived since the last announcement. Do not repeat
+            content you have already delivered. If nothing appears
+            new, say so briefly (e.g., "No new messages from
+            [sender]").
+            --- END THREAD-AWARE BURST HANDLING ---
             {% endif %}
 
       - alias: "7a · Extract LLM response with defensive fallback"
@@ -1628,6 +1970,8 @@ actions:
       - condition: template
         value_template: "{{ reminder_enabled | bool(false) }}"
     then:
+      - variables:
+          _rem_start_ts: "{{ as_timestamp(now()) }}"
       - alias: "Reminder repeat-while loop"
         repeat:
           while:
@@ -1912,6 +2256,82 @@ actions:
                   {{ petnames }}
                   --- END PET NAME CONTEXT ---
                   {% endif %}
+                  {% set _expr_sens = expressive_sens | default('moderate') %}
+
+                  --- EXPRESSIVE TEXT INTERPRETATION ---
+                  The message may contain informal, expressive text
+                  that is NOT meant to be read literally. Interpret
+                  these patterns naturally for spoken delivery:
+                  {% if _expr_sens == 'conservative' %}
+                  Only interpret obvious laughter patterns (hahaha,
+                  jajaja, LOL) and explicit emoji-only messages.
+                  Leave other informal text as-is.
+                  {% elif _expr_sens == 'aggressive' %}
+                  Aggressively interpret ALL informal text as
+                  expressive intent — elongated words, emoji
+                  clusters, repeated punctuation, slang, and any
+                  text that looks emotional. Convert everything
+                  into natural spoken language.
+                  {% else %}
+                  Interpret laughter, elongated words (nooooo,
+                  siiii), emoji clusters, and other clearly
+                  expressive text as emotional intent. Describe
+                  what the sender is expressing rather than
+                  spelling out the characters.
+                  {% endif %}
+
+                  Key rules:
+                  - Laughter → describe as laughter, never spell
+                    out syllables
+                  - Emoji-only → describe sentiment, never name
+                    individual emoji
+                  - Elongation → interpret emphasis, don't
+                    reproduce stretching
+                  - Repeated punctuation → convey energy through
+                    delivery, not by reading punctuation
+                  {% set _expr_ref = expressive_ref | default('') | string | trim %}
+                  {% if _expr_ref | length > 0 %}
+
+                  Cultural reference patterns:
+                  {{ _expr_ref }}
+                  {% endif %}
+                  --- END EXPRESSIVE TEXT INTERPRETATION ---
+                  {% if tts_engine | default('basic') == 'elevenlabs_v3' %}
+                  {% set _tag_style = audio_tag_density | default('moderate') %}
+
+                  --- TTS PERFORMANCE DIRECTIVES (ElevenLabs v3) ---
+                  Your output will be spoken by an ElevenLabs v3
+                  voice. You may insert audio tags in square
+                  brackets to direct voice performance:
+                  [laughs], [whispers], [shouts], [sighs],
+                  [pauses], [sarcastic], [excited], [gasps],
+                  [cheerfully], [deadpan], [playfully].
+                  {% if _tag_style == 'minimal' %}
+                  Use tags sparingly — only for strong emotional
+                  moments. Most reminders need zero tags.
+                  {% elif _tag_style == 'dramatic' %}
+                  Use tags liberally for theatrical delivery.
+                  React, pause, emote — make it a performance.
+                  {% else %}
+                  Use 1-2 tags per reminder for natural emphasis.
+                  Don't overdo it.
+                  {% endif %}
+                  Tags go inline: "[laughs] She thinks that's
+                  hilarious." Never break words with tags. Never
+                  end with an audio tag — always follow with speech.
+                  --- END TTS PERFORMANCE DIRECTIVES ---
+                  {% endif %}
+                  {% if burst_mode | default('thread_aware')
+                        == 'thread_aware' %}
+
+                  --- THREAD-AWARE BURST HANDLING ---
+                  The thread may include messages that arrived in
+                  a burst since the last announcement or reminder.
+                  Focus on what is NEW — do not re-summarize
+                  content already delivered. If nothing is new
+                  since the last reminder, keep it brief.
+                  --- END THREAD-AWARE BURST HANDLING ---
+                  {% endif %}
 
             - alias: "R6a · Extract reminder LLM response"
               variables:
@@ -2083,6 +2503,615 @@ actions:
                   via {{ _r_satellite if _r_has_satellite
                   else 'mobile push' }}.
                 level: info
+
+      # -----------------------------------------------------------------
+      # 9e · Long-tail reminder phase
+      # -----------------------------------------------------------------
+      # After fast-cadence reminders exhaust, switch to a slower
+      # nag interval until the hard ceiling is reached. Presence
+      # re-trigger mode controls behavior when the user is detected:
+      #   single_check — one-shot nag per long-tail interval
+      #   full_restart — re-enter fast-cadence loop from scratch
+      # -----------------------------------------------------------------
+      - alias: "9e · Long-tail reminder phase"
+        if:
+          - condition: template
+            value_template: "{{ long_tail_min | int(0) > 0 }}"
+        then:
+          - alias: "Long-tail repeat loop"
+            repeat:
+              while:
+                - condition: template
+                  value_template: >-
+                    {% set elapsed = (as_timestamp(now())
+                        - (_rem_start_ts | float)) / 60 %}
+                    {{ elapsed < (ceiling_min | int(240)) }}
+              sequence:
+                # --- Wait long-tail interval ---
+                - alias: "LT1 · Wait long-tail interval"
+                  delay:
+                    minutes: "{{ long_tail_min | int(15) }}"
+
+                # --- Ceiling re-check after wait ---
+                - alias: "LT2 · Ceiling check after wait"
+                  condition: template
+                  value_template: >-
+                    {% set elapsed = (as_timestamp(now())
+                        - (_rem_start_ts | float)) / 60 %}
+                    {{ elapsed < (ceiling_min | int(240)) }}
+
+                # --- Gate checks (mirror R3 series) ---
+                - alias: "LT3 · Re-check master toggle"
+                  condition: template
+                  value_template: >-
+                    {{ is_state(toggle_entity, 'on') }}
+
+                - alias: "LT3a · Re-check DND"
+                  condition: template
+                  value_template: >-
+                    {% set dnd = dnd_entity | default('')
+                        | string %}
+                    {% if dnd | length == 0 %}true
+                    {% else %}
+                      {{ states(dnd) | default('off')
+                         in ['off', 'unavailable',
+                             'unknown'] }}
+                    {% endif %}
+
+                - alias: "LT3b · Re-check quiet hours"
+                  condition: template
+                  value_template: >-
+                    {% if not (enable_quiet | bool(false)) %}
+                      true
+                    {% else %}
+                      {% set qs = today_at(quiet_start_val) %}
+                      {% set qe = today_at(quiet_end_val) %}
+                      {% if qs < qe %}
+                        {{ not (qs <= now() < qe) }}
+                      {% else %}
+                        {{ qe <= now() < qs }}
+                      {% endif %}
+                    {% endif %}
+
+                - alias: "LT3c · Exit if phone active"
+                  condition: template
+                  value_template: >-
+                    {% set ent = phone_interactive_entity
+                        | default('') | string %}
+                    {% if ent | length == 0 %}true
+                    {% else %}
+                      {{ not is_state(ent, 'on') }}
+                    {% endif %}
+
+                - alias: "LT3d · Exit if notification dismissed"
+                  condition: template
+                  value_template: >-
+                    {% set ent = last_removed_entity
+                        | default('') | string %}
+                    {% if ent | length == 0 %}true
+                    {% else %}
+                      {% set rm = states[ent].attributes
+                          | default({}) %}
+                      {% set rm_s = rm.get('android.title',
+                          '') | string | lower | trim %}
+                      {% set rm_p = rm.get('package',
+                          '') | string | lower | trim %}
+                      {% set rm_pt = rm.get('post_time',
+                          0) | int(0) %}
+                      {{ not (rm_s == _trigger_sender
+                              and rm_p == _trigger_package
+                              and rm_pt >= (_trigger_post_time
+                                  | int(0))) }}
+                    {% endif %}
+
+                # --- Presence resolution ---
+                - alias: "LT4 · Re-resolve presence"
+                  variables:
+                    _lt_idx: >-
+                      {% set ns = namespace(idx=-1) %}
+                      {% for s in presence_list %}
+                        {% if states(s) | default('off')
+                              == 'on'
+                              and ns.idx == -1 %}
+                          {% set ns.idx = loop.index0 %}
+                        {% endif %}
+                      {% endfor %}
+                      {{ ns.idx }}
+                    _lt_satellite: >-
+                      {% set idx = _lt_idx | int(-1) %}
+                      {% if idx >= 0
+                            and idx < (satellite_list
+                                | length) %}
+                        {{ satellite_list[idx] }}
+                      {% else %}{{ '' }}{% endif %}
+                    _lt_has_sat: >-
+                      {{ (_lt_satellite | default('')
+                          | string | length) > 0 }}
+
+                - alias: "LT4-gate · Skip if no satellite/fallback"
+                  condition: template
+                  value_template: >-
+                    {{ _lt_has_sat | bool(false)
+                       or fallback == 'mobile_push' }}
+
+                # --- Ringer mode ---
+                - alias: "LT5 · Resolve ringer mode"
+                  variables:
+                    _lt_ringer: >-
+                      {% set ent = ringer_entity
+                          | default('') | string %}
+                      {% if ent | length == 0 %}normal
+                      {% else %}
+                        {{ states(ent)
+                           | default('normal') }}
+                      {% endif %}
+                    _lt_saved_vol: >-
+                      {% if _lt_has_sat | bool(false) %}
+                        {{ state_attr(_lt_satellite,
+                            'volume_level')
+                           | default(0.5) | float(0.5) }}
+                      {% else %}{{ 0.5 }}{% endif %}
+
+                - alias: "LT5-gate · Skip if phone silent"
+                  condition: template
+                  value_template: >-
+                    {{ _lt_ringer != 'silent' }}
+
+                # --- Deliver long-tail reminder ---
+                - alias: "LT6 · Route: single_check vs full_restart"
+                  choose:
+                    # =====================================================
+                    # FULL RESTART — re-enter fast-cadence sub-loop
+                    # =====================================================
+                    - conditions:
+                        - condition: template
+                          value_template: >-
+                            {{ retrigger_mode == 'full_restart'
+                               and _lt_has_sat | bool(false) }}
+                      sequence:
+                        - alias: "LT6-FR · Fast-cadence sub-loop"
+                          repeat:
+                            while:
+                              - condition: template
+                                value_template: >-
+                                  {% set elapsed = (
+                                      as_timestamp(now())
+                                      - (_rem_start_ts
+                                          | float)) / 60 %}
+                                  {{ repeat.index
+                                     <= (reminder_max
+                                         | int(3))
+                                     and elapsed
+                                     < (ceiling_min
+                                         | int(240)) }}
+                            sequence:
+                              - alias: "FR-R1 · Wait fast interval"
+                                delay:
+                                  minutes: >-
+                                    {{ reminder_interval_min
+                                       | int(5) }}
+                              # Gate re-checks
+                              - alias: "FR-R3 · Toggle gate"
+                                condition: template
+                                value_template: >-
+                                  {{ is_state(toggle_entity,
+                                      'on') }}
+                              - alias: "FR-R3c · Phone gate"
+                                condition: template
+                                value_template: >-
+                                  {% set ent =
+                                      phone_interactive_entity
+                                      | default('')
+                                      | string %}
+                                  {% if ent | length == 0 %}
+                                    true
+                                  {% else %}
+                                    {{ not is_state(ent,
+                                        'on') }}
+                                  {% endif %}
+                              - alias: "FR-R3d · Dismiss gate"
+                                condition: template
+                                value_template: >-
+                                  {% set ent =
+                                      last_removed_entity
+                                      | default('')
+                                      | string %}
+                                  {% if ent | length == 0 %}
+                                    true
+                                  {% else %}
+                                    {% set rm =
+                                        states[ent].attributes
+                                        | default({}) %}
+                                    {% set rm_s =
+                                        rm.get('android.title',
+                                        '') | string | lower
+                                        | trim %}
+                                    {% set rm_p =
+                                        rm.get('package',
+                                        '') | string | lower
+                                        | trim %}
+                                    {% set rm_pt =
+                                        rm.get('post_time',
+                                        0) | int(0) %}
+                                    {{ not (rm_s
+                                            == _trigger_sender
+                                            and rm_p
+                                            == _trigger_package
+                                            and rm_pt
+                                            >= (_trigger_post_time
+                                                | int(0))) }}
+                                  {% endif %}
+                              # LLM call
+                              - alias: "FR-R6 · LLM reminder"
+                                continue_on_error: true
+                                action: conversation.process
+                                response_variable: _fr_llm
+                                data:
+                                  agent_id: !input conversation_agent
+                                  text: >-
+                                    {{ reminder_prompt_text }}
+
+                                    {% if (agent_name | default('')
+                                        | string | trim)
+                                        | length > 0 %}
+                                    Your name is {{ agent_name }}.
+                                    {% endif %}
+
+                                    The sender's preferred name is
+                                    {{ display_sender }}.
+
+                                    --- ESCALATION CONTEXT ---
+                                    phase: full-restart (re-triggered
+                                    from long-tail by presence)
+                                    fast_reminder: {{ repeat.index }}
+                                    of {{ reminder_max | int(3) }}
+                                    elapsed_minutes: >-
+                                      {{ ((as_timestamp(now())
+                                          - (_rem_start_ts
+                                              | float))
+                                          / 60) | round(0) }}
+                                    Be urgent — the user has ignored
+                                    all previous reminders and the
+                                    system has re-engaged because
+                                    presence was detected again.
+                                    --- END ESCALATION ---
+
+                                    --- NOTIFICATION DATA ---
+                                    sender: {{ display_sender }}
+                                    app: {{ app_label }}
+                                    message: >-
+                                      {{ truncated_text
+                                         | replace('<', '‹')
+                                         | replace('>', '›') }}
+                                    --- END DATA ---
+                              - variables:
+                                  _fr_text: >-
+                                    {% if _fr_llm is defined
+                                          and _fr_llm.response
+                                              is defined
+                                          and _fr_llm.response
+                                              .speech is defined
+                                          and _fr_llm.response
+                                              .speech.plain
+                                              is defined
+                                          and _fr_llm.response
+                                              .speech.plain
+                                              .speech
+                                              is defined %}
+                                      {{ _fr_llm.response
+                                         .speech.plain.speech }}
+                                    {% else %}
+                                      Reminder: {{ app_label }}
+                                      from {{ display_sender }}.
+                                      Check your phone.
+                                    {% endif %}
+                              # Volume + TTS + restore
+                              - choose:
+                                  - conditions:
+                                      - condition: template
+                                        value_template: >-
+                                          {{ _lt_ringer
+                                             == 'vibrate' }}
+                                    sequence:
+                                      - action: media_player.volume_set
+                                        continue_on_error: true
+                                        target:
+                                          entity_id: >-
+                                            {{ _lt_satellite }}
+                                        data:
+                                          volume_level: >-
+                                            {{ quiet_vol
+                                               | float(0.15) }}
+                                  - conditions:
+                                      - condition: template
+                                        value_template: >-
+                                          {{ tts_output_vol
+                                             | float(0) > 0 }}
+                                    sequence:
+                                      - action: media_player.volume_set
+                                        continue_on_error: true
+                                        target:
+                                          entity_id: >-
+                                            {{ _lt_satellite }}
+                                        data:
+                                          volume_level: >-
+                                            {{ tts_output_vol
+                                               | float(0.5) }}
+                              - action: tts.speak
+                                continue_on_error: true
+                                target:
+                                  entity_id: "{{ tts_entity }}"
+                                data: >-
+                                  {% if tts_mode
+                                      == 'elevenlabs_custom_service' %}
+                                    {{ {"message": _fr_text,
+                                        "media_player_entity_id":
+                                            _lt_satellite,
+                                        "options":
+                                            {"voice_profile":
+                                                voice_profile},
+                                        "announce":
+                                            tts_announce
+                                            | bool(false)}
+                                       | to_json }}
+                                  {% else %}
+                                    {% if tts_announce
+                                        | bool(false) %}
+                                      {{ {"message": _fr_text,
+                                          "media_player_entity_id":
+                                              _lt_satellite,
+                                          "announce": true}
+                                         | to_json }}
+                                    {% else %}
+                                      {{ {"message": _fr_text,
+                                          "media_player_entity_id":
+                                              _lt_satellite}
+                                         | to_json }}
+                                    {% endif %}
+                                  {% endif %}
+                              - delay:
+                                  seconds: >-
+                                    {{ restore_delay | int(8) }}
+                              - if:
+                                  - condition: template
+                                    value_template: >-
+                                      {{ _lt_ringer == 'vibrate'
+                                         or tts_output_vol
+                                            | float(0) > 0 }}
+                                then:
+                                  - action: media_player.volume_set
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: >-
+                                        {{ _lt_satellite }}
+                                    data:
+                                      volume_level: >-
+                                        {{ _lt_saved_vol }}
+                              - action: system_log.write
+                                continue_on_error: true
+                                data:
+                                  message: >-
+                                    Notification Follow-Me:
+                                    full-restart reminder
+                                    {{ repeat.index }}/{{
+                                    reminder_max | int(3) }}
+                                    (long-tail phase) for
+                                    {{ app_label }} from
+                                    {{ notif_sender[:20] }}.
+                                  level: info
+
+                  # =====================================================
+                  # DEFAULT — single_check (one-shot nag)
+                  # =====================================================
+                  default:
+                    - alias: "LT6-SC · LLM long-tail reminder"
+                      continue_on_error: true
+                      action: conversation.process
+                      response_variable: _lt_llm
+                      data:
+                        agent_id: !input conversation_agent
+                        text: >-
+                          {{ reminder_prompt_text }}
+
+                          {% if (agent_name | default('')
+                              | string | trim)
+                              | length > 0 %}
+                          Your name is {{ agent_name }}.
+                          {% endif %}
+
+                          The sender's preferred name is
+                          {{ display_sender }}.
+
+                          --- ESCALATION CONTEXT ---
+                          phase: long-tail
+                          elapsed_minutes: >-
+                            {{ ((as_timestamp(now())
+                                - (_rem_start_ts | float))
+                                / 60) | round(0) }}
+                          This is a persistent long-tail
+                          reminder. The user has ignored all
+                          fast-cadence reminders. Be direct
+                          and urgent.
+                          --- END ESCALATION ---
+
+                          --- NOTIFICATION DATA ---
+                          sender: {{ display_sender }}
+                          app: {{ app_label }}
+                          message: >-
+                            {{ truncated_text
+                               | replace('<', '‹')
+                               | replace('>', '›') }}
+                          --- END DATA ---
+                    - variables:
+                        _lt_text: >-
+                          {% if _lt_llm is defined
+                                and _lt_llm.response
+                                    is defined
+                                and _lt_llm.response
+                                    .speech is defined
+                                and _lt_llm.response
+                                    .speech.plain
+                                    is defined
+                                and _lt_llm.response
+                                    .speech.plain.speech
+                                    is defined %}
+                            {{ _lt_llm.response
+                               .speech.plain.speech }}
+                          {% else %}
+                            Reminder: {{ app_label }}
+                            from {{ display_sender }}.
+                            Check your phone.
+                          {% endif %}
+                    # Volume adjust
+                    - choose:
+                        - conditions:
+                            - condition: template
+                              value_template: >-
+                                {{ _lt_ringer == 'vibrate'
+                                   and _lt_has_sat
+                                       | bool(false) }}
+                          sequence:
+                            - action: media_player.volume_set
+                              continue_on_error: true
+                              target:
+                                entity_id: "{{ _lt_satellite }}"
+                              data:
+                                volume_level: >-
+                                  {{ quiet_vol | float(0.15) }}
+                        - conditions:
+                            - condition: template
+                              value_template: >-
+                                {{ tts_output_vol | float(0) > 0
+                                   and _lt_has_sat
+                                       | bool(false) }}
+                          sequence:
+                            - action: media_player.volume_set
+                              continue_on_error: true
+                              target:
+                                entity_id: "{{ _lt_satellite }}"
+                              data:
+                                volume_level: >-
+                                  {{ tts_output_vol
+                                     | float(0.5) }}
+                    # TTS delivery
+                    - alias: "LT7 · Deliver long-tail TTS"
+                      choose:
+                        - conditions:
+                            - condition: template
+                              value_template: >-
+                                {{ _lt_has_sat
+                                   | bool(false) }}
+                          sequence:
+                            - action: tts.speak
+                              continue_on_error: true
+                              target:
+                                entity_id: >-
+                                  {{ tts_entity }}
+                              data: >-
+                                {% set msg = _lt_text %}
+                                {% set sat = _lt_satellite %}
+                                {% if tts_mode
+                                    == 'elevenlabs_custom_service' %}
+                                  {% if tts_announce
+                                      | bool(false) %}
+                                    {{ {"message": msg,
+                                        "media_player_entity_id":
+                                            sat,
+                                        "options":
+                                            {"voice_profile":
+                                                voice_profile},
+                                        "announce": true} }}
+                                  {% else %}
+                                    {{ {"message": msg,
+                                        "media_player_entity_id":
+                                            sat,
+                                        "options":
+                                            {"voice_profile":
+                                                voice_profile}} }}
+                                  {% endif %}
+                                {% else %}
+                                  {% if tts_announce
+                                      | bool(false) %}
+                                    {{ {"message": msg,
+                                        "media_player_entity_id":
+                                            sat,
+                                        "announce": true} }}
+                                  {% else %}
+                                    {{ {"message": msg,
+                                        "media_player_entity_id":
+                                            sat} }}
+                                  {% endif %}
+                                {% endif %}
+                        - conditions:
+                            - condition: template
+                              value_template: >-
+                                {{ not (_lt_has_sat
+                                       | bool(false))
+                                   and fallback
+                                       == 'mobile_push' }}
+                          sequence:
+                            - action: >-
+                                {{ mobile_service }}
+                              continue_on_error: true
+                              data:
+                                title: >-
+                                  Reminder: {{ app_label }}
+                                  — {{ display_sender }}
+                                message: "{{ _lt_text }}"
+                    # Playback wait + volume restore
+                    - alias: "LT8 · Wait for playback"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ _lt_has_sat | bool(false)
+                               and (_lt_ringer == 'vibrate'
+                                    or tts_output_vol
+                                       | float(0) > 0) }}
+                      then:
+                        - repeat:
+                            until:
+                              - condition: template
+                                value_template: >-
+                                  {{ states(_lt_satellite)
+                                     | default('idle')
+                                     not in ['playing']
+                                     or repeat.index
+                                        >= (restore_delay
+                                            | int(8)) }}
+                            sequence:
+                              - delay:
+                                  seconds: 1
+                    - alias: "LT8a · Restore volume"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ (_lt_ringer == 'vibrate'
+                                or tts_output_vol
+                                   | float(0) > 0)
+                               and _lt_has_sat
+                                   | bool(false) }}
+                      then:
+                        - action: media_player.volume_set
+                          continue_on_error: true
+                          target:
+                            entity_id: >-
+                              {{ _lt_satellite }}
+                          data:
+                            volume_level: >-
+                              {{ _lt_saved_vol }}
+                    # Log
+                    - alias: "LT9 · Log long-tail reminder"
+                      action: system_log.write
+                      continue_on_error: true
+                      data:
+                        message: >-
+                          Notification Follow-Me: long-tail
+                          reminder ({{ ((as_timestamp(now())
+                          - (_rem_start_ts | float))
+                          / 60) | round(0) }}min elapsed)
+                          for {{ app_label }} from
+                          {{ notif_sender[:20] }}.
+                        level: info
 
   # ---------------------------------------------------------------------------
   # 10. Log successful announcement for debugging
