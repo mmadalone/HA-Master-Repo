@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.10.0)
+# Notification Follow-Me (v3.10.1)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.10.0)"
+  name: "Notification Follow-Me (v3.10.1)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -408,6 +408,18 @@ blueprint:
                 - label: "LLM summary (full pipeline)"
                   value: llm_summary
 
+        drop_reactions:
+          name: Drop emoji reaction notifications
+          description: >-
+            When enabled (default), emoji reaction notifications
+            (e.g., Signal "reacted with ❤️", iMessage tapbacks,
+            WhatsApp reactions) are silently dropped before reaching
+            the LLM. When disabled, reactions are treated as normal
+            messages and announced through the standard pipeline.
+          default: true
+          selector:
+            boolean: {}
+
     # =========================================================================
     # ④ QUIET HOURS & DND
     # =========================================================================
@@ -801,18 +813,40 @@ blueprint:
             announcements. The blueprint appends the original
             notification data plus escalation context (reminder
             number and minutes elapsed). Use this to control
-            the agent's tone as reminders escalate.
+            the agent's tone as reminders escalate. Note: the
+            "read mode" selector below controls whether the
+            agent paraphrases or reads verbatim — you don't
+            need to include that instruction here.
           default: >-
             You already told the user about this message, but they
-            haven't checked their phone yet. Remind them again —
-            re-summarize the message naturally. You can be
-            progressively more insistent with each reminder. Do
-            not read the message verbatim — paraphrase it. If
-            this is reminder 3 or higher, be noticeably more
-            urgent or exasperated.
+            haven't checked their phone yet. Remind them again.
+            You can be progressively more insistent with each
+            reminder. If this is reminder 3 or higher, be
+            noticeably more urgent or exasperated.
           selector:
             text:
               multiline: true
+
+        reminder_read_mode:
+          name: Reminder read mode
+          description: >-
+            Controls how the agent delivers the message content
+            during reminders. "paraphrase" (default) — summarize
+            the message naturally, never read it word-for-word.
+            "verbatim" — read the message text exactly as written.
+            "progressive" — paraphrase on early reminders, switch
+            to verbatim from reminder 3 onward when the user
+            clearly hasn't checked their phone.
+          default: paraphrase
+          selector:
+            select:
+              options:
+                - label: "Paraphrase (summarize naturally)"
+                  value: paraphrase
+                - label: "Verbatim (read exact text)"
+                  value: verbatim
+                - label: "Progressive (paraphrase → verbatim)"
+                  value: progressive
 
         phone_interactive_sensor:
           name: Phone interactive sensor (optional)
@@ -941,6 +975,7 @@ variables:
   restore_delay: !input tts_restore_delay
   junk_patterns_list: !input junk_patterns
   media_behavior: !input media_message_behavior
+  drop_reactions: !input drop_reactions
   include_group: !input include_group_context
   aliases_map: !input sender_aliases
   context_entities_list: !input context_entities
@@ -952,6 +987,7 @@ variables:
   reminder_interval_min: !input reminder_interval
   reminder_max: !input reminder_max_repeats
   reminder_prompt_text: !input reminder_prompt
+  reminder_read_mode: !input reminder_read_mode
   phone_interactive_entity: !input phone_interactive_sensor
   last_removed_entity: !input last_removed_sensor
   long_tail_min: !input long_tail_interval
@@ -1108,6 +1144,9 @@ actions:
   - alias: "2b · Drop emoji reaction notifications"
     condition: template
     value_template: >-
+      {%- if not (drop_reactions | bool(true)) -%}
+        true
+      {%- else -%}
       {%- set text = notif_text | default('') | string -%}
       {%- set lower = text | lower -%}
       {%- set reaction_phrases = [
@@ -1134,6 +1173,7 @@ actions:
         {%- endif -%}
       {%- endif -%}
       {{ not ns.is_reaction }}
+      {%- endif -%}
 
   # ---------------------------------------------------------------------------
   # 3. Cooldown check — suppress if last announcement was too recent
@@ -2203,6 +2243,26 @@ actions:
                 agent_id: !input conversation_agent
                 text: >-
                   {{ reminder_prompt_text }}
+
+                  {% set _read_mode = reminder_read_mode | default('paraphrase') %}
+                  {% if _read_mode == 'verbatim' %}
+                  Read the message text exactly as written — word
+                  for word. Do not paraphrase, summarize, or skip
+                  any part of the message.
+                  {% elif _read_mode == 'progressive' %}
+                  {% if repeat.index < 3 %}
+                  Paraphrase the message naturally — do not read
+                  it verbatim.
+                  {% else %}
+                  The user has ignored multiple reminders. Read
+                  the message text exactly as written — word for
+                  word. No paraphrasing. They clearly need to
+                  hear the full thing.
+                  {% endif %}
+                  {% else %}
+                  Do not read the message verbatim — paraphrase
+                  it naturally in your own words.
+                  {% endif %}
 
                   {% if (agent_name | default('') | string | trim) | length > 0 %}
                   Your name is {{ agent_name }}. If the message mentions your
