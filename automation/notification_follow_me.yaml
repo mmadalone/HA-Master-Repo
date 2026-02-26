@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.13.1)
+# Notification Follow-Me (v3.14.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.13.1)"
+  name: "Notification Follow-Me (v3.14.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,21 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.14.0:** Conversation thread context (Phase 4).
+      When the phone's notification stack contains multiple unread
+      messages from the same chat (android.textLines > 1 entry),
+      the full message thread is injected into the LLM prompt as a
+      structured `CONVERSATION THREAD` block. Gives the agent
+      awareness of what was said before the latest message —
+      enabling contextual summaries like "she's been telling you
+      about X" instead of treating each message in isolation.
+      Thread context is injected in both the initial announcement
+      (step 7-llm) and reminder calls (R6). When only a single
+      message exists (no stacked notifications), the block is
+      omitted and behavior is unchanged from v3.13.1. Note:
+      Android's notification system only exposes received messages
+      in textLines — the user's own replies are not included
+      unless sent via inline notification reply (OS limitation).
     - **v3.13.1:** Conversation threading + R3c sustained-use fix +
       outgoing reply gate.
       Adds `conversation_id` (scoped to `this.context.id`) to both
@@ -1649,6 +1664,21 @@ actions:
         {% endif %}
 
   # ---------------------------------------------------------------------------
+  - alias: "6c · Build conversation thread context from textLines"
+    variables:
+      thread_context: >-
+        {% set lines = states[sensor_entity].attributes.get(
+            'android.textLines', none) %}
+        {% if lines is not none and lines is iterable
+              and lines is not string and lines | length > 1 %}
+          {% for line in lines %}
+          {{ loop.index }}. {{ line }}
+          {% endfor %}
+        {% else %}
+          none
+        {% endif %}
+
+  # ---------------------------------------------------------------------------
   # 7. Generate summary via conversation agent (skip for short_tts media)
   # ---------------------------------------------------------------------------
   - alias: "7 · Generate notification summary via LLM"
@@ -1703,6 +1733,17 @@ actions:
             {% endif %}
             current_time: {{ now().strftime('%H:%M') }}
             --- END NOTIFICATION DATA ---
+            {% if thread_context | default('none') != 'none' %}
+
+            --- CONVERSATION THREAD (recent messages, oldest first) ---
+            The following are the most recent messages in this chat
+            thread as shown in the phone's notification stack. Use
+            this to understand the flow of conversation — what was
+            said before the latest message. Do not read these out
+            individually; use them for context when summarizing.
+            {{ thread_context }}
+            --- END CONVERSATION THREAD ---
+            {% endif %}
 
             --- THREAD FORMAT CONTEXT ---
             Lines in the message thread prefixed with "You:" are
@@ -2481,6 +2522,16 @@ actions:
                     {{ _r_attrs.get('android.text', '')
                        | default(_r_attrs.get('message', ''), true) }}
                   {% endif %}
+                _r_thread_context: >-
+                  {% set lines = _r_attrs.get('android.textLines', none) %}
+                  {% if lines is not none and lines is iterable
+                        and lines is not string and lines | length > 1 %}
+                    {% for line in lines %}
+                    {{ loop.index }}. {{ line }}
+                    {% endfor %}
+                  {% else %}
+                    none
+                  {% endif %}
                 _r_display_sender: >-
                   {% set raw = _r_sender_raw %}
                   {% set amap = aliases_map | default('', true) %}
@@ -2976,6 +3027,15 @@ actions:
                       {% endif %}
                       current_time: {{ now().strftime('%H:%M') }}
                       --- END NOTIFICATION DATA ---
+                      {% if _r_thread_context | default('none') != 'none' %}
+
+                      --- CONVERSATION THREAD (recent messages, oldest first) ---
+                      Recent messages in this chat thread from the notification
+                      stack. Use for context when summarizing — do not read
+                      these out individually.
+                      {{ _r_thread_context }}
+                      --- END CONVERSATION THREAD ---
+                      {% endif %}
 
                       --- THREAD FORMAT CONTEXT ---
                       Lines in the message thread prefixed with "You:" are
