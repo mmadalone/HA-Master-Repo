@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.12.3)
+# Notification Follow-Me (v3.12.5)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.12.3)"
+  name: "Notification Follow-Me (v3.12.5)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,15 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.12.5:** Pronoun grounding (Issue 3) — adds PRONOUN CONTEXT
+      fence to all 4 LLM prompt sites. Instructs the agent that "you/tú"
+      in notification text refers to the phone's owner unless the sender
+      addresses the agent by name.
+    - **v3.12.4:** GIF media detection fix (Issue 8) — removed "GIF"
+      from substring-based `media_patterns` to prevent false positives
+      on normal messages mentioning GIF. Animated sticker notifications
+      (`<emoji> GIF`, ≤10 chars) are now detected via a dedicated
+      short-text + suffix check in `is_media_message`.
     - **v3.12.3:** Supersede-safe restore (Option 3) — when a
       reminder while-loop (R0, LT0, FR0) exits due to supersede
       (newer notification cycle owns the cooldown helper), the
@@ -1477,7 +1486,6 @@ actions:
         - "Photo"
         - "Video"
         - "Sticker"
-        - "GIF"
         - "Document"
         - "Contact card"
         - "Location"
@@ -1493,6 +1501,10 @@ actions:
             {% set ns.media = true %}
           {% endif %}
         {% endfor %}
+        {% if not ns.media and text | length <= 10
+              and text[-3:] == 'GIF' %}
+          {% set ns.media = true %}
+        {% endif %}
         {{ ns.media }}
 
       matched_media_type: >-
@@ -1503,6 +1515,10 @@ actions:
             {% set ns.matched = p %}
           {% endif %}
         {% endfor %}
+        {% if ns.matched == '' and text | length <= 10
+              and text[-3:] == 'GIF' %}
+          {% set ns.matched = 'GIF' %}
+        {% endif %}
         {{ ns.matched }}
 
       truncated_text: >-
@@ -1631,6 +1647,13 @@ actions:
             party. Do not treat the text after "You:" as a person's
             name. These are the user's own outbound replies.
             --- END THREAD FORMAT CONTEXT ---
+
+            --- PRONOUN CONTEXT ---
+            When "you" or "tú" appears in the message text, it usually
+            refers to the notification recipient — not to you. The
+            exception is when the sender addresses you by name; in that
+            case, they are speaking to you directly.
+            --- END PRONOUN CONTEXT ---
             {% set petnames = user_petnames_list | default('') | string | trim %}
             {% if petnames | length > 0 %}
 
@@ -2606,6 +2629,14 @@ actions:
                   after "You:" as a person's name. These are the
                   user's own outbound replies.
                   --- END THREAD FORMAT CONTEXT ---
+
+                  --- PRONOUN CONTEXT ---
+                  When "you" or "tú" appears in the message text,
+                  it usually refers to the notification recipient —
+                  not to you. The exception is when the sender
+                  addresses you by name; in that case, they are
+                  speaking to you directly.
+                  --- END PRONOUN CONTEXT ---
                   {% set petnames = user_petnames_list
                       | default('') | string | trim %}
                   {% if petnames | length > 0 %}
@@ -3435,6 +3466,15 @@ actions:
                                          | replace('<', '‹')
                                          | replace('>', '›') }}
                                     --- END DATA ---
+
+                                    --- PRONOUN CONTEXT ---
+                                    When "you" or "tú" appears in
+                                    the message text, it usually
+                                    refers to the notification
+                                    recipient — not to you. The
+                                    exception is when the sender
+                                    addresses you by name.
+                                    --- END PRONOUN CONTEXT ---
                               - variables:
                                   _fr_text: >-
                                     {% if _fr_llm is defined
@@ -4031,6 +4071,14 @@ actions:
                                | replace('<', '‹')
                                | replace('>', '›') }}
                           --- END DATA ---
+
+                          --- PRONOUN CONTEXT ---
+                          When "you" or "tú" appears in the
+                          message text, it usually refers to
+                          the notification recipient — not to
+                          you. The exception is when the sender
+                          addresses you by name.
+                          --- END PRONOUN CONTEXT ---
                     - variables:
                         _lt_text: >-
                           {% if _lt_llm is defined
