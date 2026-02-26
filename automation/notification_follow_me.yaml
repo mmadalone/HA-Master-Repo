@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.12.7)
+# Notification Follow-Me (v3.12.8)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.12.7)"
+  name: "Notification Follow-Me (v3.12.8)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,12 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.12.8:** Sustained-use phone interactive check (Issue 10
+      Part 1) — R3c, LT3c, and FR-R3c no longer kill reminders on
+      a momentary screen-on. Phone must be continuously active for
+      a configurable threshold (default 2 min) before reminders
+      exit. Prevents false exits from glancing at the phone or
+      unrelated screen-on events.
     - **v3.12.7:** Outgoing WhatsApp media gate (Issue 13) —
       adds `category: progress` to step 1b alongside the existing
       `transport` check. WhatsApp uses this category for outgoing
@@ -993,14 +999,31 @@ blueprint:
             Optional. Binary sensor from the Android Companion App
             that indicates whether the phone screen is on and the
             user is actively interacting with it. When configured,
-            the reminder loop exits if the phone is currently
-            active — assuming the user has seen the notification.
-            Dramatically reduces phantom reminders. Leave empty to
-            skip this check and rely on sender-change detection only.
+            the reminder loop exits if the phone has been
+            continuously active for the duration set in "Phone
+            interactive threshold" — preventing false exits from
+            momentary screen glances. Leave empty to skip this
+            check and rely on sender-change detection only.
           default: ""
           selector:
             entity:
               domain: binary_sensor
+
+        phone_interactive_minutes:
+          name: Phone interactive threshold (minutes)
+          description: >-
+            How long the phone must be continuously active before
+            reminders stop. Prevents false exits from glancing at
+            the phone or unrelated screen-on events. Only used
+            when a phone interactive sensor is configured above.
+          default: 2
+          selector:
+            number:
+              min: 1
+              max: 10
+              step: 1
+              unit_of_measurement: minutes
+              mode: slider
 
         last_removed_sensor:
           name: Last removed notification sensor (optional)
@@ -1131,6 +1154,7 @@ variables:
   reminder_prompt_text: !input reminder_prompt
   reminder_read_mode: !input reminder_read_mode
   phone_interactive_entity: !input phone_interactive_sensor
+  phone_interactive_min: !input phone_interactive_minutes
   last_removed_entity: !input last_removed_sensor
   long_tail_min: !input long_tail_interval
   ceiling_min: !input reminder_ceiling
@@ -2437,15 +2461,21 @@ actions:
                   {% endif %}
                 {% endif %}
 
-            - alias: "R3c · Exit if phone is actively being used"
+            - alias: "R3c · Exit if phone has been active beyond threshold"
               condition: template
               value_template: >-
                 {% set ent = phone_interactive_entity
                     | default('') | string %}
                 {% if ent | length == 0 %}
                   true
+                {% elif states(ent) | default('off') != 'on' %}
+                  true
                 {% else %}
-                  {{ states(ent) | default('off') != 'on' }}
+                  {% set changed = states[ent].last_changed
+                      | default(now()) %}
+                  {% set mins = ((now() - changed).total_seconds()
+                      / 60) | round(1) %}
+                  {{ mins < (phone_interactive_min | int(2)) }}
                 {% endif %}
 
             - alias: "R3d · Exit if user dismissed this notification"
@@ -3282,14 +3312,19 @@ actions:
                       {% endif %}
                     {% endif %}
 
-                - alias: "LT3c · Exit if phone active"
+                - alias: "LT3c · Exit if phone active beyond threshold"
                   condition: template
                   value_template: >-
                     {% set ent = phone_interactive_entity
                         | default('') | string %}
                     {% if ent | length == 0 %}true
+                    {% elif not is_state(ent, 'on') %}true
                     {% else %}
-                      {{ not is_state(ent, 'on') }}
+                      {% set changed = states[ent].last_changed
+                          | default(now()) %}
+                      {% set mins = ((now() - changed).total_seconds()
+                          / 60) | round(1) %}
+                      {{ mins < (phone_interactive_min | int(2)) }}
                     {% endif %}
 
                 - alias: "LT3d · Exit if notification dismissed"
@@ -3419,7 +3454,7 @@ actions:
                                 value_template: >-
                                   {{ is_state(toggle_entity,
                                       'on') }}
-                              - alias: "FR-R3c · Phone gate"
+                              - alias: "FR-R3c · Phone gate (sustained)"
                                 condition: template
                                 value_template: >-
                                   {% set ent =
@@ -3428,9 +3463,18 @@ actions:
                                       | string %}
                                   {% if ent | length == 0 %}
                                     true
+                                  {% elif not is_state(ent,
+                                      'on') %}
+                                    true
                                   {% else %}
-                                    {{ not is_state(ent,
-                                        'on') }}
+                                    {% set changed =
+                                        states[ent].last_changed
+                                        | default(now()) %}
+                                    {% set mins = ((now()
+                                        - changed).total_seconds()
+                                        / 60) | round(1) %}
+                                    {{ mins < (phone_interactive_min
+                                        | int(2)) }}
                                   {% endif %}
                               - alias: "FR-R3d · Dismiss gate"
                                 condition: template
