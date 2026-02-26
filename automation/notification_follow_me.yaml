@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.12.6)
+# Notification Follow-Me (v3.12.7)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.12.6)"
+  name: "Notification Follow-Me (v3.12.7)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,13 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.12.7:** Outgoing WhatsApp media gate (Issue 13) —
+      adds `category: progress` to step 1b alongside the existing
+      `transport` check. WhatsApp uses this category for outgoing
+      GIF/photo/video/voice-note sends. Belt-and-suspenders: LLM
+      prompt now includes SKIP_OUTGOING instruction — if the message
+      text looks outgoing (e.g. "Sending GIF to…"), the agent
+      responds with the magic token and the TTS step suppresses it.
     - **v3.12.6:** Sender alias article fix — rewrites the
       relationship-name guidance at all 4 LLM prompt sites to
       explicitly require the article "the" before relationship
@@ -353,7 +360,8 @@ blueprint:
             notification sender matches any of these names, the
             message is treated as outgoing and silently dropped.
             Also drops notifications with category "transport"
-            (Signal voice notes you send). Case-insensitive.
+            (Signal voice notes you send) or "progress" (WhatsApp
+            outgoing media — GIF, photo, video). Case-insensitive.
             Leave empty to disable outgoing message filtering.
           default: ""
           selector:
@@ -1244,7 +1252,7 @@ actions:
       {%- else -%}
         {%- set cat = _attrs.get('category', '')
             | string | lower | trim -%}
-        {%- if cat == 'transport' -%}
+        {%- if cat in ['transport', 'progress'] -%}
           false
         {%- else -%}
           {%- set sender = notif_sender
@@ -1660,6 +1668,15 @@ actions:
             name. These are the user's own outbound replies.
             --- END THREAD FORMAT CONTEXT ---
 
+            --- OUTGOING MESSAGE GUARD ---
+            If the message text looks like an outgoing action rather
+            than an incoming message — for example "Sending GIF to…",
+            "Sending photo to…", "Sharing media to…", or any
+            progress/status text about content YOU are sending —
+            respond with exactly SKIP_OUTGOING and nothing else.
+            Do not summarize, narrate, or acknowledge the content.
+            --- END OUTGOING MESSAGE GUARD ---
+
             --- PRONOUN CONTEXT ---
             When "you" or "tú" appears in the message text, it usually
             refers to the notification recipient — not to you. The
@@ -1808,6 +1825,16 @@ actions:
                 incomplete response — using fallback announcement for
                 {{ app_label }} from {{ notif_sender[:20] | default('unknown') }}.
               level: warning
+
+  # ---------------------------------------------------------------------------
+  # 7a-gate · SKIP_OUTGOING suppression — if the LLM flagged this as outgoing,
+  #           halt the sequence before TTS. Condition failure in a flat sequence
+  #           stops all subsequent steps naturally (no stop action needed).
+  # ---------------------------------------------------------------------------
+  - alias: "7a-gate · Suppress TTS if LLM returned SKIP_OUTGOING"
+    condition: template
+    value_template: >-
+      {{ 'SKIP_OUTGOING' not in (announcement | default('') | string | upper) }}
 
   # ---------------------------------------------------------------------------
   # 7b. Build TTS data payloads — conditionally inject announce key
