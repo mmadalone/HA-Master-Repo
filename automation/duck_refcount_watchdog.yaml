@@ -1,5 +1,5 @@
 # =============================================================================
-# Duck Refcount Watchdog (v1.0.0)
+# Duck Refcount Watchdog (v1.1.0)
 # =============================================================================
 # Safety net for stranded duck refcount. When parallel TTS runs die mid-flight
 # (automation reload, HA restart, supersede exit), the refcount stays >0,
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Duck Refcount Watchdog (v1.0.0)"
+  name: "Duck Refcount Watchdog (v1.1.0)"
   author: madalone
   description: >
     # Duck Refcount Watchdog
@@ -37,6 +37,12 @@ blueprint:
 
 
     ### Recent changes
+
+    - **v1.1.0:** Startup/reload instant reset — adds `homeassistant` start
+      and `automation_reloaded` event triggers for immediate cleanup when
+      HA restarts or automations are reloaded. Eliminates the timeout-length
+      window where players stay ducked after mid-flight instance kills.
+      Notification now shows trigger source (timeout / startup / reload).
 
     - **v1.0.0:** Initial release — numeric_state trigger with configurable
       timeout, snapshot-based volume restore, helper cleanup, optional
@@ -129,7 +135,11 @@ blueprint:
             boolean:
 
 # =============================================================================
-# Trigger — refcount stuck above zero for too long
+# Triggers
+# =============================================================================
+# timeout  — original: refcount stuck above zero for too long
+# startup  — HA restart: instances killed, refcount orphaned
+# reload   — automation reload: same mid-flight kill scenario
 # =============================================================================
 trigger:
   - trigger: numeric_state
@@ -137,6 +147,15 @@ trigger:
     above: 0
     for:
       minutes: !input timeout_minutes
+    id: timeout
+
+  - trigger: homeassistant
+    event: start
+    id: startup
+
+  - trigger: event
+    event_type: automation_reloaded
+    id: reload
 
 # =============================================================================
 # Condition — race guard: confirm it's still stranded
@@ -155,11 +174,24 @@ variables:
   _duck_refcount_entity: !input duck_refcount_helper
   _sat_snapshot_entity: !input satellite_volume_snapshot
   _notify: !input notify_on_reset
+  _trigger_id: "{{ trigger.id | default('timeout') }}"
 
 # =============================================================================
 # Actions — restore volumes, clear helpers, reset state
 # =============================================================================
 actions:
+
+  # ---------------------------------------------------------------------------
+  # 0. Entity settle delay — startup/reload triggers fire before entities
+  #    are fully available. Wait 10s to let helpers settle.
+  # ---------------------------------------------------------------------------
+  - alias: "0 · Entity settle delay (startup/reload only)"
+    if:
+      - condition: template
+        value_template: "{{ _trigger_id in ['startup', 'reload'] }}"
+    then:
+      - delay:
+          seconds: 10
 
   # ---------------------------------------------------------------------------
   # 1. Parse snapshot and restore ducked player volumes
@@ -252,7 +284,8 @@ actions:
         data:
           title: "🦆 Duck Watchdog Reset"
           message: >-
-            Stranded duck refcount detected after timeout — forced reset.
+            Stranded duck refcount detected
+            (trigger: {{ _trigger_id }}) — forced reset.
             {% if _ducked_players | length > 0 %}
             Restored {{ _ducked_players | length }} player(s):
             {{ _ducked_players | map(attribute='entity_id') | join(', ') }}.
