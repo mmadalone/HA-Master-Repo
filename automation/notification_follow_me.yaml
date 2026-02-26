@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.12.5)
+# Notification Follow-Me (v3.12.6)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.12.5)"
+  name: "Notification Follow-Me (v3.12.6)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,15 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.12.6:** Sender alias article fix — rewrites the
+      relationship-name guidance at all 4 LLM prompt sites to
+      explicitly require the article "the" before relationship
+      descriptors (e.g. "the love of your life sent you…").
+      Corrects the example text that was priming the LLM to
+      produce "your love of your life" by using the wrong
+      possessive in the prompt itself. Sites 2–4 (reminder,
+      FR0-SC, LT0) now include the full article rule where
+      previously they had no relationship-handling instruction.
     - **v3.12.5:** Pronoun grounding (Issue 3) — adds PRONOUN CONTEXT
       fence to all 4 LLM prompt sites. Instructs the agent that "you/tú"
       in notification text refers to the phone's owner unless the sender
@@ -1622,9 +1631,12 @@ actions:
 
             The sender's preferred name is {{ display_sender }}.
             Refer to them naturally by this name — do not use any
-            other name found in the message body. If the name
-            describes a relationship (e.g. "The Love of your life"),
-            use it as a natural reference, not a quoted title.
+            other name found in the message body. If the preferred
+            name is a relationship phrase (e.g. "love of my life",
+            "mi vida"), always introduce them with the article "the"
+            — say "the love of your life sent you a message", never
+            "your love of your life". Use it as a natural reference,
+            not a quoted title.
 
             CRITICAL: Never reproduce laughter syllables (jajaja,
             hahaha), emoji characters, or elongated words literally
@@ -2599,9 +2611,11 @@ actions:
 
                   The sender's preferred name is
                   {{ _r_display_sender }}. Refer to them
-                  naturally by this name. If it describes a
-                  relationship, use it as a natural reference,
-                  not a quoted title.
+                  naturally by this name. If the preferred name
+                  is a relationship phrase, always introduce them
+                  with the article "the" — say "the love of your
+                  life", never "your love of your life". Use it
+                  as a natural reference, not a quoted title.
 
                   CRITICAL: Never reproduce laughter syllables
                   or emoji characters literally — describe the
@@ -3440,7 +3454,12 @@ actions:
                                     {% endif %}
 
                                     The sender's preferred name is
-                                    {{ display_sender }}.
+                                    {{ display_sender }}. If the
+                                    preferred name is a relationship
+                                    phrase, always introduce them with
+                                    the article "the" — say "the love
+                                    of your life", never "your love of
+                                    your life".
 
                                     --- ESCALATION CONTEXT ---
                                     phase: full-restart (re-triggered
@@ -4049,7 +4068,11 @@ actions:
                           {% endif %}
 
                           The sender's preferred name is
-                          {{ display_sender }}.
+                          {{ display_sender }}. If the preferred
+                          name is a relationship phrase, always
+                          introduce them with the article "the" —
+                          say "the love of your life", never "your
+                          love of your life".
 
                           --- ESCALATION CONTEXT ---
                           phase: long-tail
