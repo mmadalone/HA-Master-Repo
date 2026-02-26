@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.13.0)
+# Notification Follow-Me (v3.13.1)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.13.0)"
+  name: "Notification Follow-Me (v3.13.1)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,23 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.13.1:** Conversation threading + R3c sustained-use fix +
+      outgoing reply gate.
+      Adds `conversation_id` (scoped to `this.context.id`) to both
+      `conversation.process` calls (step 7-llm and step R6) so
+      the agent retains multi-turn memory across the initial
+      announcement and all subsequent reminders within the same
+      notification cycle. Fixes R3c phone interactive gate which
+      was missing the sensor state check — previously only checked
+      `last_changed` duration without verifying the phone was
+      actually ON, causing reminders to continue during sustained
+      phone use and exit on momentary screen glances. New step 1c
+      outgoing thread reply gate — checks the last entry in
+      `android.textLines` against `self_names` to detect when the
+      user's own reply triggered the sensor. Step 1b only catches
+      outgoing messages where `android.title` matches the user's
+      name; step 1c catches replies in other people's threads where
+      the sender remains the contact name.
     - **v3.13.0:** Unified notification ledger architecture (Phase 1).
       Replaces three independent reminder loops (fast-cadence §9d,
       long-tail §9e, fast-resume sub-loop) with a single ledger-driven
@@ -58,118 +75,6 @@ blueprint:
       prompt now includes SKIP_OUTGOING instruction — if the message
       text looks outgoing (e.g. "Sending GIF to…"), the agent
       responds with the magic token and the TTS step suppresses it.
-    - **v3.12.6:** Sender alias article fix — rewrites the
-      relationship-name guidance at all 4 LLM prompt sites to
-      explicitly require the article "the" before relationship
-      descriptors (e.g. "the love of your life sent you…").
-      Corrects the example text that was priming the LLM to
-      produce "your love of your life" by using the wrong
-      possessive in the prompt itself. Sites 2–4 (reminder,
-      FR0-SC, LT0) now include the full article rule where
-      previously they had no relationship-handling instruction.
-    - **v3.12.5:** Pronoun grounding (Issue 3) — adds PRONOUN CONTEXT
-      fence to all 4 LLM prompt sites. Instructs the agent that "you/tú"
-      in notification text refers to the phone's owner unless the sender
-      addresses the agent by name.
-    - **v3.12.4:** GIF media detection fix (Issue 8) — removed "GIF"
-      from substring-based `media_patterns` to prevent false positives
-      on normal messages mentioning GIF. Animated sticker notifications
-      (`<emoji> GIF`, ≤10 chars) are now detected via a dedicated
-      short-text + suffix check in `is_media_message`.
-    - **v3.12.3:** Supersede-safe restore (Option 3) — when a
-      reminder while-loop (R0, LT0, FR0) exits due to supersede
-      (newer notification cycle owns the cooldown helper), the
-      exiting cycle now performs a defensive duck cleanup:
-      checks snapshot helpers for stale state, conditionally
-      decrements the refcount, and if last duck, restores
-      volumes from snapshots, clears helpers, and clears the
-      ducking flag. Terminates immediately via `stop:` instead
-      of cascading through subsequent phases. Double-decrement
-      guarded by snapshot-non-empty check. Belt half of
-      belt-and-suspenders with duck_refcount_watchdog.
-    - **v3.12.2:** Satellite snapshot float-cast fix — the
-      `_sat_stored_vol` variable could resolve to a float when the
-      snapshot helper contained a numeric string (e.g. "0.46"),
-      causing `TypeError: object of type 'float' has no len()` on
-      the `saved_volume` and `_sat_snap_is_fresh` length checks.
-      Added `| string` before `| length` on both uses. Latent bug
-      exposed by stranded duck state (Issue 7) leaving stale data
-      in the snapshot helper.
-    - **v3.12.1:** Outgoing message gate (Issue 5 partial) —
-      New `self_names` input accepts a comma-separated list of
-      the user's own display names. Step 1b drops two categories
-      of self-generated noise: notifications with
-      `category: transport` (Signal voice notes, media controls)
-      and notifications where the sender name matches any entry
-      in the self-names list (case-insensitive). Outgoing text
-      prefix detection (Check 3) deferred — blocked on WhatsApp
-      format capture.
-    - **v3.12.0:** Trigger-timestamp cooldown + zombie supersede —
-      Step 9a now writes `trigger.to_state.last_changed` instead of
-      `now()` to the cooldown helper, so cooldown gates compare
-      trigger timestamps rather than wall-clock time (Issue 4).
-      All three reminder loops (standard R0, long-tail LT0,
-      full-restart FR0) now include a supersede check: each
-      iteration reads the helper timestamp and self-terminates
-      if a newer cycle has written a more recent value, preventing
-      zombie loops from squatting in parallel slots and starving
-      new notifications (Issue 6).
-    - **v3.11.0:** Duck refcount (parallel burst guard) — new optional
-      `duck_refcount_helper` input_number in §⑦. Tracks how many
-      active duck cycles are in flight across parallel runs. Only
-      the last run to finish TTS delivery restores volumes —
-      preventing burst messages from prematurely undoing the duck
-      while other announcements are still playing. Applied to
-      all four duck/restore paths: main announcement (7f→8),
-      standard reminders (R5b→R9), long-tail single_check
-      (LT6b→LT8), and full_restart (FR-duck→FR-restore).
-      Helper-aware restore resolution reads from shared snapshot
-      helpers when available, falling back to per-run snapshots.
-      Requires the duck snapshot helper to be configured.
-    - **v3.10.2:** Ducking flag integration — new optional
-      `ducking_flag` input_boolean in §⑦. Set ON during duck
-      cycles and OFF after restore, signaling external volume-sync
-      automations (Alexa ↔ MA, Voice PE duck/restore) to back off.
-      Shared with Email Follow-Me for cross-blueprint coordination.
-      Also adds full duck/restore cycles for other media players
-      in the standard reminder loop (R5b/R9b/R9c), long-tail
-      single_check (LT6b/LT8b/LT8c), and full_restart (FR-duck)
-      paths — previously only the main announcement path ducked
-      other players, leaving reminders competing with background
-      music at full volume.
-    - **v3.7.7:** Agent display name — new optional text input
-      in §① lets you specify the persona name the conversation
-      agent goes by (e.g., "Rick", "Quark", "Jarvis"). Injected
-      into both the initial LLM prompt (step 7) and the reminder
-      prompt (R6) so the agent recognizes references to itself
-      in notification content without hardcoding persona names.
-      Leave empty for generic "assistant" phrasing.
-    - **v3.7.6:** Stale dismissal fix — R3d now compares the
-      `post_time` attribute of the removed notification against
-      the triggering notification's `post_time`. Previously,
-      the sender+package match had no temporal awareness, so a
-      dismissed notification from the same contact would
-      permanently suppress all future reminders from that
-      contact until a different sender's notification was
-      dismissed. Now only dismissals with `post_time` >= the
-      trigger's `post_time` exit the loop. Step 9c captures
-      `_trigger_post_time` for the comparison.
-    - **v3.7.5:** Notification dismissal exit — new optional
-      `last_removed_notification` sensor input in §⑧. The
-      reminder loop now checks if the user dismissed the
-      notification matching the original sender AND app. Only
-      an exact sender + package match exits the loop —
-      dismissing unrelated notifications (Gmail, YouTube, etc.)
-      is safely ignored. Fixes reminders persisting after the
-      user has already read and dismissed the message.
-    - **v3.7.4:** Satellite volume race-condition fix — new optional
-      input_text helper in §⑤ stores the target satellite's original
-      volume using first-write-wins logic. When rapid-fire
-      notifications trigger parallel runs, the second run reads
-      the true pre-duck volume from the helper instead of
-      snapshotting the already-adjusted level. Cleared after
-      restore. Same pattern as the duck_snapshot_helper in §⑦.
-      Leave empty for per-run snapshots (original behavior).
 
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/notification_follow_me.yaml"
@@ -1242,6 +1147,7 @@ variables:
   reminder_flag_entity: !input reminder_loop_flag
   reminder_watchdog_entity: !input reminder_loop_watchdog
   bundled_prompt_text: !input bundled_reminder_prompt
+  llm_agent: !input conversation_agent
 
 # =============================================================================
 # TRIGGERS
@@ -1294,6 +1200,7 @@ actions:
   # ---------------------------------------------------------------------------
   - alias: "1 · Extract notification attributes"
     variables:
+      _conv_id: "notif-follow-me-{{ this.context.id }}"
       _attrs: >-
         {% if trigger.to_state is defined %}
           {{ trigger.to_state.attributes }}
@@ -1371,6 +1278,35 @@ actions:
             {%- endif -%}
           {%- endfor -%}
           {{ not ns.is_self }}
+        {%- endif -%}
+      {%- endif -%}
+
+  # ---------------------------------------------------------------------------
+  # 1c. Outgoing thread reply gate — drop when last textLine is yours
+  # ---------------------------------------------------------------------------
+  - alias: "1c · Drop outgoing thread replies"
+    condition: template
+    value_template: >-
+      {%- set lines = _attrs.get('android.textLines', none) -%}
+      {%- if lines is not iterable or lines is string
+          or lines | length == 0 -%}
+        true
+      {%- else -%}
+        {%- set last = lines[-1] | default('') | string | trim -%}
+        {%- set self_list = self_names_list
+            | default('') | string | trim -%}
+        {%- if self_list | length == 0 -%}
+          true
+        {%- else -%}
+          {%- set ns = namespace(is_outgoing=false) -%}
+          {%- for name in self_list.split(',') -%}
+            {%- set prefix = name | trim -%}
+            {%- if prefix | length > 0
+                and last.startswith(prefix ~ ':') -%}
+              {%- set ns.is_outgoing = true -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ not ns.is_outgoing }}
         {%- endif -%}
       {%- endif -%}
 
@@ -1734,7 +1670,8 @@ actions:
         action: conversation.process
         response_variable: llm_result
         data:
-          agent_id: !input conversation_agent
+          agent_id: "{{ llm_agent }}"
+          conversation_id: "{{ _conv_id }}"
           text: >-
             {{ notification_prompt }}
 
@@ -2024,7 +1961,7 @@ actions:
   # ---------------------------------------------------------------------------
   - alias: "7d · Gate: skip TTS when phone is in silent mode"
     condition: template
-    value_template: "{{ ringer_state != 'silent' or (dnd_entity | default('') | string | length) == 0 }}"
+    value_template: "{{ ringer_state != 'silent' }}"
 
   # ---------------------------------------------------------------------------
   # 7e. Duck volume when phone is in vibrate mode
@@ -2196,6 +2133,7 @@ actions:
             default:
               - alias: "Fallback — unknown TTS mode, log warning and use standard"
                 action: system_log.write
+                continue_on_error: true
                 data:
                   message: >-
                     Notification Follow-Me: unknown tts_mode '{{ tts_mode }}'
@@ -2630,17 +2568,19 @@ actions:
                   {% endif %}
                 {% endif %}
 
-            - alias: "R3c · Phone not interactive"
+            - alias: "R3c · Phone not interactive (sustained-use check)"
               condition: template
               value_template: >-
                 {% set pe = phone_interactive_entity | default('', true) %}
                 {% if pe == '' %}
                   true
+                {% elif not is_state(pe, 'on') %}
+                  true
                 {% else %}
                   {% set dur = (as_timestamp(now())
                                - as_timestamp(states[pe].last_changed | default(0)))
                                / 60 %}
-                  {{ dur >= (phone_interactive_min | int(2)) }}
+                  {{ dur < (phone_interactive_min | int(2)) }}
                 {% endif %}
 
             # ---------------------------------------------------------------
@@ -3000,7 +2940,8 @@ actions:
                   action: conversation.process
                   response_variable: reminder_llm_result
                   data:
-                    agent_id: !input conversation_agent
+                    agent_id: "{{ llm_agent }}"
+                    conversation_id: "{{ _conv_id }}"
                     text: >-
                       {{ _r_prompt_text }}
 
@@ -3196,6 +3137,7 @@ actions:
                           default:
                             - alias: "Fallback — unknown TTS mode"
                               action: system_log.write
+                              continue_on_error: true
                               data:
                                 message: >-
                                   Notification Follow-Me: reminder loop unknown
