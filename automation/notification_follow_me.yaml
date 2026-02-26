@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.14.0)
+# Notification Follow-Me (v3.14.1)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.14.0)"
+  name: "Notification Follow-Me (v3.14.1)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,14 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.14.1:** Watchdog self-heal trigger. Adds a time_pattern
+      trigger (every 5 min) that detects orphaned reminder loops
+      left by blueprint reloads or HA restarts. When the reminder
+      flag is ON but the watchdog tick is stale (>2× interval) and
+      the ledger still has entries, delivers a basic TTS reminder
+      and refreshes the tick. Degraded-mode only (no LLM, no duck
+      orchestration) — full sophistication resumes on next real
+      notification trigger.
     - **v3.14.0:** Conversation thread context (Phase 4).
       When the phone's notification stack contains multiple unread
       messages from the same chat (android.textLines > 1 entry),
@@ -1173,6 +1181,11 @@ triggers:
     trigger: state
     entity_id: !input notification_sensor
 
+  - alias: "Watchdog — periodic stale-loop recovery"
+    id: watchdog_tick
+    trigger: time_pattern
+    minutes: "/5"
+
 # =============================================================================
 # CONDITIONS
 # =============================================================================
@@ -1210,6 +1223,76 @@ conditions:
 # ACTIONS
 # =============================================================================
 actions:
+  # ---------------------------------------------------------------------------
+  # 0w. Watchdog self-heal — recover orphaned reminder loops
+  # ---------------------------------------------------------------------------
+  - alias: "0w · Watchdog recovery gate"
+    if:
+      - condition: template
+        value_template: "{{ trigger.id == 'watchdog_tick' }}"
+    then:
+      - alias: "0w-check · Evaluate if orphaned loop exists"
+        if:
+          - condition: template
+            value_template: >-
+              {{ reminder_enabled | bool(false)
+                 and is_state(reminder_flag_entity, 'on')
+                 and (states(ledger_entity) | default('') | length > 0) }}
+        then:
+          - variables:
+              _wd_stale: >-
+                {% set w = reminder_watchdog_entity | default('') %}
+                {% if w | length == 0 %}false
+                {% else %}
+                  {% set wt = states(w) | as_timestamp | default(0) %}
+                  {% set threshold =
+                      (reminder_interval_min | int(5)) * 2 * 60 %}
+                  {{ (as_timestamp(now()) - wt) > threshold }}
+                {% endif %}
+          - condition: template
+            value_template: "{{ _wd_stale | bool(false) }}"
+          - variables:
+              _wd_active_index: >-
+                {% set ns = namespace(idx=-1) %}
+                {% for s in presence_list %}
+                  {% if ns.idx == -1 and is_state(s, 'on') %}
+                    {% set ns.idx = loop.index0 %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.idx }}
+              _wd_satellite: >-
+                {% set idx = _wd_active_index | int(-1) %}
+                {% if idx >= 0 and idx < (satellite_list | length) %}
+                  {{ satellite_list[idx] }}
+                {% else %}{{ '' }}{% endif %}
+              _wd_has_satellite: >-
+                {{ _wd_satellite | default('') | length > 0 }}
+          - condition: template
+            value_template: "{{ _wd_has_satellite | bool(false) }}"
+          - action: system_log.write
+            continue_on_error: true
+            data:
+              message: >-
+                Notification Follow-Me: watchdog recovering orphaned
+                reminder loop — delivering basic reminder via
+                {{ _wd_satellite }}
+              level: warning
+          - action: input_datetime.set_datetime
+            continue_on_error: true
+            target:
+              entity_id: "{{ reminder_watchdog_entity }}"
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - action: tts.speak
+            continue_on_error: true
+            target:
+              entity_id: "{{ tts_entity }}"
+            data:
+              message: >-
+                Hey, you still have unread messages. Check your phone.
+              media_player_entity_id: "{{ _wd_satellite }}"
+      - stop: "Watchdog tick complete"
+
   # ---------------------------------------------------------------------------
   # 1. Extract notification attributes into variables
   # ---------------------------------------------------------------------------
@@ -1679,6 +1762,15 @@ actions:
         {% endif %}
 
   # ---------------------------------------------------------------------------
+  # 6d. Detect if the message addresses the agent by name
+  # ---------------------------------------------------------------------------
+  - alias: "6d · Detect if message addresses the agent by name"
+    variables:
+      is_addressed_to_agent: >-
+        {% set name = agent_name | default('') | string | trim %}
+        {{ name | length > 0 and truncated_text | default('') | regex_search('(?i)\\b' ~ name ~ '\\b') }}
+
+  # ---------------------------------------------------------------------------
   # 7. Generate summary via conversation agent (skip for short_tts media)
   # ---------------------------------------------------------------------------
   - alias: "7 · Generate notification summary via LLM"
@@ -1705,10 +1797,16 @@ actions:
           text: >-
             {{ notification_prompt }}
 
-            {% if (agent_name | default('') | string | trim) | length > 0 %}
-            Your name is {{ agent_name }}. If the message mentions your
-            name, refers to "the AI", "the assistant", or otherwise
-            addresses you — acknowledge it naturally in your summary.
+            {% if is_addressed_to_agent | default(false) | bool(false) %}
+            Your name is {{ agent_name }}. The sender addressed you
+            directly in this message. React to that — you are being
+            spoken to, not just relaying a message. But the substance
+            may still be about the recipient, so relay that content
+            naturally while acknowledging you were addressed.
+            {% elif (agent_name | default('') | string | trim) | length > 0 %}
+            Your name is {{ agent_name }}. If the message refers to
+            "the AI" or "the assistant", acknowledge it naturally in
+            your summary.
             {% endif %}
 
             The sender's preferred name is {{ display_sender }}.
@@ -1764,9 +1862,7 @@ actions:
 
             --- PRONOUN CONTEXT ---
             When "you" or "tú" appears in the message text, it usually
-            refers to the notification recipient — not to you. The
-            exception is when the sender addresses you by name; in that
-            case, they are speaking to you directly.
+            refers to the notification recipient — not to you.
             --- END PRONOUN CONTEXT ---
             {% set petnames = user_petnames_list | default('') | string | trim %}
             {% if petnames | length > 0 %}
@@ -3002,10 +3098,18 @@ actions:
                       Read mode: {{ reminder_read_mode }}
                       {% endif %}
 
-                      {% if (agent_name | default('') | string | trim) | length > 0 %}
-                      Your name is {{ agent_name }}. If the message mentions your
-                      name, refers to "the AI", "the assistant", or otherwise
-                      addresses you — acknowledge it naturally.
+                      {% set _name = agent_name | default('') | string | trim %}
+                      {% if _name | length > 0 %}
+                      Your name is {{ agent_name }}.
+                      {% if _r_truncated | default('') | regex_search('(?i)\\b' ~ _name ~ '\\b') %}
+                      The sender addressed you directly. React to that — you
+                      are being spoken to, not just relaying a message. But the
+                      substance may still be about the recipient, so relay that
+                      content naturally while acknowledging you were addressed.
+                      {% else %}
+                      If the message refers to "the AI" or "the assistant",
+                      acknowledge it naturally.
+                      {% endif %}
                       {% endif %}
 
                       The sender's preferred name is {{ _r_display_sender }}.
