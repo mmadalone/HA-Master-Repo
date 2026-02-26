@@ -12,3 +12,4 @@
 *.tmp
 *.bak
 .smbdelete*
+/style-guide/_reference
