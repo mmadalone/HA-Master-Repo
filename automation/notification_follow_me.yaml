@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.16.0)
+# Notification Follow-Me (v3.17.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.16.0)"
+  name: "Notification Follow-Me (v3.17.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,6 +29,13 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
+    - **v3.17.0:** Agent randomizer support — new ⑨ section with optional
+      script call that overrides conversation agent + TTS entity at runtime;
+      forces TTS mode to standard when active; "called by name trumps random"
+      detection at step 6d swaps to the addressed agent's full pair from the
+      roster when a non-active agent is named in the notification text;
+      alias-aware matching supports nicknames and misspellings via
+      comma-separated aliases per agent
     - **v3.16.0:** App-aware R3c gate — evicts only the app the user is viewing, not all reminders
     - **v3.16.0:** New last_used_app_sensor + notification_app_packages inputs for foreground detection
     - **v3.16.0:** Four-branch R3c: unconfigured backwards-compat, per-app eviction, unrelated-app pass
@@ -1098,6 +1105,41 @@ blueprint:
             text:
               multiline: true
 
+    # =========================================================================
+    # ⑨ AGENT RANDOMIZER (optional)
+    # =========================================================================
+    agent_randomizer:
+      name: "⑨ Agent randomizer"
+      icon: mdi:dice-multiple
+      description: >-
+        Optionally randomize the conversation agent and TTS voice each
+        time this automation fires. When enabled, the configured agent
+        randomizer script replaces both the conversation agent and TTS
+        entity, and forces TTS mode to standard.
+      collapsed: true
+      input:
+        use_agent_randomizer:
+          name: Enable agent randomizer
+          description: >-
+            When ON, calls the agent randomizer script to select a random
+            conversation agent + paired TTS entity. Overrides the
+            conversation agent from ① and the TTS entity from ⑤. TTS
+            mode is forced to "standard_tts_entity" when active.
+          default: false
+          selector:
+            boolean:
+        agent_randomizer_script:
+          name: Agent randomizer script
+          description: >-
+            The script entity created from the Agent Randomizer blueprint.
+            Must return response variables "agent" (conversation agent)
+            and "tts" (TTS entity). Only used when the toggle above is ON.
+          default: ""
+          selector:
+            entity:
+              filter:
+                domain: script
+
 # =============================================================================
 # EXECUTION MODE
 # =============================================================================
@@ -1176,6 +1218,8 @@ variables:
   reminder_watchdog_entity: !input reminder_loop_watchdog
   bundled_prompt_text: !input bundled_reminder_prompt
   llm_agent: !input conversation_agent
+  use_randomizer: !input use_agent_randomizer
+  randomizer_script: !input agent_randomizer_script
 
 # =============================================================================
 # TRIGGERS
@@ -1332,6 +1376,63 @@ actions:
         then:
           - stop: "Watchdog tick complete — no recovery needed"
       # Watchdog recovery: falls through to §1–§9 when _wd_recovered = true
+
+  # ---------------------------------------------------------------------------
+  # 0r. Agent randomizer — optionally override agent + TTS with random pair
+  # ---------------------------------------------------------------------------
+  - alias: "0r · Call agent randomizer if enabled"
+    if:
+      - condition: template
+        value_template: >-
+          {{ use_randomizer | bool(false)
+             and randomizer_script | default('') | length > 0 }}
+    then:
+      - action: "{{ randomizer_script }}"
+        response_variable: _randomizer
+  - alias: "0r · Apply randomizer overrides (or keep defaults)"
+    variables:
+      llm_agent: >-
+        {%- if _randomizer is defined and _randomizer.agent | default('') | length > 0 -%}
+          {{ _randomizer.agent }}
+        {%- else -%}
+          {{ llm_agent }}
+        {%- endif -%}
+      tts_entity: >-
+        {%- if _randomizer is defined and _randomizer.tts | default('') | length > 0 -%}
+          {{ _randomizer.tts }}
+        {%- else -%}
+          {{ tts_entity }}
+        {%- endif -%}
+      tts_mode: >-
+        {%- if _randomizer is defined and _randomizer.agent | default('') | length > 0 -%}
+          standard_tts_entity
+        {%- else -%}
+          {{ tts_mode }}
+        {%- endif -%}
+      agent_name: >-
+        {%- if _randomizer is defined and _randomizer.name | default('') | length > 0 -%}
+          {{ _randomizer.name }}
+        {%- else -%}
+          {{ agent_name }}
+        {%- endif -%}
+      _roster: >-
+        {%- if _randomizer is defined and _randomizer.roster is defined -%}
+          {{ _randomizer.roster }}
+        {%- else -%}
+          []
+        {%- endif -%}
+      _active_aliases: >-
+        {%- if _randomizer is defined -%}
+          {%- set ns = namespace(found='') -%}
+          {%- for p in _randomizer.roster | default([]) -%}
+            {%- if ns.found == '' and p.agent == (_randomizer.agent | default('')) -%}
+              {%- set ns.found = p.aliases | default('') -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.found }}
+        {%- else -%}
+          {{ agent_name }}
+        {%- endif -%}
 
   # ---------------------------------------------------------------------------
   # 1. Extract notification attributes into variables
@@ -1860,13 +1961,80 @@ actions:
         {% endif %}
 
   # ---------------------------------------------------------------------------
-  # 6d. Detect if the message addresses the agent by name
+  # 6d. Detect if the message addresses an agent by name
+  #     When randomizer is active, checks ALL roster names — if a non-active
+  #     agent is called by name, late-swaps to that agent's full pair.
   # ---------------------------------------------------------------------------
-  - alias: "6d · Detect if message addresses the agent by name"
+  - alias: "6d · Detect direct address and roster name-swap"
     variables:
-      is_addressed_to_agent: >-
-        {% set name = agent_name | default('') | string | trim %}
-        {{ name | length > 0 and truncated_text | default('') | regex_search('(?i)\\b' ~ name ~ '\\b') }}
+      _name_match: >-
+        {%- set text = truncated_text | default('') -%}
+        {%- set active_aliases = _active_aliases | default(agent_name | default('')) | string -%}
+        {%- set ns_cur = namespace(found=false) -%}
+        {%- for alias in active_aliases.split(',') -%}
+          {%- set a = alias | trim -%}
+          {%- if not ns_cur.found and a | length > 0 and text | regex_search('(?i)\\b' ~ a ~ '\\b') -%}
+            {%- set ns_cur.found = true -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {%- if ns_cur.found -%}
+          current
+        {%- elif _roster | default([]) | length > 0 -%}
+          {%- set ns = namespace(hit='') -%}
+          {%- for p in _roster -%}
+            {%- if ns.hit == '' -%}
+              {%- for alias in (p.aliases | default('') | string).split(',') -%}
+                {%- set a = alias | trim -%}
+                {%- if ns.hit == '' and a | length > 0 and text | regex_search('(?i)\\b' ~ a ~ '\\b') -%}
+                  {%- set ns.hit = p | tojson -%}
+                {%- endif -%}
+              {%- endfor -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- if ns.hit | length > 0 -%}
+            roster
+          {%- else -%}
+            none
+          {%- endif -%}
+        {%- else -%}
+          none
+        {%- endif -%}
+      _roster_hit: >-
+        {%- if _name_match == 'roster' -%}
+          {%- set text = truncated_text | default('') -%}
+          {%- set ns = namespace(hit='') -%}
+          {%- for p in _roster -%}
+            {%- if ns.hit == '' -%}
+              {%- for alias in (p.aliases | default('') | string).split(',') -%}
+                {%- set a = alias | trim -%}
+                {%- if ns.hit == '' and a | length > 0 and text | regex_search('(?i)\\b' ~ a ~ '\\b') -%}
+                  {%- set ns.hit = p | tojson -%}
+                {%- endif -%}
+              {%- endfor -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.hit }}
+        {%- else -%}
+          {}
+        {%- endif -%}
+      is_addressed_to_agent: "{{ _name_match in ['current', 'roster'] }}"
+  - alias: "6d-swap · Apply roster name-swap (or keep current)"
+    variables:
+      _swap: >-
+        {%- if _name_match == 'roster' and _roster_hit != '{}' -%}
+          {{ _roster_hit | from_json }}
+        {%- else -%}
+          {}
+        {%- endif -%}
+      llm_agent: "{{ _swap.agent | default(llm_agent) }}"
+      tts_entity: "{{ _swap.tts | default(tts_entity) }}"
+      agent_name: "{{ _swap.name | default(agent_name) }}"
+      tts_mode: >-
+        {%- if _name_match == 'roster' and _swap.agent | default('') | length > 0 -%}
+          standard_tts_entity
+        {%- else -%}
+          {{ tts_mode }}
+        {%- endif -%}
 
   # ---------------------------------------------------------------------------
   # 7. Generate summary via conversation agent (skip for short_tts media)
