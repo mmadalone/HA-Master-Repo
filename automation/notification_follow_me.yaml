@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.14.1)
+# Notification Follow-Me (v3.15.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.14.1)"
+  name: "Notification Follow-Me (v3.15.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,75 +29,9 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
-    - **v3.14.1:** Watchdog self-heal trigger. Adds a time_pattern
-      trigger (every 5 min) that detects orphaned reminder loops
-      left by blueprint reloads or HA restarts. When the reminder
-      flag is ON but the watchdog tick is stale (>2× interval) and
-      the ledger still has entries, delivers a basic TTS reminder
-      and refreshes the tick. Degraded-mode only (no LLM, no duck
-      orchestration) — full sophistication resumes on next real
-      notification trigger.
-    - **v3.14.0:** Conversation thread context (Phase 4).
-      When the phone's notification stack contains multiple unread
-      messages from the same chat (android.textLines > 1 entry),
-      the full message thread is injected into the LLM prompt as a
-      structured `CONVERSATION THREAD` block. Gives the agent
-      awareness of what was said before the latest message —
-      enabling contextual summaries like "she's been telling you
-      about X" instead of treating each message in isolation.
-      Thread context is injected in both the initial announcement
-      (step 7-llm) and reminder calls (R6). When only a single
-      message exists (no stacked notifications), the block is
-      omitted and behavior is unchanged from v3.13.1. Note:
-      Android's notification system only exposes received messages
-      in textLines — the user's own replies are not included
-      unless sent via inline notification reply (OS limitation).
-    - **v3.13.1:** Conversation threading + R3c sustained-use fix +
-      outgoing reply gate.
-      Adds `conversation_id` (scoped to `this.context.id`) to both
-      `conversation.process` calls (step 7-llm and step R6) so
-      the agent retains multi-turn memory across the initial
-      announcement and all subsequent reminders within the same
-      notification cycle. Fixes R3c phone interactive gate which
-      was missing the sensor state check — previously only checked
-      `last_changed` duration without verifying the phone was
-      actually ON, causing reminders to continue during sustained
-      phone use and exit on momentary screen glances. New step 1c
-      outgoing thread reply gate — checks the last entry in
-      `android.textLines` against `self_names` to detect when the
-      user's own reply triggered the sensor. Step 1b only catches
-      outgoing messages where `android.title` matches the user's
-      name; step 1c catches replies in other people's threads where
-      the sender remains the contact name.
-    - **v3.13.0:** Unified notification ledger architecture (Phase 1).
-      Replaces three independent reminder loops (fast-cadence §9d,
-      long-tail §9e, fast-resume sub-loop) with a single ledger-driven
-      unified loop. New inputs: notification_ledger (input_text CSV
-      store), reminder_loop_flag (input_boolean ownership), and
-      reminder_loop_watchdog (input_datetime staleness detection).
-      Ledger entries use FIFO eviction on 255-char overflow and
-      TTL expiry based on reminder_ceiling. Loop ownership via
-      last-writer-starts pattern with watchdog staleness check.
-      Dismiss detection (R3d) now removes individual entries from
-      the ledger rather than killing the loop. Bundled reminders:
-      when multiple entries exist, uses dedicated bundled_reminder_prompt
-      for multi-notification summaries. Presence retrigger mode expanded
-      to 3 options (continue/re_escalate/single_burst). Duck orchestration
-      unified — one cycle per loop tick. File reduced from ~4,850 to
-      ~3,430 lines.
-    - **v3.12.8:** Sustained-use phone interactive check (Issue 10
-      Part 1) — R3c, LT3c, and FR-R3c no longer kill reminders on
-      a momentary screen-on. Phone must be continuously active for
-      a configurable threshold (default 2 min) before reminders
-      exit. Prevents false exits from glancing at the phone or
-      unrelated screen-on events.
-    - **v3.12.7:** Outgoing WhatsApp media gate (Issue 13) —
-      adds `category: progress` to step 1b alongside the existing
-      `transport` check. WhatsApp uses this category for outgoing
-      GIF/photo/video/voice-note sends. Belt-and-suspenders: LLM
-      prompt now includes SKIP_OUTGOING instruction — if the message
-      text looks outgoing (e.g. "Sending GIF to…"), the agent
-      responds with the magic token and the TTS step suppresses it.
+    - **v3.15.0:** Burst batch tail collects catch-up stragglers into one bundled TTS call
+    - **v3.15.0:** Early ledger write ensures cooldown-blocked runs register before exit
+    - **v3.15.0:** New burst_batch_window input controls batch accumulation delay (5–60s)
 
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/notification_follow_me.yaml"
@@ -173,6 +107,24 @@ blueprint:
             about a message they received. Be concise. Do not read the
             message verbatim — paraphrase it. If the message is very short
             (under 10 words), you may quote it directly.
+          selector:
+            text:
+              multiline: true
+
+        direct_address_prompt:
+          name: Direct-address prompt override
+          description: >-
+            When the sender addresses the agent by name, this prompt
+            replaces the standard relay framing from the summarization
+            prompt above. Edit it to change how the agent reacts when
+            spoken to directly. Clear it entirely to disable the
+            override — the agent will use normal relay mode even when
+            addressed by name.
+          default: >-
+            The sender addressed you directly by name in this message.
+            You are being spoken to, not relaying a message to someone
+            else. Respond in first person. Acknowledge being addressed,
+            then convey any content meant for the recipient naturally.
           selector:
             text:
               multiline: true
@@ -431,6 +383,24 @@ blueprint:
             burst to settle before announcing. The sensor accumulates
             messages during the wait, so the LLM sees the full burst.
             Shorter = faster response, longer = catches more messages.
+          default: 15
+          selector:
+            number:
+              min: 5
+              max: 60
+              step: 5
+              unit_of_measurement: seconds
+              mode: slider
+
+        burst_batch_window:
+          name: Burst batch tail window (seconds)
+          description: >-
+            Only used when burst handling is "catch_up". After the
+            first message is announced immediately, waits this many
+            seconds for additional burst messages to accumulate in
+            the ledger, then announces them in a single bundled TTS
+            call. Shorter = faster follow-up, longer = catches more
+            stragglers.
           default: 15
           selector:
             number:
@@ -1123,6 +1093,7 @@ variables:
   last_sender_entity: !input last_announced_sender_helper
   burst_mode: !input burst_handling
   debounce_secs: !input debounce_window
+  burst_batch_secs: !input burst_batch_window
   char_limit: !input char_cap
   dnd_entity: !input dnd_sensor
   enable_quiet: !input enable_quiet_hours
@@ -1139,6 +1110,7 @@ variables:
   expressive_ref: !input expressive_patterns
   audio_tag_density: !input audio_tag_style
   notification_prompt: !input notification_prompt
+  direct_address_prompt_text: !input direct_address_prompt
   agent_name: !input agent_display_name
   ringer_entity: !input ringer_mode_sensor
   quiet_vol: !input quiet_volume
@@ -1291,7 +1263,42 @@ actions:
               message: >-
                 Hey, you still have unread messages. Check your phone.
               media_player_entity_id: "{{ _wd_satellite }}"
-      - stop: "Watchdog tick complete"
+          # --- Watchdog recovery: prepare for full loop re-entry ---
+          - alias: "0w-RECOVER · Clear orphaned flag for clean ownership claim"
+            action: input_boolean.turn_off
+            continue_on_error: true
+            target:
+              entity_id: "{{ reminder_flag_entity }}"
+          - alias: "0w-RECOVER · Populate pipeline stubs from ledger + sensor"
+            variables:
+              _wd_ledger_raw: "{{ states(ledger_entity) | default('') }}"
+              _wd_first_entry: "{{ _wd_ledger_raw.split(',')[0] | default('') }}"
+              _wd_entry_parts: "{{ _wd_first_entry.split('|') }}"
+              _trigger_sender: >-
+                {{ _wd_entry_parts[0] | default('unknown') | trim }}
+              _trigger_post_time: >-
+                {{ _wd_entry_parts[1] | default('0') | trim }}
+              _trigger_package: >-
+                {{ _wd_entry_parts[2] | default('') | trim }}
+              target_satellite: "{{ _wd_satellite }}"
+          - alias: "0w-RECOVER · Log full loop re-entry"
+            action: system_log.write
+            continue_on_error: true
+            data:
+              message: >-
+                Notification Follow-Me: watchdog promoting to full reminder
+                loop — sender={{ _trigger_sender }},
+                satellite={{ target_satellite }}
+              level: warning
+          - variables:
+              _wd_recovered: "true"
+      # Watchdog: only stop if no recovery occurred (normal tick, no orphan)
+      - if:
+          - condition: template
+            value_template: "{{ _wd_recovered | default('false') != 'true' }}"
+        then:
+          - stop: "Watchdog tick complete — no recovery needed"
+      # Watchdog recovery: falls through to §1–§9 when _wd_recovered = true
 
   # ---------------------------------------------------------------------------
   # 1. Extract notification attributes into variables
@@ -1575,6 +1582,64 @@ actions:
           {{ truncated_text }}
         {% endif %}
 
+  # ---------------------------------------------------------------------------
+  # 2e-L. Early ledger write for burst accumulation (catch_up only)
+  # ---------------------------------------------------------------------------
+  # Runs BEFORE the cooldown gate so that cooldown-blocked runs still register
+  # their message in the ledger. Run 1 will also write here; the §9c-L1 guard
+  # prevents a double-write for catch_up mode.
+  - alias: "2e-L · Early ledger write for burst accumulation"
+    if:
+      - condition: template
+        value_template: >-
+          {{ burst_mode == 'catch_up' and
+             reminder_enabled | bool(false) and
+             (ledger_entity | default('') | string | length) > 0 }}
+    then:
+      - variables:
+          _early_sender: "{{ notif_sender | default('') | string | lower | trim }}"
+          _early_package: "{{ notif_package | default('') | string | lower | trim }}"
+          _early_post_time: >-
+            {% set pt = _attrs.get('post_time', 0) | int(0) %}
+            {{ pt }}
+          _early_ledger_entry: >-
+            {{ _early_sender }}|{{ _early_post_time }}|{{ _early_package }}
+          _early_new_ledger: >-
+            {% set current = states(ledger_entity) | default('')
+                | replace('unknown', '') | trim %}
+            {% set entry = _early_ledger_entry | trim %}
+            {% if current | length == 0 %}
+              {{ entry }}
+            {% else %}
+              {% set candidate = current ~ ',' ~ entry %}
+              {% if candidate | length <= 255 %}
+                {{ candidate }}
+              {% else %}
+                {# FIFO eviction — drop oldest entries until it fits #}
+                {% set parts = current.split(',') %}
+                {% set ns = namespace(found=false, result=entry) %}
+                {% for i in range(parts | length) %}
+                  {% if not ns.found %}
+                    {% set remaining = parts[i+1:] | join(',') %}
+                    {% set test = remaining ~ ',' ~ entry
+                        if remaining | length > 0 else entry %}
+                    {% if test | length <= 255 %}
+                      {% set ns.found = true %}
+                      {% set ns.result = test %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.result }}
+              {% endif %}
+            {% endif %}
+      - alias: "2e-L · Write early ledger entry"
+        action: input_text.set_value
+        continue_on_error: true
+        target:
+          entity_id: "{{ ledger_entity }}"
+        data:
+          value: "{{ _early_new_ledger | trim }}"
+
   - alias: "3c · Enforce per-sender cooldown"
     condition: template
     value_template: >-
@@ -1795,18 +1860,16 @@ actions:
           agent_id: "{{ llm_agent }}"
           conversation_id: "{{ _conv_id }}"
           text: >-
+            {% if is_addressed_to_agent | default(false) | bool(false) and (direct_address_prompt_text | default('') | string | trim) | length > 0 %}
+            {{ direct_address_prompt_text }}
+            {% elif (agent_name | default('') | string | trim) | length > 0 %}
             {{ notification_prompt }}
 
-            {% if is_addressed_to_agent | default(false) | bool(false) %}
-            Your name is {{ agent_name }}. The sender addressed you
-            directly in this message. React to that — you are being
-            spoken to, not just relaying a message. But the substance
-            may still be about the recipient, so relay that content
-            naturally while acknowledging you were addressed.
-            {% elif (agent_name | default('') | string | trim) | length > 0 %}
             Your name is {{ agent_name }}. If the message refers to
             "the AI" or "the assistant", acknowledge it naturally in
             your summary.
+            {% else %}
+            {{ notification_prompt }}
             {% endif %}
 
             The sender's preferred name is {{ display_sender }}.
@@ -2456,6 +2519,156 @@ actions:
               value: "{{ notif_sender | default('') | string }}"
 
   # ---------------------------------------------------------------------------
+  # 9ab-batch. Burst batch tail — catch_up mode only
+  # ---------------------------------------------------------------------------
+  # After Run 1 announces the first message, wait for additional burst messages
+  # to accumulate in the ledger, then announce them in a single bundled call.
+  # Cooldown-blocked runs wrote to the ledger at §2e-L and exited at §3c,
+  # so their entries are already there for us to collect.
+  - alias: "9ab-batch · Burst batch tail"
+    if:
+      - condition: template
+        value_template: >-
+          {{ burst_mode == 'catch_up' and
+             reminder_enabled | bool(false) and
+             (ledger_entity | default('') | string | length) > 0 }}
+    then:
+      - alias: "9ab-batch · Wait for burst to accumulate"
+        delay:
+          seconds: "{{ burst_batch_secs | int(15) }}"
+
+      - alias: "9ab-batch · Read ledger and find new entries"
+        variables:
+          _batch_own_post_time: >-
+            {% set pt = _attrs.get('post_time', 0) | int(0) %}
+            {{ pt }}
+          _batch_ledger_raw: >-
+            {{ states(ledger_entity) | default('')
+               | replace('unknown', '') | trim }}
+          _batch_new_entries: >-
+            {% set own_pt = _batch_own_post_time | string | trim %}
+            {% set entries = _batch_ledger_raw.split(',')
+                | reject('equalto', '') | list %}
+            {% set ns = namespace(new=[]) %}
+            {% for e in entries %}
+              {% set parts = e.split('|') %}
+              {% if parts | length >= 2 %}
+                {% set e_pt = parts[1] | string | trim %}
+                {% if e_pt != own_pt %}
+                  {% set ns.new = ns.new + [e] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.new | join(',') }}
+          _batch_count: >-
+            {% set raw = _batch_new_entries | trim %}
+            {% if raw | length == 0 %}0
+            {% else %}{{ raw.split(',') | length }}
+            {% endif %}
+
+      - alias: "9ab-batch · Announce bundled batch if new entries exist"
+        if:
+          - condition: template
+            value_template: "{{ (_batch_count | int(0)) > 0 }}"
+        then:
+          - alias: "9ab-batch · Build batch context for LLM"
+            variables:
+              _batch_context: >-
+                {% set entries = _batch_new_entries.split(',')
+                    | reject('equalto', '') | list %}
+                {% set ns = namespace(lines=[]) %}
+                {% for e in entries %}
+                  {% set parts = e.split('|') %}
+                  {% set sender = parts[0] | default('unknown') %}
+                  {% set pkg = parts[2] | default('unknown')
+                      if parts | length >= 3 else 'unknown' %}
+                  {% set ns.lines = ns.lines
+                      + [sender ~ ' via ' ~ pkg] %}
+                {% endfor %}
+                {{ ns.lines | join('; ') }}
+
+          - alias: "9ab-batch · LLM bundled summary for batch tail"
+            continue_on_error: true
+            action: conversation.process
+            response_variable: batch_llm_result
+            data:
+              agent_id: "{{ llm_agent }}"
+              text: >-
+                {{ bundled_prompt_text }}
+
+                You have {{ _batch_count }} additional notification(s)
+                that arrived while the first message was being announced.
+                Summarize them briefly as a batch follow-up.
+
+                Batch entries: {{ _batch_context }}
+
+          - alias: "9ab-batch · Set batch announcement text"
+            variables:
+              announcement: >-
+                {% if batch_llm_result is defined
+                    and batch_llm_result.response is defined
+                    and batch_llm_result.response.speech is defined
+                    and batch_llm_result.response.speech.plain is defined %}
+                  {{ batch_llm_result.response.speech.plain.speech
+                     | default('You also have additional messages.') }}
+                {% else %}
+                  You also have {{ _batch_count }} more message{{ 's'
+                    if (_batch_count | int(0)) > 1 else '' }} waiting.
+                {% endif %}
+
+          - alias: "9ab-batch · Deliver batch via TTS (reuses §8 pipeline)"
+            choose:
+              - alias: "Satellite found — deliver batch via TTS"
+                conditions:
+                  - condition: template
+                    value_template: "{{ has_satellite }}"
+                sequence:
+                  - alias: "Batch TTS delivery (mode-dependent)"
+                    choose:
+                      - alias: "ElevenLabs custom service"
+                        conditions:
+                          - condition: template
+                            value_template: "{{ tts_mode == 'elevenlabs_custom_service' }}"
+                        sequence:
+                          - action: tts.speak
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ tts_entity }}"
+                            data: >-
+                              {% set base = tts_data_elevenlabs | default({}) %}
+                              {{ dict(base, message=announcement) }}
+                      - alias: "Standard TTS entity"
+                        conditions:
+                          - condition: template
+                            value_template: "{{ tts_mode == 'standard_tts_entity' }}"
+                        sequence:
+                          - action: tts.speak
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ tts_entity }}"
+                            data: >-
+                              {% set base = tts_data_standard | default({}) %}
+                              {{ dict(base, message=announcement) }}
+                    default:
+                      - action: tts.speak
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ tts_entity }}"
+                        data: >-
+                          {% set base = tts_data_standard | default({}) %}
+                          {{ dict(base, message=announcement) }}
+            default:
+              - alias: "No satellite — log batch tail skip"
+                action: system_log.write
+                continue_on_error: true
+                data:
+                  message: >-
+                    Notification Follow-Me: Batch tail has
+                    {{ _batch_count }} entries but no satellite
+                    available — skipping TTS.
+                  level: info
+
+  # ---------------------------------------------------------------------------
   # 9c. Notification ledger write + reminder loop ownership
   # ---------------------------------------------------------------------------
   - alias: "9c · Capture identity for ledger and exit detection"
@@ -2475,7 +2688,8 @@ actions:
       - condition: template
         value_template: >-
           {{ reminder_enabled | bool(false) and
-             ledger_entity | default('') | length > 0 }}
+             ledger_entity | default('') | length > 0 and
+             burst_mode != 'catch_up' }}
     then:
       - variables:
           _new_ledger: >-
@@ -3090,26 +3304,23 @@ actions:
                     agent_id: "{{ llm_agent }}"
                     conversation_id: "{{ _conv_id }}"
                     text: >-
+                      {% set _name = agent_name | default('') | string | trim %}
+                      {% set _r_is_addressed = _name | length > 0 and _r_truncated | default('') | regex_search('(?i)\\b' ~ _name ~ '\\b') %}
+                      {% if _r_is_addressed and (direct_address_prompt_text | default('') | string | trim) | length > 0 %}
+                      {{ direct_address_prompt_text }}
+                      {% elif _name | length > 0 %}
                       {{ _r_prompt_text }}
+
+                      Your name is {{ agent_name }}. If the message refers to
+                      "the AI" or "the assistant", acknowledge it naturally.
+                      {% else %}
+                      {{ _r_prompt_text }}
+                      {% endif %}
 
                       {{ _r_escalation_ctx }}
 
                       {% if reminder_read_mode | default('') | length > 0 %}
                       Read mode: {{ reminder_read_mode }}
-                      {% endif %}
-
-                      {% set _name = agent_name | default('') | string | trim %}
-                      {% if _name | length > 0 %}
-                      Your name is {{ agent_name }}.
-                      {% if _r_truncated | default('') | regex_search('(?i)\\b' ~ _name ~ '\\b') %}
-                      The sender addressed you directly. React to that — you
-                      are being spoken to, not just relaying a message. But the
-                      substance may still be about the recipient, so relay that
-                      content naturally while acknowledging you were addressed.
-                      {% else %}
-                      If the message refers to "the AI" or "the assistant",
-                      acknowledge it naturally.
-                      {% endif %}
                       {% endif %}
 
                       The sender's preferred name is {{ _r_display_sender }}.
