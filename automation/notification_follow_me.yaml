@@ -1,5 +1,5 @@
 # =============================================================================
-# Notification Follow-Me (v3.15.0)
+# Notification Follow-Me (v3.16.0)
 # =============================================================================
 # When a messaging notification arrives on the phone, determines the user's
 # room via FP2 presence sensors, routes to the nearest voice satellite, and
@@ -11,7 +11,7 @@
 # =============================================================================
 
 blueprint:
-  name: "Notification Follow-Me (v3.15.0)"
+  name: "Notification Follow-Me (v3.16.0)"
   author: madalone
   description: >
     ![Image](https://raw.githubusercontent.com/mmadalone/HA-Master-Repo/main/images/header/notification-follow-me-header.jpeg)
@@ -29,9 +29,9 @@ blueprint:
     phone" fallback.
 
     ### Recent changes
-    - **v3.15.0:** Burst batch tail collects catch-up stragglers into one bundled TTS call
-    - **v3.15.0:** Early ledger write ensures cooldown-blocked runs register before exit
-    - **v3.15.0:** New burst_batch_window input controls batch accumulation delay (5–60s)
+    - **v3.16.0:** App-aware R3c gate — evicts only the app the user is viewing, not all reminders
+    - **v3.16.0:** New last_used_app_sensor + notification_app_packages inputs for foreground detection
+    - **v3.16.0:** Four-branch R3c: unconfigured backwards-compat, per-app eviction, unrelated-app pass
 
   domain: automation
   source_url: "https://github.com/mmadalone/HA-Master-Repo/blob/main/automation/notification_follow_me.yaml"
@@ -939,6 +939,37 @@ blueprint:
               unit_of_measurement: minutes
               mode: slider
 
+        last_used_app_sensor:
+          name: Last used app sensor (optional — enables app-aware R3c)
+          description: >-
+            Optional. The Android Companion App `last_used_app`
+            sensor that reports the foreground app's Android
+            package name (e.g. `com.whatsapp`). When configured,
+            the sustained phone-use gate (R3c) evicts only the
+            notification entries whose app the user is actually
+            viewing, instead of killing all reminders. To find
+            package names: open the target app, then check this
+            sensor's state in Developer Tools → States. Leave
+            empty to use the original all-or-nothing behavior.
+          default: ""
+          selector:
+            entity:
+              domain: sensor
+
+        notification_app_packages:
+          name: Notification app packages (comma-separated)
+          description: >-
+            Comma-separated list of Android package names for apps
+            whose notifications this blueprint manages. Used by
+            the app-aware R3c gate to determine which ledger
+            entries to evict when the user is actively viewing
+            a matching app. Find package names by opening the
+            app and checking the last_used_app sensor state in
+            Developer Tools → States.
+          default: "com.whatsapp,org.thoughtcrime.securesms"
+          selector:
+            text:
+
         last_removed_sensor:
           name: Last removed notification sensor (optional)
           description: >-
@@ -1134,6 +1165,8 @@ variables:
   reminder_read_mode: !input reminder_read_mode
   phone_interactive_entity: !input phone_interactive_sensor
   phone_interactive_min: !input phone_interactive_minutes
+  last_app_entity: !input last_used_app_sensor
+  notif_app_packages: !input notification_app_packages
   last_removed_entity: !input last_removed_sensor
   long_tail_min: !input long_tail_interval
   ceiling_min: !input reminder_ceiling
@@ -2929,20 +2962,117 @@ actions:
                   {% endif %}
                 {% endif %}
 
-            - alias: "R3c · Phone not interactive (sustained-use check)"
-              condition: template
-              value_template: >-
-                {% set pe = phone_interactive_entity | default('', true) %}
-                {% if pe == '' %}
-                  true
-                {% elif not is_state(pe, 'on') %}
-                  true
-                {% else %}
-                  {% set dur = (as_timestamp(now())
-                               - as_timestamp(states[pe].last_changed | default(0)))
-                               / 60 %}
-                  {{ dur < (phone_interactive_min | int(2)) }}
-                {% endif %}
+            - alias: "R3c · App-aware sustained phone-use gate"
+              if:
+                - condition: template
+                  value_template: >-
+                    {# Phase 1: Is phone interactive ≥ threshold? #}
+                    {% set pe = phone_interactive_entity | default('', true) %}
+                    {% if pe == '' %}
+                      false
+                    {% elif not is_state(pe, 'on') %}
+                      false
+                    {% else %}
+                      {% set dur = (as_timestamp(now())
+                                   - as_timestamp(states[pe].last_changed
+                                   | default(0))) / 60 %}
+                      {{ dur >= (phone_interactive_min | int(2)) }}
+                    {% endif %}
+              then:
+                # --- B2: Sensor unconfigured → backwards-compat kill ---
+                - alias: "R3c-B2 · No app sensor → kill iteration"
+                  if:
+                    - condition: template
+                      value_template: >-
+                        {{ (last_app_entity | default('', true)) == '' }}
+                  then:
+                    - stop: "R3c: phone interactive, no app sensor — killing iteration"
+
+                # --- Resolve foreground app + package allow-list ---
+                - variables:
+                    _r3c_fg_app: >-
+                      {{ states(last_app_entity) | default('', true) }}
+                    _r3c_pkg_list: >-
+                      {% set raw = notif_app_packages | default('', true) %}
+                      {{ raw.split(',') | map('trim') | reject('eq', '')
+                         | list }}
+
+                # --- B3/B4: Cross-reference foreground app against ledger ---
+                - alias: "R3c-B3/B4 · Foreground app in ledger?"
+                  if:
+                    - condition: template
+                      value_template: >-
+                        {% set fg = _r3c_fg_app %}
+                        {% if fg == '' %}
+                          false
+                        {% else %}
+                          {% set ns = namespace(found=false) %}
+                          {% for e in _ledger_live %}
+                            {% if e.app == fg and fg in _r3c_pkg_list %}
+                              {% set ns.found = true %}
+                            {% endif %}
+                          {% endfor %}
+                          {{ ns.found }}
+                        {% endif %}
+                  then:
+                    # --- B3: Foreground app matches → evict those entries ---
+                    - variables:
+                        _r3c_evicted: >-
+                          {% set fg = _r3c_fg_app %}
+                          {% set ns = namespace(kept=[]) %}
+                          {% for e in _ledger_live %}
+                            {% if not (e.app == fg
+                                       and fg in _r3c_pkg_list) %}
+                              {% set ns.kept = ns.kept + [e] %}
+                            {% endif %}
+                          {% endfor %}
+                          {{ ns.kept }}
+                        _r3c_evicted_csv: >-
+                          {% set fg = _r3c_fg_app %}
+                          {% set ns = namespace(parts=[]) %}
+                          {% for e in _ledger_live %}
+                            {% if not (e.app == fg
+                                       and fg in _r3c_pkg_list) %}
+                              {% set ns.parts = ns.parts
+                                 + [e.sender ~ '|' ~ e.epoch
+                                    ~ '|' ~ e.app] %}
+                            {% endif %}
+                          {% endfor %}
+                          {{ ns.parts | join(',') }}
+                    - alias: "R3c-B3 · Write evicted ledger"
+                      action: input_text.set_value
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ ledger_entity }}"
+                      data:
+                        value: "{{ _r3c_evicted_csv }}"
+                    - alias: "R3c-B3 · Log app-aware eviction"
+                      action: system_log.write
+                      continue_on_error: true
+                      data:
+                        message: >-
+                          Notification Follow-Me: R3c evicted
+                          {{ _r3c_fg_app }} entries —
+                          {{ _r3c_evicted | length }} remain.
+                        level: info
+                    - alias: "R3c-B3 · Ledger empty → exit loop"
+                      if:
+                        - condition: template
+                          value_template: >-
+                            {{ _r3c_evicted | length == 0 }}
+                      then:
+                        - stop: "R3c: ledger empty after app-aware eviction"
+                  else:
+                    # --- B4: Unrelated app → pass (reminders continue) ---
+                    - alias: "R3c-B4 · Unrelated app — continuing"
+                      action: system_log.write
+                      continue_on_error: true
+                      data:
+                        message: >-
+                          Notification Follow-Me: R3c phone interactive
+                          but {{ _r3c_fg_app }} not in ledger —
+                          continuing reminders.
+                        level: info
 
             # ---------------------------------------------------------------
             # BLOCK 5: Presence re-resolve
